@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Media Center: right 75% focus. Editorial artwork stage + large transport. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/mediaModule"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_marginStart="8dp"
+    android:layout_marginTop="@dimen/screen_margin"
+    android:layout_marginEnd="@dimen/screen_margin"
+    android:layout_marginBottom="@dimen/panel_bottom_gap"
+    android:background="@drawable/bg_panel"
+    android:elevation="@dimen/elev_panel"
+    android:visibility="gone">
+
+    <View
+        android:layout_width="620dp"
+        android:layout_height="480dp"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_media_glow" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingStart="28dp"
+        android:paddingTop="20dp"
+        android:paddingEnd="28dp"
+        android:paddingBottom="18dp">
+
+        <!-- Header + source selector -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:letterSpacing="0.02"
+                    android:text="MEDIA CENTER"
+                    android:textColor="@color/text_primary"
+                    android:textSize="20sp" />
+
+                <TextView
+                    style="@style/Label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="BLUETOOTH · USB · STREAMING" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:background="@drawable/bg_chip_glass"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="2dp">
+
+                <TextView
+                    android:id="@+id/mmSrcBt"
+                    android:layout_width="104dp"
+                    android:layout_height="34dp"
+                    android:background="@drawable/bg_dock_active"
+                    android:fontFamily="sans-serif-medium"
+                    android:gravity="center"
+                    android:text="BLUETOOTH"
+                    android:textColor="@color/accent_sky"
+                    android:textSize="10sp" />
+
+                <TextView
+                    android:id="@+id/mmSrcRadio"
+                    android:layout_width="104dp"
+                    android:layout_height="34dp"
+                    android:layout_marginStart="2dp"
+                    android:background="@drawable/bg_pill"
+                    android:fontFamily="sans-serif-medium"
+                    android:gravity="center"
+                    android:text="RADIO FM"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="10sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Main content -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="16dp"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:layout_width="236dp"
+                android:layout_height="236dp"
+                android:background="@drawable/bg_media_stage"
+                android:elevation="18dp"
+                android:padding="10dp">
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/bg_album">
+
+                    <ImageView
+                        android:id="@+id/mmArt"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/bg_album"
+                        android:clipToOutline="true"
+                        android:contentDescription="Carátula del álbum"
+                        android:padding="54dp"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_media"
+                        android:tint="@color/text_muted" />
+                </FrameLayout>
+            </FrameLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="28dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    style="@style/Label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="REPRODUCIENDO" />
+
+                <TextView
+                    android:id="@+id/mmTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif-medium"
+                    android:maxLines="1"
+                    android:text="Sin reproducción"
+                    android:textColor="@color/text_primary"
+                    android:textSize="26sp" />
+
+                <TextView
+                    android:id="@+id/mmArtist"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="Bluetooth · USB · Streaming"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="15sp" />
+
+                <TextView
+                    android:id="@+id/mmAlbum"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="1dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text=""
+                    android:textColor="@color/text_faint"
+                    android:textSize="11sp" />
+
+                <ProgressBar
+                    android:id="@+id/mmProgress"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="3dp"
+                    android:layout_marginTop="18dp"
+                    android:max="1000"
+                    android:progressDrawable="@drawable/bg_media_progress" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/mmTime"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:fontFeatureSettings="tnum"
+                        android:text="0:00 / 0:00"
+                        android:textColor="@color/text_muted"
+                        android:textSize="11sp" />
+
+                    <ImageView
+                        android:layout_width="12dp"
+                        android:layout_height="12dp"
+                        android:contentDescription="Fuente"
+                        android:src="@drawable/ic_bluetooth"
+                        android:tint="@color/accent_sky" />
+
+                    <TextView
+                        android:id="@+id/mmSource"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:fontFeatureSettings="tnum"
+                        android:text="BT"
+                        android:textColor="@color/text_muted"
+                        android:textSize="10sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageButton
+                        android:id="@+id/mmPrev"
+                        android:layout_width="60dp"
+                        android:layout_height="60dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="Anterior"
+                        android:padding="16dp"
+                        android:src="@drawable/ic_prev"
+                        android:tint="@color/text_secondary" />
+
+                    <ImageButton
+                        android:id="@+id/mmPlay"
+                        android:layout_width="82dp"
+                        android:layout_height="82dp"
+                        android:layout_marginStart="18dp"
+                        android:layout_marginEnd="18dp"
+                        android:background="@drawable/bg_play_button"
+                        android:contentDescription="Reproducir"
+                        android:elevation="10dp"
+                        android:padding="24dp"
+                        android:src="@drawable/ic_play"
+                        android:tint="#FFFFFF" />
+
+                    <ImageButton
+                        android:id="@+id/mmNext"
+                        android:layout_width="60dp"
+                        android:layout_height="60dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="Siguiente"
+                        android:padding="16dp"
+                        android:src="@drawable/ic_next"
+                        android:tint="@color/text_secondary" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/mmOpenSource"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_action_pill"
+                    android:fontFamily="sans-serif-medium"
+                    android:gravity="center"
+                    android:letterSpacing="0.08"
+                    android:paddingStart="18dp"
+                    android:paddingEnd="18dp"
+                    android:text="ABRIR APP DE ORIGEN"
+                    android:textColor="@color/accent_sky"
+                    android:textSize="10sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

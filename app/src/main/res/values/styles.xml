@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.IbizaDash" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/obsidian_900</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="colorPrimary">@color/accent_sky</item>
+        <item name="colorPrimaryDark">@color/obsidian_900</item>
+        <item name="colorAccent">@color/accent_sky</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_muted</item>
+    </style>
+
+    <!-- 9sp uppercase, 0.12 tracking, medium -->
+    <style name="Label">
+        <item name="android:textColor">@color/text_muted</item>
+        <item name="android:textSize">@dimen/label_size</item>
+        <item name="android:letterSpacing">0.12</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <!-- 12sp secondary value -->
+    <style name="Value">
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">@dimen/value_size</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+
+    <!-- 96sp light tabular HUD -->
+    <style name="Hud">
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">@dimen/hud_speed</item>
+        <item name="android:fontFamily">sans-serif-light</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:letterSpacing">-0.04</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+    </style>
+
+    <!-- Premium compact action button for the Vehicle module -->
+    <style name="VehicleActionButton">
+        <item name="android:layout_height">48dp</item>
+        <item name="android:background">@drawable/bg_action_pill</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textSize">10sp</item>
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.06</item>
+        <item name="android:gravity">center</item>
+        <item name="android:drawablePadding">6dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="android:paddingStart">8dp</item>
+        <item name="android:paddingEnd">8dp</item>
+        <item name="android:stateListAnimator">@null</item>
+    </style>
+
+    <!-- Secondary action row used by Settings -->
+    <style name="SettingsActionButton">
+        <item name="android:layout_height">52dp</item>
+        <item name="android:background">@drawable/bg_action_pill</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:letterSpacing">0.03</item>
+        <item name="android:gravity">start|center_vertical</item>
+        <item name="android:drawablePadding">10dp</item>
+        <item name="android:paddingStart">16dp</item>
+        <item name="android:paddingEnd">16dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="android:stateListAnimator">@null</item>
+    </style>
+
+    <!-- Primary gradient action -->
+    <style name="PrimaryButton">
+        <item name="android:layout_height">56dp</item>
+        <item name="android:background">@drawable/bg_primary_button</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textColor">#06121F</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:letterSpacing">0.04</item>
+        <item name="android:gravity">center</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="android:stateListAnimator">@null</item>
+    </style>
+
+    <!-- Tinted switches -->
+    <style name="SettingsSwitch">
+        <item name="android:thumbTint">@color/switch_thumb_tint</item>
+        <item name="android:trackTint">@color/switch_track_tint</item>
+    </style>
+</resources>

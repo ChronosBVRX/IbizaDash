@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="radius_panel">24dp</dimen>
+    <dimen name="radius_card">20dp</dimen>
+    <dimen name="radius_chip">26dp</dimen>
+    <dimen name="radius_dock">28dp</dimen>
+    <dimen name="radius_art">8dp</dimen>
+    <dimen name="radius_metric">14dp</dimen>
+
+    <dimen name="elev_panel">12dp</dimen>
+    <dimen name="elev_card">10dp</dimen>
+    <dimen name="elev_dock">18dp</dimen>
+
+    <dimen name="panel_width">420dp</dimen>
+    <dimen name="dock_height">84dp</dimen>
+    <dimen name="screen_margin">16dp</dimen>
+    <dimen name="panel_bottom_gap">104dp</dimen>
+
+    <dimen name="hud_speed">96sp</dimen>
+    <dimen name="time_size">36sp</dimen>
+    <dimen name="label_size">9sp</dimen>
+    <dimen name="value_size">12sp</dimen>
+</resources>

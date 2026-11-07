@@ -1,12 +1,13 @@
 # IbizaDash
 
-Launcher/dashboard estilo Tesla para el **SEAT Ibiza 2009-2013** con la head unit
-**SPRD sp7731e** (Android 8.1, 1280Ã—720, 2 GB RAM).
+Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puertas**
+(motor **CEKA** 2.0 MPI 8V, 115 hp, mercado México) con la head unit **SPRD sp7731e** (Android 8.1, 1280Ã—720, 2 GB RAM).
 
 ![IbizaDash](screenshots/stereo_paused_final.png)
 
-- **APK release:** `dist/IbizaDash.apk` (**~1.26 MB**, sin Play Store, sin librerÃ­as nativas).
+- **APK publicados:** [Releases de GitHub](https://github.com/ChronosBVRX/IbizaDash/releases/latest) (`IbizaDash.apk` / `IbizaCompanion.apk`).
 - **Paquete:** `com.chronosbvrx.ibizadash`
+- **Salida local:** `app/build/outputs/apk/release/app-release.apk` y `companion-app/app/build/outputs/apk/debug/app-debug.apk`.
 - **minSdk 23 / targetSdk 33 / compileSdk 36**
 - Hecho con **Views** (sin Compose) para que sea liviano en el Cortex-A7.
 
@@ -19,7 +20,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 2009-2013** con la head uni
 | Launcher HOME landscape | âœ… |
 | Mapa oscuro con GPS (Esri Dark Gray Canvas) | âœ… |
 | **Render SEAT Ibiza 2010 verde (3/4 frontal)** | âœ… |
-| Velocidad CAN (`persist.can.speed`) con fallback GPS | âœ… |
+| Velocidad **OBD > CAN > GPS** (OBD expira a los 4 s) | âœ… |
 | Unidades km/h / mph | âœ… |
 | Reloj, fecha y clima (Open-Meteo) | âœ… |
 | Reversa automÃ¡tica (AIDL de `com.tw.service.xt`) | âœ… |
@@ -27,11 +28,16 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 2009-2013** con la head uni
 | Controles de media (play/pausa, anterior, siguiente) | âœ… |
 | **Media Bluetooth: tÃ­tulo, artista, carÃ¡tula** | âœ… (con acceso a notificaciones) |
 | **Estado Bluetooth: nombre, A2DP/HFP, baterÃ­a, llamada** | âœ… (baterÃ­a si el telÃ©fono la publica) |
+| **NavegaciÃ³n turn-by-turn en el estÃ©reo** (banner, calle, cuenta regresiva, ETA) | âœ… |
+| **PosiciÃ³n adherida a la carretera** (proyecciÃ³n + OSRM nearest) | âœ… |
+| **SincronizaciÃ³n con IbizaCompanion** (ruta, avance, prÃ³ximo giro) | âœ… |
+| **Wi-Fi Direct para portadas, rutas y teselas** (Bluetooth de respaldo) | âœ… |
+| **Fase 1+2: navegación y mapa en el teléfono** (media y avisos remotos) | âœ… |
 | Dock: Mapa, Media, Radio, TelÃ©fono, CÃ¡mara, Apps | âœ… |
 | CajÃ³n de aplicaciones | âœ… |
 | Ajustes (clima, unidades, abrir Car Choose/ajustes coche) | âœ… |
 | RPM, puertas, luces, TPMS por CAN | â³ pendiente |
-| Mapas offline | â³ pendiente |
+| **Mapas offline** (Esri Dark z11â€“z15, MichoacÃ¡n + vecinos) | âœ… |
 
 ---
 
@@ -74,6 +80,46 @@ Salida:
 
 El release se firma con la llave debug para pruebas. Para distribuciÃ³n, crear un
 `keystore.properties` y una `signingConfig` release real.
+
+---
+
+## Compilar la app compañera (teléfono)
+
+El proyecto de la compañera es un Gradle independiente dentro de `companion-app/`.
+Se compila con el wrapper de la raíz:
+
+```powershell
+$env:JAVA_HOME="C:\Program Files\Android\Android Studio\jbr"
+cd C:\Users\Axel Rosete\Desktop\Proyectos\General\IbizaDash
+.\gradlew.bat -p companion-app :app:assembleDebug
+```
+
+Salida: `companion-app/app/build/outputs/apk/debug/app-debug.apk`.
+
+Requisitos:
+
+- JDK 17 y Android SDK 34. Android Studio crea `companion-app/local.properties`
+  con `sdk.dir=...`; si compilas por consola, créalo a mano.
+- El AAR de Spotify está en `companion-app/app/libs/` (13 MB); no se descarga de Maven.
+- La búsqueda exacta de YouTube usa una API key **opcional**. Para habilitarla,
+  añade a `companion-app/local.properties`:
+  ```
+  YOUTUBE_API_KEY=tu_key
+  ```
+  Sin ella, la app abre la búsqueda de YouTube Music en vez del video exacto.
+  **No subas `local.properties` ni la key al repositorio.**
+
+### Continuar en otra PC
+
+```powershell
+git clone https://github.com/ChronosBVRX/IbizaDash.git
+cd IbizaDash
+```
+
+- Crea `local.properties` en la raíz y en `companion-app/` con `sdk.dir`.
+- Los mapas offline (`.mbtiles`, ~1.2 GB) y los APK **no** están en Git:
+  se regeneran con `scripts/build_offline_pack.py` o se descargan de **Releases**.
+- El material `decompiled/` del APK del proveedor tampoco se versiona.
 
 ---
 
@@ -211,9 +257,11 @@ Si falla, se intenta `com.tw.reverse/.LRReverseActivity`.
 TambiÃ©n se lee `Settings.System` â†’ `REVERSE_STATUS_FOR_PROTOCOL` como respaldo.
 
 ### Velocidad
-- Primero intenta `persist.can.speed` (SystemProperties por reflexiÃ³n).
-- Si no existe o es 0, usa GPS (`LocationManager`, 1 Hz).
-- La fuente se muestra como `CAN` o `GPS` debajo del velocÃ­metro.
+- **Prioridad OBD:** mientras el ELM327/Superbox entrega `010D`, esa es la velocidad mostrada
+  (se descarta a los 4 s sin datos para no congelar la lectura).
+- Luego `persist.can.speed` (SystemProperties por reflexiÃ³n).
+- Al final GPS (`LocationManager`, 1 Hz).
+- La fuente se muestra como `OBD`, `CAN` o `GPS` debajo del velocÃ­metro.
 
 ### Mandos del volante
 El MCU los maneja. El launcher recibe HOME/BACK/MENU y las teclas de media se envÃ­an
@@ -246,11 +294,84 @@ Del decompilado de `TWCarInfoServiceImpl` y del AIDL `CarServiceAidl`:
 
 ## Mapa y atribuciÃ³n
 
-- Tiles: **Esri World Dark Gray Canvas** (`server.arcgisonline.com`), sin API key.
+- Tiles online: **Esri World Dark Gray Canvas** (`server.arcgisonline.com`), sin API key.
 - AtribuciÃ³n mostrada: *Esri, HERE, Garmin, Â© OpenStreetMap contributors*.
-- Requiere internet. Si el coche no tiene datos, el mapa queda vacÃ­o; se puede aÃ±adir
-  cachÃ©/offline mÃ¡s adelante.
 - No se usa CARTO (ahora exige API key) ni Google Maps (mÃ¡s pesado y con GMS).
+
+### Mapas offline (listos)
+
+- Pack **Esri Dark z11â€“z15** para **MichoacÃ¡n y estados vecinos**: **104,113 tiles**
+  (~480 MB en `.mbtiles`, 392 MB en el zip del telÃ©fono). El detalle z14â€“z15 cubre el
+  corredor Moreliaâ€“Uruapanâ€“Zamoraâ€“Guadalajaraâ€“QuerÃ©taro; el resto del estado y
+  vecinos queda en z11â€“z13.
+- GeneraciÃ³n reanudable:
+  ```powershell
+  python scripts\build_offline_pack.py            # descarga lo que falte
+  python scripts\build_offline_pack.py --repair   # sincroniza PNG que falten en los .mbtiles
+  python scripts\build_offline_pack.py --make-zip # empaqueta para el telÃ©fono
+  ```
+- **EstÃ©reo:** los `.mbtiles` van a
+  `/sdcard/Android/data/com.chronosbvrx.ibizadash/files/osmdroid/` (osmdroid escanea la
+  *base*, no la cachÃ©). `MapTileFileArchiveProvider` los detecta por extensiÃ³n.
+- **TelÃ©fono:** `offline-tiles.zip` va a
+  `/sdcard/Android/data/com.chronosbvrx.ibizacompanion/files/offline-tiles.zip`;
+  `TilePackInstaller` lo extrae una vez y lo borra. Leaflet lo sirve con
+  `setOfflineBase('file://â€¦')` y `maxNativeZoom: 15`.
+- Despliegue: `.\scripts\deploy_offline.ps1` (rutas `-Stereo` y `-Phone` configurables).
+
+---
+
+## NavegaciÃ³n turn-by-turn (estÃ©reo + telÃ©fono)
+
+- **Motor propio en el estÃ©reo** (`nav/RouteNavigator.kt`): proyecta el GPS sobre la polilÃnea,
+  calcula restante/ETA, detecta salida de ruta y publica `NavState` con icono de maniobra,
+  distancia al giro, calle siguiente y progreso.
+- **Banner Waze** en la capa NavegaciÃ³n + mini tira de maniobra, mapa *heading-up* y
+  marcador **encajado en la carretera** (`nav/RoadSnapper.kt`: proyecciÃ³n a la ruta,
+  OSRM `nearest` cuando hay red, suavizado y rechazo de saltos > 90 m).
+- **Enlace con IbizaCompanion** (`nav/NavStateRelay.kt` + `BtNavBridgeServer`):
+  - `NAV_STATE` con destino, polilÃnea, distancia restante, ETA, prÃ³ximo giro, progreso y
+    flags de llegada/desvÃ­o.
+  - Snapshot inmediato al conectar el telÃ©fono y `active=false` al borrar la ruta.
+  - `PING`/`PONG` para detectar que la app del estÃ©reo sigue viva; el telÃ©fono reconecta solo.
+- **TelÃ©fono:** la portada muestra conexiÃ³n real, servicio, tarjeta de ruta activa con
+  croquis del trazado, progreso, prÃ³ximo giro, restante/ETA y acciones *Ver en el mapa* /
+  *Detener*. Sin datos inventados cuando no hay enlace.
+
+---
+
+## Wi-Fi Direct (transporte principal de datos)
+
+El puente con el teléfono ya no depende de Bluetooth. El estéreo abre un servidor TCP
+(`47800`), responde al descubrimiento UDP (`47801`) y crea un grupo Wi-Fi Direct;
+el teléfono se conecta por Wi-Fi y sólo cae a RFCOMM si no hay enlace Wi-Fi.
+Las rutas, las portadas y las teselas del corredor viajan por Wi-Fi; Bluetooth sigue
+atendiendo A2DP/AVRCP, llamadas, ELM327 y el modo de respaldo.
+
+- Código estéreo: `nav/WifiNavBridgeServer.kt`, `nav/NavBridgeProtocol.kt`, `nav/NavLink.kt`.
+- Código teléfono: `WifiBridgeClient.kt`, `BridgeRouter.kt`, `BridgeLink.kt`, `data/TileSender.kt`.
+- Detalle, permisos, pruebas y límites: **[docs/WIFI_DIRECT_TRANSPORT.md](docs/WIFI_DIRECT_TRANSPORT.md)**.
+- Estado del enlace en **Ajustes rápidos → WiFi y punto de acceso** (estéreo) y en
+  **Conexión** (teléfono), con IP manual como respaldo para hotspot/LAN.
+- Validado en emulador (Android 36, APK release + debug): `HELLO`/`WELCOME`,
+  `PING`/`PONG`, ruta Palo Alto (10.7 km, 16 pasos), 55 teselas únicas (~983 KB)
+  y portada 64×64. Capturas: `screenshots/wifi_connection.png`,
+  `screenshots/wifi_quick.png`, `screenshots/wifi_stereo_route.png`,
+  `screenshots/wifi_dashboard.png`.
+
+### Fase 1 + Fase 2 (el teléfono como cerebro)
+
+- **Navegación en el teléfono**: `PhoneNavigator` usa el GPS del teléfono y manda
+  `PHONE_NAV_STATE`; el estéreo solo pinta el banner y mueve el marcador. Si el
+  teléfono deja de mandar, el estéreo recupera su guía local en 10 s.
+- **Mapa renderizado en el teléfono**: `MAP_FRAME` (1024×720 JPEG, 2 fps) sustituye
+  a osmdroid en el estéreo; el `MapView` se oculta y solo se decodifica la imagen.
+- **Media remota**: botones del estéreo → `MEDIA_CMD` → MediaSession del teléfono.
+- **Notificaciones**: `NOTIFY` del teléfono a la cápsula de avisos del estéreo.
+- **GPS en segundo plano**: el servicio se promueve a foreground `location`.
+- Detalle y límites: **[docs/PHONE_FIRST_PHASE12.md](docs/PHONE_FIRST_PHASE12.md)**.
+- Capturas: `screenshots/phase2_remote_map.png`,
+  `screenshots/phase1_phone_nav_moved.png`, `screenshots/phase1_notify.png`.
 
 ---
 
@@ -303,8 +424,36 @@ Handoff completo para continuar el desarrollo (qué hace/no hace, menús nativos
 transiciones, canales de datos y estado real de pruebas):
 **[docs/IBIZA_LAUNCHER_HANDOFF.md](docs/IBIZA_LAUNCHER_HANDOFF.md)**.
 
-> Medición en emulador (1280×720/160 dpi): **PSS 60.3 MB**, **270 vistas**, APK **1.23 MB**.
-> La validación de 60 fps debe hacerse en el estéreo con dumpsys gfxinfo.
+> Medición en emulador (1280×720/160 dpi) tras el rediseño visual: **PSS 79.8 MB**,
+> **388 vistas**, APK release **1.36 MB**. La validación de 60 fps debe hacerse en el estéreo
+> con `dumpsys gfxinfo`.
+
+---
+
+## Rediseño premium de interfaces
+
+Todas las pantallas comparten ahora el mismo lenguaje visual: superficies de cristal con
+gradiente sutil, iconos lineales/filled coherentes, acentos cian y estados semánticos
+(verde/ámbar/rojo). El rediseño usa sólo XML, drawables estáticos y animaciones de
+compositor; **no añade blur, librerías ni Compose**.
+
+| Pantalla | Cambios |
+|---|---|
+| **Cockpit** | HUD con chip de fuente, tarjeta de media con marco de carátula y tarjeta de salud con icono semántico. |
+| **Navegación** | Panel mini con tarjeta de destino conectada al estado real de navegación, clima en tarjeta y CTA principal. |
+| **Media Center** | Layout editorial en dos columnas: carátula grande, metadatos, progreso, transporte y fuente. |
+| **Radio** | Sintonizador a la izquierda con escala FM y presets 3×2 a la derecha; controles con iconos. |
+| **Vehículo** | Hero de salud, 4 tarjetas de sistemas (temperatura, eléctrico, combustible, mantenimiento) y acciones rápidas con iconos. |
+| **Ajustes rápidos** | Drawer con iconos en badges, switches tintados, tarjetas agrupadas y CTA cian. |
+| **Ajustes** | Pantalla de dos columnas con tarjetas, checkboxes/radios tintados y botones premium. |
+| **Aplicaciones** | Grid con tiles de cristal, placa de icono y contador de apps. |
+| **Mapa** | Controles flotantes con chip de contexto, velocidad y GPS. |
+
+Capturas de validación: `screenshots/ui_cockpit_after.png`,
+`screenshots/ui_media_after.png`, `screenshots/ui_nav_after.png`,
+`screenshots/ui_vehicle_after.png`, `screenshots/ui_radio_after.png`,
+`screenshots/ui_quick_after.png`, `screenshots/ui_settings_after.png`,
+`screenshots/ui_apps_after.png` y `screenshots/ui_map_after.png`.
 
 ---
 
@@ -363,17 +512,70 @@ Archivos: `media/BluetoothMediaReceiver.kt`, `car/AvrcpController.kt`, `car/TwCo
 
 ## OBD-II (ELM327)
 
-El módulo Vehículo incluye un cliente OBD-II por Bluetooth SPP. El adaptador debe estar
-emparejado en Ajustes → Bluetooth y el contacto del coche puesto. Al tocar el chip **OBD**
+El módulo Vehículo incluye un cliente OBD-II por Bluetooth **SPP clásico o BLE**. El adaptador debe estar
+emparejado (o detectable) en Ajustes → Bluetooth y el contacto del coche puesto. Al tocar el chip **OBD**
 se abre el selector de dispositivo, la búsqueda automática, el modo demo y el acceso a los
 ajustes Bluetooth.
 
-- PIDs: RPM, carga, acelerador, refrigerante, admisión, velocidad, combustible, batería,
-  MIL/DTC y VIN.
+- PIDs: RPM, carga, acelerador, refrigerante, admisión, velocidad, batería, MIL/DTC y VIN.
+  **El nivel de combustible no lo entrega el motor por OBD genérico (PID 2F) en este coche**:
+  se lee del **cuadro de instrumentos por UDS** (ver abajo). Si el cuadro no responde, la app
+  muestra “sin lectura”; nunca inventa un valor.
 - Para probar sin adaptador: `adb shell am start -n com.chronosbvrx.ibizadash/.MainActivity --ez obd_demo true`
   o el chip OBD → “Modo demo (simulado)”.
 - El CAN box del coche no entregó datos de motor en las pruebas; el dashboard nativo
   (DashMate) está en modo demo esperando un Superbox. Ver el handoff para el detalle.
+
+### Nivel de combustible real (UDS del cuadro)
+
+El sensor de nivel está cableado al **cuadro de instrumentos (J285)**, no a la ECU del motor.
+En la plataforma PQ25 el cuadro es UDS y responde a la petición:
+
+```
+CAN 0x714: 03 22 22 06 55 55 55 55   (UDS ReadDataByIdentifier, DID 0x2206)
+CAN 0x77E: 04 62 22 06 2C AA AA AA   (0x2C = 44 litros)
+```
+
+La app lo consulta cada 60 s con el ELM327 (`obd/Elm327Client.kt`):
+`ATSP6` → `ATSH714` → `ATCRA77E` → `22 2206`, y al terminar restaura el OBD normal.
+Incluye el modo raw (`ATCAF0` + trama ISO-TP completa) como respaldo para clones.
+Funciona con **ELM327 clásico (SPP)** y con **BLE** (B16/Vgate, servicios FFE0/FFE1 o
+18F0/2AF0-2AF1); el BLE se detecta y se enlaza con `BleElm327Link`.
+
+- **Escala:** en los cuadros VAG UDS (Octavia/Yeti/Ibiza) el byte es **litros**; el tanque del
+  6J es de **45 L**. El Touareg NF usa medias unidades, por eso hay calibración.
+- **Calibración:** en Vehículo → Fallas → Consola, “Nivel real de combustible · UDS” lee y
+  muestra el raw; con el tanque lleno, “Calibrar tanque lleno” guarda ese raw como 100 %.
+  “Calibrar reserva/vacío” guarda el punto bajo. Se guarda en `Prefs`.
+- **Dónde se ve:** chip `F xx%` en el Cockpit, cápsula de velocidad de los módulos y tarjeta
+  **COMBUSTIBLE** del módulo Vehículo (con litros y fuente `UDS`).
+- Si no hay adaptador OBD o el cuadro no responde, se muestra **“Sin lectura de nivel”**.
+  No se usa un valor virtual ni el antiguo rango estimado.
+- **Fuentes verificadas:** el ejemplo de tramas UDS para nivel de combustible en VAG
+  (HackMag, “Turn Your Smartphone into a Car Instrument Cluster”), la tabla de IDs de
+  diagnóstico VAG (`0x714 → 0x77E`, evDash/NDSS) y la documentación de Ross-Tech de que
+  el cuadro del 6J es UDS (`5K0-920-xxx-17.clb`, `EV_Kombi_UDS_VDD_RM09`).
+
+### Diccionario de fallas del Ibiza 2010 2.0 Style (CEKA)
+
+El coche del proyecto es un **SEAT Ibiza 6J 2010, 2.0 MPI 8V 115 hp, 4 puertas,
+código de motor CEKA** (versión México). `obd/DtcDictionary.kt` incluye:
+
+- **158 códigos entre genéricos SAE y específicos VAG** que esta ECU puede memorizar
+  (aire, lambdas, inyectores, encendido, EVAP, ralentí, ECU, caja automática).
+- **Códigos específicos VAG P1xxx** frecuentes en este motor: P1127/P1128 (ajuste
+  multiplicativo), P1136/P1137 (aditivo), P1141-P1143 (verificación de carga),
+  P1296 (refrigeración), P1338 (G40), P1340 (correlación G40/G28 → correa),
+  P1425/P1426 (válvula N80), P1545 (cuerpo de aceleración), P1570 (inmovilizador),
+  P1602 (terminal 30) y P2279 (fuga de admisión).
+- **Códigos VAG de taller de 5 dígitos** (VCDS) con equivalencia a Pxxxx cuando existe
+  (16514→P0130, 17544→P1136, 17746→P1338, 18010→P1602, etc.) y una lista de códigos
+  de otros módulos (airbags, ABS, cuadro, confort).
+- **Explorador dentro del tablero:** módulo Vehículo → pestaña **Fallas** →
+  **“Diccionario de fallas (Ibiza 6J 2.0)”**, con búsqueda por código o síntoma
+  (p. ej. `EVAP`, `bobina`, `P0171`).
+- Cada explicación prioriza lo que realmente falla en el CEKA: bobina/cables/bujías,
+  fugas de admisión/PCV, cuerpo de aceleración, N80, termostato, G40/G28 y correa.
 
 ---
 

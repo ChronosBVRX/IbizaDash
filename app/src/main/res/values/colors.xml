@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Deep Obsidian -->
+    <color name="obsidian_900">#0B0F17</color>
+    <color name="obsidian_800">#0F1520</color>
+    <color name="obsidian_700">#121824</color>
+    <color name="obsidian_600">#182130</color>
+
+    <!-- Legacy names used by the app -->
+    <color name="bg">#0B0F17</color>
+    <color name="panel">#CC0F1622</color>
+    <color name="card">#B3121A26</color>
+    <color name="card2">#99121A26</color>
+
+    <!-- Electric accents -->
+    <color name="accent">#38BDF8</color>
+    <color name="accent_sky">#38BDF8</color>
+    <color name="accent_deep">#0284C7</color>
+    <color name="accent_cyan">#22D3EE</color>
+    <color name="accent_electric">#00D2FF</color>
+    <color name="accent_blue">#0099FF</color>
+
+    <!-- Warm accents -->
+    <color name="amber">#FF9500</color>
+    <color name="copper">#D97706</color>
+    <color name="warning">#F59E0B</color>
+    <color name="danger">#FF3B30</color>
+    <color name="red">#FF3B30</color>
+
+    <!-- Semantic -->
+    <color name="green">#10B981</color>
+    <color name="teal">#14B8A6</color>
+    <color name="success">#22C55E</color>
+
+    <!-- Type -->
+    <color name="text">#F8FAFC</color>
+    <color name="text_primary">#F8FAFC</color>
+    <color name="text_secondary">#CBD5E1</color>
+    <color name="text_dim">#94A3B8</color>
+    <color name="text_muted">#94A3B8</color>
+    <color name="text_faint">#64748B</color>
+
+    <!-- Glass -->
+    <color name="line">#14FFFFFF</color>
+    <color name="glass_border">#1FFFFFFF</color>
+    <color name="glass_border_soft">#14FFFFFF</color>
+    <color name="glass_surface">#CC0F1622</color>
+    <color name="glass_surface_soft">#99121A26</color>
+</resources>

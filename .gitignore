@@ -1,0 +1,73 @@
+# Build / IDE
+build/
+**/build/
+.gradle/
+**/.gradle/
+.kotlin/
+**/.kotlin/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+*.hprof
+
+# Configuración local (SDK, API keys, firmas)
+local.properties
+**/local.properties
+keystore.properties
+*.keystore
+*.jks
+
+# IDE / sistema
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Logs de build
+*.log
+*.err
+build_*.log
+build_*.err
+
+# Artefactos locales pesados (no forman parte del código)
+dist/
+decompiled/
+offline-tiles/
+offline-maps/
+*.mbtiles
+
+# Capturas: solo las que documentan el proyecto
+screenshots/*
+!screenshots/stereo_paused_final.png
+!screenshots/final_cockpit.png
+!screenshots/final_media.png
+!screenshots/final_nav.png
+!screenshots/final_vehicle.png
+!screenshots/ibizacomp_ui.png
+!screenshots/ibizadash.png
+!screenshots/emu_fase3.png
+!screenshots/ui_apps_after.png
+!screenshots/ui_cockpit_after.png
+!screenshots/ui_map_after.png
+!screenshots/ui_media_after.png
+!screenshots/ui_nav_after.png
+!screenshots/ui_quick_after.png
+!screenshots/ui_radio_after.png
+!screenshots/ui_settings_after.png
+!screenshots/ui_vehicle_after.png
+!screenshots/wifi_connection.png
+!screenshots/wifi_dashboard.png
+!screenshots/wifi_quick.png
+!screenshots/wifi_stereo_route.png
+!screenshots/phase1_notify.png
+!screenshots/phase1_phone_nav_moved.png
+!screenshots/phase2_remote_map.png
+
+# Python caches
+__pycache__/
+*.pyc

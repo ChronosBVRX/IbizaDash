@@ -1,0 +1,675 @@
+package com.chronosbvrx.ibizacompanion.feature.navigation
+
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.Bundle
+import android.util.Log
+import android.webkit.ConsoleMessage
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import com.chronosbvrx.ibizacompanion.BridgeLink
+import com.chronosbvrx.ibizacompanion.core.design.theme.IbizaColors
+import com.chronosbvrx.ibizacompanion.core.state.CompanionState
+import com.chronosbvrx.ibizacompanion.data.NominatimClient
+import com.chronosbvrx.ibizacompanion.data.PlaceResult
+import com.chronosbvrx.ibizacompanion.map.MapFrameSender
+import com.chronosbvrx.ibizacompanion.nav.PhoneNavController
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+
+private data class RoutePreview(
+    val destination: PlaceResult,
+    val distanceMeters: Int,
+    val durationSeconds: Int,
+    val encodedPolyline: String,
+    val steps: List<JSONObject>
+)
+
+private const val MAP_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="stylesheet" href="leaflet.css"/>
+<style>
+  html,body { height:100%; width:100%; margin:0; background:#080D14; }
+  #map { position:absolute; top:0; right:0; bottom:0; left:0; }
+  .leaflet-control-attribution { font-size:9px; background:rgba(8,13,20,.7); color:#91A2B5; }
+  .leaflet-control-attribution a { color:#42C8E8; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<script src="leaflet.js"></script>
+<script>
+  var map = L.map('map', { zoomControl:false, attributionControl:true }).setView([19.7060,-101.1950], 15);
+  var tiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19,
+    attribution: 'Esri, HERE, Garmin, © OpenStreetMap'
+  });
+  tiles.on('tileload', function(e){ console.log('tileload ' + e.tile.src); });
+  tiles.on('tileerror', function(e){ console.log('tileerror ' + e.tile.src); });
+  tiles.addTo(map);
+  // Offline-first layer: file:// PNG tree pushed by scripts/build_offline_pack.py.
+  // If local tiles miss repeatedly, it removes itself and the online layer shows.
+  var offlineBase = null, offlineMisses = 0, offlineHits = 0;
+  var offline = L.tileLayer('', { maxZoom: 19, maxNativeZoom: 15, attribution: '' });
+  offline.on('tileerror', function(e){
+    offlineMisses++;
+    if (offlineMisses > 14 && map.hasLayer(offline)) {
+      map.removeLayer(offline);
+      console.log('offline_fallback');
+    }
+  });
+  offline.on('tileload', function(e){ offlineMisses = 0; offlineHits++; });
+  function setOfflineBase(base) {
+    offlineBase = base;
+    offlineMisses = 0; offlineHits = 0;
+    offline.setUrl(base + '/{z}/{x}/{y}.png');
+    if (!map.hasLayer(offline)) { offline.addTo(map); offline.bringToFront(); }
+    if (routeLine) routeLine.bringToFront();
+    console.log('offline_on ' + base);
+  }
+  setTimeout(function(){ console.log('mapsize ' + map.getSize().x + 'x' + map.getSize().y + ' zoom ' + map.getZoom()); }, 1000);
+  var me = null, routeLine = null;
+  function setCurrent(lat, lon, center) {
+    if (me) map.removeLayer(me);
+    me = L.circleMarker([lat, lon], { radius:7, color:'#42C8E8', fillColor:'#42C8E8', fillOpacity:1, weight:3 }).addTo(map);
+    if (center) map.setView([lat, lon], 16);
+  }
+  function setRoute(points) {
+    if (routeLine) map.removeLayer(routeLine);
+    routeLine = L.polyline(points, { color:'#42C8E8', weight:7, opacity:0.95 }).addTo(map);
+    map.fitBounds(routeLine.getBounds(), { padding:[60,60] });
+  }
+  function clearRoute() {
+    if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+  }
+  function center(lat, lon) { map.setView([lat, lon], 16); }
+</script>
+</body>
+</html>
+"""
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+fun NavigationScreen() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val mainHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+    val appState by CompanionState.state.collectAsState()
+    val followState = rememberUpdatedState(appState.routeActive)
+
+    var query by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<PlaceResult>>(emptyList()) }
+    var searching by remember { mutableStateOf(false) }
+    var showSheet by remember { mutableStateOf(false) }
+    var searchJob by remember { mutableStateOf<Job?>(null) }
+    var route by remember { mutableStateOf<RoutePreview?>(null) }
+    var status by remember { mutableStateOf<String?>(null) }
+    var sendingTiles by remember { mutableStateOf(false) }
+    var tileProgress by remember { mutableStateOf("") }
+    var webView by remember { mutableStateOf<WebView?>(null) }
+    var mapReady by remember { mutableStateOf(false) }
+    var currentLat by remember { mutableStateOf(19.7060) }
+    var currentLon by remember { mutableStateOf(-101.1950) }
+    var centeredOnce by remember { mutableStateOf(false) }
+
+    val hasLocationPermission = ContextCompat.checkSelfPermission(
+        context, Manifest.permission.ACCESS_FINE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+
+    // Location updates -> Leaflet marker.
+    DisposableEffect(hasLocationPermission) {
+        val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+        val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                currentLat = location.latitude
+                currentLon = location.longitude
+                val center = !centeredOnce || followState.value
+                centeredOnce = true
+                webView?.post {
+                    webView?.evaluateJavascript(
+                        "setCurrent(${location.latitude},${location.longitude},$center)", null
+                    )
+                }
+            }
+            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+            override fun onProviderEnabled(provider: String) {}
+            override fun onProviderDisabled(provider: String) {}
+        }
+        if (hasLocationPermission && lm != null) {
+            try {
+                val last = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                    ?: lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                if (last != null) {
+                    currentLat = last.latitude
+                    currentLon = last.longitude
+                }
+                lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000L, 5f, listener)
+                lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 5000L, 20f, listener)
+            } catch (_: Exception) {
+            }
+        }
+        onDispose {
+            try {
+                lm?.removeUpdates(listener)
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    fun centerOnMe() {
+        webView?.evaluateJavascript("center($currentLat,$currentLon)", null)
+    }
+
+    fun drawRoute(points: List<android.location.Location>) {
+        // not used
+    }
+
+    fun drawRouteFromPolyline(encoded: String) {
+        val points = decodePolyline(encoded)
+        if (points.isEmpty()) return
+        val js = points.joinToString(",") { "[${it.first},${it.second}]" }
+        webView?.evaluateJavascript("setRoute([$js])", null)
+    }
+
+    fun calculateRoute(dest: PlaceResult) {
+        val fromLat = currentLat
+        val fromLon = currentLon
+        Log.d("Nav", "calculateRoute ${dest.displayName} from=$fromLat,$fromLon to=${dest.lat},${dest.lon}")
+        scope.launch {
+            status = "Calculando ruta…"
+            val built = withContext(Dispatchers.IO) {
+                com.chronosbvrx.ibizacompanion.data.RouteBuilder.build(
+                    fromLat, fromLon, dest.lat, dest.lon, dest.displayName
+                )
+            }
+            if (built == null) {
+                status = "No se pudo calcular la ruta"
+                return@launch
+            }
+            val preview = RoutePreview(
+                dest, built.distanceMeters, built.durationSeconds,
+                built.encodedPolyline, built.steps
+            )
+            route = preview
+            status = null
+            showSheet = true
+            drawRouteFromPolyline(built.encodedPolyline)
+        }
+    }
+
+    fun clearRouteOnStereo() {
+        CompanionState.clearRoute()
+        PhoneNavController.clear()
+        MapFrameSender.stop()
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                try {
+                    BridgeLink.clearRoute(context)
+                } catch (_: Exception) {
+                }
+            }
+        }
+    }
+
+    /** Envía las teselas del corredor cuando el enlace es Wi-Fi. */
+    fun sendRouteTiles(preview: RoutePreview) {
+        if (sendingTiles) return
+        if (!BridgeLink.isWifiActive()) {
+            status = "Conecta por Wi-Fi Direct para enviar el mapa"
+            return
+        }
+        sendingTiles = true
+        tileProgress = "0/0"
+        status = "Preparando mapa del recorrido…"
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                com.chronosbvrx.ibizacompanion.data.TileSender.sendRouteTiles(
+                    context,
+                    preview.encodedPolyline
+                ) { sent, total ->
+                    if (sent == total || sent % 8 == 0) {
+                        mainHandler.post {
+                            tileProgress = "$sent/$total"
+                            status = "Enviando mapa $sent/$total…"
+                        }
+                    }
+                }
+            }
+            sendingTiles = false
+            status = when {
+                result.total == 0 -> "Sin Wi-Fi activo: no se envió el mapa"
+                result.sent == 0 -> "No se pudo descargar el mapa del recorrido"
+                else -> "Mapa enviado: ${result.sent}/${result.total} teselas"
+            }
+        }
+    }
+
+    fun sendRoute() {
+        val preview = route ?: return
+        scope.launch {
+            status = "Enviando al IbizaDash…"
+            val ok = withContext(Dispatchers.IO) {
+                BridgeLink.sendRouteSet(
+                    context,
+                    preview.destination.displayName,
+                    preview.distanceMeters,
+                    preview.durationSeconds,
+                    preview.encodedPolyline,
+                    preview.steps
+                )
+            }
+            if (ok) {
+                status = "Ruta enviada al IbizaDash"
+                CompanionState.update {
+                    it.copy(
+                        routeActive = true,
+                        routeDestination = preview.destination.displayName,
+                        routePolyline = preview.encodedPolyline,
+                        routeDistanceM = preview.distanceMeters,
+                        routeDurationS = preview.durationSeconds,
+                        routeRemainingM = preview.distanceMeters,
+                        routeRemainingText = "Calculando…",
+                        routeEtaText = "",
+                        routeNextStep = "Esperando GPS",
+                        routeIcon = "STRAIGHT",
+                        routeProgress = 0f,
+                        routeArrived = false,
+                        routeOffRoute = false
+                    )
+                }
+                // A partir de aquí la navegación la calcula el teléfono con su
+                // GPS; el estéreo solo pinta PHONE_NAV_STATE.
+                PhoneNavController.setRoute(
+                    context,
+                    preview.destination.displayName,
+                    preview.distanceMeters,
+                    preview.durationSeconds,
+                    preview.encodedPolyline,
+                    preview.steps
+                )
+                // El mapa del corredor sólo viaja por Wi-Fi (son MB, no KB).
+                if (BridgeLink.isWifiActive()) {
+                    sendRouteTiles(preview)
+                }
+            } else {
+                status = "No se pudo enviar (revisa Wi-Fi/Bluetooth)"
+            }
+        }
+    }
+
+    Box(Modifier.fillMaxSize().background(IbizaColors.Background)) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { ctx ->
+                WebView(ctx).apply {
+                    layoutParams = android.view.ViewGroup.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.loadsImagesAutomatically = true
+                    settings.setSupportZoom(false)
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            Log.d("MapWeb", "onPageFinished $url")
+                            mapReady = true
+                            view?.evaluateJavascript("console.log('L='+(typeof L));") { r ->
+                                Log.d("MapWeb", "L check: $r")
+                            }
+                        }
+
+                        override fun onReceivedError(
+                            view: WebView?,
+                            request: WebResourceRequest?,
+                            error: WebResourceError?
+                        ) {
+                            Log.e("MapWeb", "error ${request?.url} ${error?.description}")
+                        }
+                    }
+                    webChromeClient = object : WebChromeClient() {
+                        override fun onConsoleMessage(msg: ConsoleMessage): Boolean {
+                            Log.d("MapWeb", "console: ${msg.message()} @${msg.sourceId()}:${msg.lineNumber()}")
+                            return true
+                        }
+                    }
+                    setBackgroundColor(android.graphics.Color.parseColor("#080D14"))
+                    settings.allowFileAccess = true
+                    settings.allowContentAccess = true
+                    @Suppress("DEPRECATION")
+                    settings.allowFileAccessFromFileURLs = true
+                    @Suppress("DEPRECATION")
+                    settings.allowUniversalAccessFromFileURLs = true
+                    settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                    loadDataWithBaseURL("file:///android_asset/leaflet/", MAP_HTML, "text/html", "UTF-8", null)
+                    webView = this
+                }
+            },
+            update = { view ->
+                webView = view
+            }
+        )
+
+        LaunchedEffect(webView) {
+            delay(1200L)
+            webView?.evaluateJavascript("setCurrent($currentLat,$currentLon,true)", null)
+            // Offline tile pack (scripts/build_offline_pack.py) if present.
+            // External app storage first so adb can push the PNG tree without root.
+            try {
+                val pack = context.getExternalFilesDir(null)?.let {
+                    java.io.File(it, "offline-tiles")
+                } ?: java.io.File(context.filesDir, "offline-tiles")
+                if (pack.isDirectory && (pack.list()?.isNotEmpty() == true)) {
+                    webView?.evaluateJavascript(
+                        "setOfflineBase('file://${pack.absolutePath}')", null
+                    )
+                    Log.d("MapWeb", "offline pack activo: ${pack.absolutePath}")
+                }
+            } catch (_: Exception) {
+            }
+        }
+
+        LaunchedEffect(appState.routePolyline) {
+            if (appState.routePolyline.isNotBlank() && route == null) {
+                delay(400L)
+                drawRouteFromPolyline(appState.routePolyline)
+            }
+        }
+
+        LaunchedEffect(webView, mapReady, appState.wifiConnected, appState.routeActive) {
+            val view = webView
+            if (view != null && mapReady && appState.wifiConnected && appState.routeActive) {
+                MapFrameSender.start(view)
+            } else {
+                MapFrameSender.stop()
+            }
+        }
+
+        DisposableEffect(Unit) {
+            onDispose { MapFrameSender.stop() }
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+                .background(IbizaColors.Surface.copy(alpha = 0.96f), RoundedCornerShape(18.dp))
+                .padding(10.dp)
+        ) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { q ->
+                    query = q
+                    searchJob?.cancel()
+                    if (q.length >= 3) {
+                        searchJob = scope.launch {
+                            // Debounce: Nominatim allows ~1 request/second.
+                            delay(700L)
+                            searching = true
+                            val res = withContext(Dispatchers.IO) {
+                                val photon = com.chronosbvrx.ibizacompanion.data.PhotonClient.search(q, currentLat, currentLon)
+                                if (photon.isNotEmpty()) photon else {
+                                    val near = NominatimClient.searchNear(q, currentLat, currentLon)
+                                    if (near.isNotEmpty()) near else NominatimClient.search(q)
+                                }
+                            }
+                            results = res
+                            searching = false
+                            if (res.isNotEmpty()) {
+                                status = null
+                                showSheet = true
+                            } else {
+                                status = "Sin resultados para \"$q\""
+                            }
+                        }
+                    } else {
+                        results = emptyList()
+                        searching = false
+                    }
+                },
+                placeholder = { Text("¿Qué quieres hacer o a dónde vamos?", color = IbizaColors.TextSecondary) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = IbizaColors.Primary) },
+                trailingIcon = {
+                    if (searching) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = IbizaColors.Primary,
+                            strokeWidth = 2.dp
+                        )
+                    } else if (query.isNotEmpty()) {
+                        IconButton(onClick = { query = ""; results = emptyList() }) {
+                            Icon(Icons.Default.Close, contentDescription = "Limpiar", tint = IbizaColors.TextSecondary)
+                        }
+                    }
+                },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = {
+                    if (results.isNotEmpty()) calculateRoute(results.first())
+                }),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = IbizaColors.Primary,
+                    unfocusedBorderColor = IbizaColors.Border,
+                    focusedTextColor = IbizaColors.TextPrimary,
+                    unfocusedTextColor = IbizaColors.TextPrimary,
+                    cursorColor = IbizaColors.Primary
+                )
+            )
+            if (results.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                TextButton(onClick = { showSheet = true }) {
+                    Icon(Icons.Default.List, contentDescription = null, tint = IbizaColors.Primary, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("${results.size} sugerencias", color = IbizaColors.Primary)
+                }
+            }
+        }
+
+        // Recenter FAB
+        FloatingActionButton(
+            onClick = { centerOnMe() },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = 16.dp),
+            containerColor = IbizaColors.SurfaceElevated,
+            contentColor = IbizaColors.Primary
+        ) {
+            Icon(Icons.Default.MyLocation, contentDescription = "Centrar en mi ubicación")
+        }
+
+        // Status
+        status?.let { msg ->
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = IbizaColors.SurfaceElevated,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 120.dp)
+            ) {
+                Text(
+                    msg,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = IbizaColors.TextSecondary,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                )
+            }
+        }
+    }
+
+    // Suggestions / route sheet
+    if (showSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSheet = false },
+            containerColor = IbizaColors.Surface,
+            contentColor = IbizaColors.TextPrimary,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = IbizaColors.TextSecondary) }
+        ) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
+                val preview = route
+                if (preview == null) {
+                    Text("Sugerencias para \"$query\"", style = MaterialTheme.typography.titleMedium, color = IbizaColors.TextPrimary)
+                    Text("Calles, negocios, destinos o lo que quieras hacer", style = MaterialTheme.typography.bodySmall, color = IbizaColors.TextSecondary)
+                    Spacer(Modifier.height(10.dp))
+                    LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                        items(results) { place ->
+                            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Surface(shape = RoundedCornerShape(10.dp), color = IbizaColors.SurfaceElevated, modifier = Modifier.size(36.dp)) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Place, contentDescription = null, tint = IbizaColors.Primary, modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                                Spacer(Modifier.width(10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(place.displayName, style = MaterialTheme.typography.bodyMedium, color = IbizaColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                }
+                                TextButton(onClick = {
+                                    query = place.displayName.take(48)
+                                    calculateRoute(place)
+                                }) {
+                                    Text("Ir", color = IbizaColors.Primary)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(shape = RoundedCornerShape(12.dp), color = IbizaColors.SurfaceElevated, modifier = Modifier.size(44.dp)) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Route, contentDescription = null, tint = IbizaColors.Primary, modifier = Modifier.size(22.dp))
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(preview.destination.displayName, style = MaterialTheme.typography.titleMedium, color = IbizaColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                "${"%.1f".format(preview.distanceMeters / 1000.0)} km · ${preview.durationSeconds / 60} min",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = IbizaColors.TextSecondary
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                route = null
+                                query = ""
+                                showSheet = false
+                                webView?.evaluateJavascript("clearRoute()", null)
+                                clearRouteOnStereo()
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Cancelar", color = IbizaColors.TextSecondary)
+                        }
+                        Button(
+                            onClick = { sendRoute() },
+                            modifier = Modifier.weight(1.5f),
+                            colors = ButtonDefaults.buttonColors(containerColor = IbizaColors.Primary, contentColor = IbizaColors.Background),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Enviar al IbizaDash")
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { sendRouteTiles(preview) },
+                        enabled = !sendingTiles,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Map,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = IbizaColors.TextSecondary
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            if (sendingTiles) "Enviando mapa $tileProgress"
+                            else "Enviar mapa del recorrido",
+                            color = IbizaColors.TextSecondary
+                        )
+                    }
+                    Text(
+                        "Teselas z14–z15 por Wi-Fi Direct (offline en el estéreo).",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = IbizaColors.TextSecondary
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+        }
+    }
+}
+
+private fun decodePolyline(encoded: String): List<Pair<Double, Double>> {
+    val poly = ArrayList<Pair<Double, Double>>()
+    var index = 0
+    val len = encoded.length
+    var lat = 0
+    var lng = 0
+    while (index < len) {
+        var b: Int
+        var shift = 0
+        var result = 0
+        do {
+            b = encoded[index++].code - 63
+            result = result or ((b and 0x1f) shl shift)
+            shift += 5
+        } while (b >= 0x20)
+        val dlat = if ((result and 1) != 0) (result shr 1).inv() else (result shr 1)
+        lat += dlat
+
+        shift = 0
+        result = 0
+        do {
+            b = encoded[index++].code - 63
+            result = result or ((b and 0x1f) shl shift)
+            shift += 5
+        } while (b >= 0x20)
+        val dlng = if ((result and 1) != 0) (result shr 1).inv() else (result shr 1)
+        lng += dlng
+        poly.add(lat / 1e5 to lng / 1e5)
+    }
+    return poly
+}
