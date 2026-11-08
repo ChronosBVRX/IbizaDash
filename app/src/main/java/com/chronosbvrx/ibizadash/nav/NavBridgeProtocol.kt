@@ -342,7 +342,8 @@ object NavBridgeProtocol {
     }
 
     /**
-     * Guarda una tesela en la caché de osmdroid:     * files/osmdroid/tiles/EsriDark/{z}/{x}/{y}.png
+     * Guarda una tesela en la caché de osmdroid:
+     * files/osmdroid/tiles/EsriDark/{z}/{x}/{y}.tile
      */
     private fun saveTile(context: Context, obj: JSONObject) {
         try {
@@ -360,10 +361,10 @@ object NavBridgeProtocol {
             )
             val dir = File(base, "$zoom/$x")
             if (!dir.exists() && !dir.mkdirs()) return
-            val target = File(dir, "$y.png")
+            val target = File(dir, "$y.tile")
 
             // Escritura atómica: osmdroid no debe leer un PNG a medias.
-            val tmp = File(dir, "$y.png.tmp")
+            val tmp = File(dir, "$y.tile.tmp")
             tmp.writeBytes(bytes)
             if (!tmp.renameTo(target)) {
                 target.writeBytes(bytes)

@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IbizaDash + IbizaCompanion · Galería de pantallas</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --card: #121c2e;
+    --card2: #17233a;
+    --line: #22314c;
+    --text: #eef3fc;
+    --muted: #8a94a6;
+    --accent: #2d7df6;
+    --accent2: #1fb6ff;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: radial-gradient(1200px 600px at 20% -10%, #13233f 0%, var(--bg) 55%) fixed;
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  header {
+    padding: 42px 28px 26px;
+    max-width: 1480px;
+    margin: 0 auto;
+  }
+  h1 {
+    margin: 0 0 8px;
+    font-size: clamp(28px, 4vw, 46px);
+    letter-spacing: -0.02em;
+  }
+  .lead { color: var(--muted); font-size: 16px; max-width: 900px; line-height: 1.55; }
+  .badges { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+  .badge {
+    border: 1px solid var(--line);
+    background: rgba(45,125,246,.10);
+    color: #cfe2ff;
+    border-radius: 999px;
+    padding: 7px 13px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .badge.alt { background: rgba(31,182,255,.08); }
+  .badge.green { background: rgba(45,200,120,.10); color: #b9f6d4; }
+  nav.toc {
+    max-width: 1480px;
+    margin: 0 auto;
+    padding: 0 28px;
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  nav.toc a { color: var(--accent2); text-decoration: none; font-weight: 600; font-size: 14px; }
+  nav.toc a:hover { text-decoration: underline; }
+  main { max-width: 1480px; margin: 0 auto; padding: 10px 28px 60px; }
+  section { margin-top: 46px; }
+  h2 {
+    font-size: 24px;
+    margin: 0 0 4px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  h2 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 16px var(--accent); }
+  .section-sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+  .contact {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 18px;
+    margin: 18px 0 8px;
+  }
+  .contact a {
+    display: block;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--card);
+    transition: transform .18s ease, border-color .18s ease;
+  }
+  .contact a:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .contact img { display: block; width: 100%; height: auto; }
+  .contact span { display: block; padding: 12px 14px; color: var(--muted); font-size: 13px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+    gap: 18px;
+  }
+  .shot {
+    background: linear-gradient(180deg, var(--card2), var(--card));
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  }
+  .shot:hover {
+    transform: translateY(-3px);
+    border-color: #3b6fd0;
+    box-shadow: 0 12px 34px rgba(0,0,0,.35);
+  }
+  .shot button {
+    display: block;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: zoom-in;
+    line-height: 0;
+  }
+  .shot img { width: 100%; height: auto; display: block; }
+  .shot .meta { padding: 14px 15px 16px; }
+  .shot h3 { margin: 0 0 5px; font-size: 16px; }
+  .shot p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+  .hint {
+    margin-top: 10px;
+    color: #6f7c92;
+    font-size: 12px;
+  }
+  footer {
+    border-top: 1px solid var(--line);
+    max-width: 1480px;
+    margin: 0 auto;
+    padding: 24px 28px 50px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  dialog {
+    border: 1px solid var(--line);
+    background: #0d1627;
+    padding: 0;
+    border-radius: 16px;
+    max-width: min(96vw, 1400px);
+    max-height: 94vh;
+    color: var(--text);
+    box-shadow: 0 30px 90px rgba(0,0,0,.6);
+  }
+  dialog::backdrop { background: rgba(3, 8, 18, .82); backdrop-filter: blur(3px); }
+  dialog img { display: block; width: 100%; height: auto; max-height: calc(94vh - 70px); object-fit: contain; background: #000; }
+  .dlg-bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 16px; }
+  .dlg-bar strong { font-size: 14px; }
+  .dlg-bar button {
+    border: 1px solid var(--line);
+    background: var(--card2);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 7px 14px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .dlg-bar button:hover { border-color: var(--accent); }
+  @media (max-width: 560px) {
+    header, nav.toc, main, footer { padding-left: 16px; padding-right: 16px; }
+    .grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>IbizaDash + IbizaCompanion</h1>
+  <p class="lead">
+    Galería de pantallas de las dos apps, capturada directamente del emulador a 1280×720.
+    Sirve para evaluar jerarquía, tamaños, iconos y flujos sin abrir la aplicación.
+    Los datos del coche son del modo demo y el mapa usa el paquete offline de Morelia.
+  </p>
+  <div class="badges">
+    <span class="badge">IbizaDash 1.5.4 · estéreo</span>
+    <span class="badge alt">IbizaCompanion 1.5.3 · teléfono</span>
+    <span class="badge green">15 pantallas del estéreo</span>
+    <span class="badge green">10 pantallas del teléfono</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <a href="#estereo">Estéreo</a>
+  <a href="#telefono">Teléfono</a>
+  <a href="#hojas">Hojas de contacto</a>
+  <a href="https://github.com/ChronosBVRX/IbizaDash/releases/latest">Última versión</a>
+</nav>
+
+<main>
+
+  <section id="estereo">
+    <h2><span class="dot"></span>IbizaDash · estéreo del coche</h2>
+    <p class="section-sub">Launcher a pantalla completa con mapa, estado del vehículo, música, radio y diagnóstico.</p>
+    <div class="grid">
+
+      <article class="shot">
+        <button onclick="show(this,'Inicio','Mapa, velocidad, estado del coche, reproductor y salud del motor en una sola vista.')"><img src="stereo/01-inicio.png" alt="Inicio IbizaDash" loading="lazy"></button>
+        <div class="meta"><h3>Inicio</h3><p>Mapa, velocidad, estado del coche, reproductor y salud del motor en una sola vista.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Mapa','Vista completa del mapa, posición del coche y acceso a la guía.')"><img src="stereo/02-mapa.png" alt="Mapa IbizaDash" loading="lazy"></button>
+        <div class="meta"><h3>Mapa</h3><p>Vista completa del mapa, posición del coche y acceso a la guía.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Música','Reproductor con portada, progreso, controles y origen Bluetooth o radio.')"><img src="stereo/03-musica.png" alt="Música IbizaDash" loading="lazy"></button>
+        <div class="meta"><h3>Música</h3><p>Reproductor con portada, progreso, controles y origen Bluetooth o radio.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Radio','Sintonizador FM, banda, presets y búsqueda de emisoras.')"><img src="stereo/04-radio.png" alt="Radio IbizaDash" loading="lazy"></button>
+        <div class="meta"><h3>Radio</h3><p>Sintonizador FM, banda, presets y búsqueda de emisoras.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Mi Auto','Resumen visual de temperatura, sistema eléctrico, combustible y mantenimiento.')"><img src="stereo/05-mi-auto.png" alt="Mi Auto IbizaDash" loading="lazy"></button>
+        <div class="meta"><h3>Mi Auto</h3><p>Resumen visual de temperatura, sistema eléctrico, combustible y mantenimiento.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Diagnóstico','Velocidad, marcha, fuente y reversa; acceso a Motor, Eléctrico, Fallas y Consola.')"><img src="stereo/06-diagnostico.png" alt="Diagnóstico IbizaDash" loading="lazy"></button>
+        <div class="meta"><h3>Diagnóstico</h3><p>Velocidad, marcha, fuente y reversa; acceso a Motor, Eléctrico, Fallas y Consola.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Motor','RPM, carga, acelerador, refrigerante, admisión, avance y mezcla, cada uno con su icono.')"><img src="stereo/07-motor.png" alt="Motor IbizaDash" loading="lazy"></button>
+        <div class="meta"><h3>Motor</h3><p>RPM, carga, acelerador, refrigerante, admisión, avance y mezcla, cada uno con su icono.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Eléctrico','Batería y carga en vivo, con el rango sano y el estado explicado.')"><img src="stereo/08-electrico.png" alt="Eléctrico IbizaDash" loading="lazy"></button>
+        <div class="meta"><h3>Eléctrico</h3><p>Batería y carga en vivo, con el rango sano y el estado explicado.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Fallas','Lectura de códigos DTC y diccionario adaptado al Ibiza 6J 2.0 CEKA.')"><img src="stereo/09-fallas.png" alt="Fallas IbizaDash" loading="lazy"></button>
+        <div class="meta"><h3>Fallas</h3><p>Lectura de códigos DTC y diccionario adaptado al Ibiza 6J 2.0 CEKA.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Consola','Comandos OBD, VIN, prueba de gasolina y calibración del tanque.')"><img src="stereo/10-consola.png" alt="Consola IbizaDash" loading="lazy"></button>
+        <div class="meta"><h3>Consola</h3><p>Comandos OBD, VIN, prueba de gasolina y calibración del tanque.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Ajustes rápidos','Brillo, modo noche, silencio y voz de navegación.')"><img src="stereo/11-ajustes-rapidos.png" alt="Ajustes rápidos IbizaDash" loading="lazy"></button>
+        <div class="meta"><h3>Ajustes rápidos</h3><p>Brillo, modo noche, silencio y voz de navegación.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Música y conexión','Sonido, Wi-Fi, datos del auto, mapas offline, launcher y actualización del sistema.')"><img src="stereo/12-ajustes-conexion.png" alt="Música y conexión IbizaDash" loading="lazy"></button>
+        <div class="meta"><h3>Música y conexión</h3><p>Sonido, Wi-Fi, datos del auto, mapas offline, launcher y actualización del sistema.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Ajustes','Preferencias del sistema: clima, demo de media, 5 GHz, unidades y permisos.')"><img src="stereo/13-ajustes.png" alt="Ajustes IbizaDash" loading="lazy"></button>
+        <div class="meta"><h3>Ajustes</h3><p>Preferencias del sistema: clima, demo de media, 5 GHz, unidades y permisos.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Aplicaciones','Acceso a todas las apps instaladas sin salir del launcher.')"><img src="stereo/15-apps.png" alt="Aplicaciones IbizaDash" loading="lazy"></button>
+        <div class="meta"><h3>Aplicaciones</h3><p>Acceso a todas las apps instaladas sin salir del launcher.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Guía en ruta','Ruta real con maniobra, distancia, ETA, destino y botón para finalizar.')"><img src="stereo/16-guia.png" alt="Guía en ruta IbizaDash" loading="lazy"></button>
+        <div class="meta"><h3>Guía en ruta</h3><p>Ruta real con maniobra, distancia, ETA, destino y botón para finalizar.</p></div>
+      </article>
+
+    </div>
+  </section>
+
+  <section id="telefono">
+    <h2><span class="dot"></span>IbizaCompanion · teléfono</h2>
+    <p class="section-sub">Mando del estéreo: rutas, música, conexión Wi-Fi Direct y actualizaciones.</p>
+    <div class="grid">
+
+      <article class="shot">
+        <button onclick="show(this,'Inicio','Estado del enlace, ruta activa con ETA y accesos rápidos.')"><img src="phone/01-inicio.png" alt="Inicio IbizaCompanion" loading="lazy"></button>
+        <div class="meta"><h3>Inicio</h3><p>Estado del enlace, ruta activa con ETA y accesos rápidos.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Rutas','Búsqueda de calles, negocios o destinos.')"><img src="phone/02-rutas.png" alt="Rutas IbizaCompanion" loading="lazy"></button>
+        <div class="meta"><h3>Rutas</h3><p>Búsqueda de calles, negocios o destinos.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Sugerencias','Resultados de búsqueda con acceso directo a cada destino.')"><img src="phone/03-rutas-sugerencias.png" alt="Sugerencias IbizaCompanion" loading="lazy"></button>
+        <div class="meta"><h3>Sugerencias</h3><p>Resultados de búsqueda con acceso directo a cada destino.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Ruta calculada','Distancia, duración y envío de la ruta al estéreo.')"><img src="phone/04-ruta.png" alt="Ruta calculada IbizaCompanion" loading="lazy"></button>
+        <div class="meta"><h3>Ruta calculada</h3><p>Distancia, duración y envío de la ruta al estéreo.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Música','Control de reproducción y búsqueda de música.')"><img src="phone/05-musica.png" alt="Música IbizaCompanion" loading="lazy"></button>
+        <div class="meta"><h3>Música</h3><p>Control de reproducción y búsqueda de música.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Conexión','Estado de Wi-Fi Direct, IP del estéreo y reconexión.')"><img src="phone/06-conexion.png" alt="Conexión IbizaCompanion" loading="lazy"></button>
+        <div class="meta"><h3>Conexión</h3><p>Estado de Wi-Fi Direct, IP del estéreo y reconexión.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Actualización OTA','Estado de la actualización del estéreo y búsqueda manual.')"><img src="phone/07-conexion-ota.png" alt="Actualización OTA IbizaCompanion" loading="lazy"></button>
+        <div class="meta"><h3>Actualización OTA</h3><p>Estado de la actualización del estéreo y búsqueda manual.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Ajustes','Versión instalada, tráfico TomTom y módulos descargables.')"><img src="phone/08-ajustes.png" alt="Ajustes IbizaCompanion" loading="lazy"></button>
+        <div class="meta"><h3>Ajustes</h3><p>Versión instalada, tráfico TomTom y módulos descargables.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Módulos y sistema','Instalación de mapas, permisos y automatización del enlace.')"><img src="phone/09-ajustes-modulos.png" alt="Módulos IbizaCompanion" loading="lazy"></button>
+        <div class="meta"><h3>Módulos y sistema</h3><p>Instalación de mapas, permisos y automatización del enlace.</p></div>
+      </article>
+
+      <article class="shot">
+        <button onclick="show(this,'Sistema','Diagnóstico, versiones y estado del enlace.')"><img src="phone/10-ajustes-sistema.png" alt="Sistema IbizaCompanion" loading="lazy"></button>
+        <div class="meta"><h3>Sistema</h3><p>Diagnóstico, versiones y estado del enlace.</p></div>
+      </article>
+
+    </div>
+  </section>
+
+  <section id="hojas">
+    <h2><span class="dot"></span>Hojas de contacto</h2>
+    <p class="section-sub">Vista rápida de todas las pantallas en una sola imagen.</p>
+    <div class="contact">
+      <a href="contact-sheet-stereo.png" target="_blank"><img src="contact-sheet-stereo.png" alt="Hoja de contacto del estéreo" loading="lazy"><span>IbizaDash · 15 pantallas</span></a>
+      <a href="contact-sheet-phone.png" target="_blank"><img src="contact-sheet-phone.png" alt="Hoja de contacto del teléfono" loading="lazy"><span>IbizaCompanion · 10 pantallas</span></a>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  Capturas reales del emulador (1280×720) con datos OBD de demostración y el paquete offline de Morelia.
+  Haz clic en cualquier captura para verla a tamaño completo.
+  · IbizaDash 1.5.4 · IbizaCompanion 1.5.3 ·
+  <a href="https://github.com/ChronosBVRX/IbizaDash" style="color:#1fb6ff">ChronosBVRX/IbizaDash</a>
+</footer>
+
+<dialog id="lightbox" onclick="if(event.target===this)this.close()">
+  <div class="dlg-bar"><strong id="lbTitle"></strong><button onclick="document.getElementById('lightbox').close()">Cerrar</button></div>
+  <img id="lbImage" alt="">
+  <div class="dlg-bar"><span id="lbDesc" style="color:#8a94a6;font-size:13px"></span></div>
+</dialog>
+
+<script>
+  function show(btn, title, desc) {
+    const img = btn.querySelector('img');
+    document.getElementById('lbImage').src = img.src;
+    document.getElementById('lbTitle').textContent = title;
+    document.getElementById('lbDesc').textContent = desc;
+    document.getElementById('lightbox').showModal();
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') document.getElementById('lightbox').close();
+  });
+</script>
+</body>
+</html>

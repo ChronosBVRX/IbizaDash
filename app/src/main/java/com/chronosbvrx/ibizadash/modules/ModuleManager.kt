@@ -160,7 +160,13 @@ object ModuleManager {
                     zis.closeEntry()
                     continue
                 }
-                val out = File(target, name)
+                val isTiles = target.path.replace('\\', '/').endsWith("osmdroid/tiles/EsriDark")
+                val outName = if (isTiles && name.endsWith(".png", ignoreCase = true)) {
+                    name.dropLast(4) + ".tile"
+                } else {
+                    name
+                }
+                val out = File(target, outName)
                 val canonicalTarget = target.canonicalPath + File.separator
                 if (!out.canonicalPath.startsWith(canonicalTarget)) {
                     zis.closeEntry()

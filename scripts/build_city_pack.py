@@ -100,7 +100,7 @@ def main():
     ap.add_argument("--lon", type=float, default=-101.1950)
     ap.add_argument("--km", type=float, default=20.0, help="half-side of the box, in km")
     ap.add_argument("--zooms", default="13-16")
-    ap.add_argument("--version", type=int, default=1)
+    ap.add_argument("--version", type=int, default=2)
     ap.add_argument("--title", default="Mapas de Morelia")
     args = ap.parse_args()
 
@@ -136,7 +136,7 @@ def main():
                         failed[0] += 1
                     return
                 with lock:
-                    zf.writestr("%d/%d/%d.png" % (z, x, y), data)
+                    zf.writestr("%d/%d/%d.tile" % (z, x, y), data)
                     done[0] += 1
                     if done[0] % 200 == 0:
                         print("  ...%d" % done[0], flush=True)

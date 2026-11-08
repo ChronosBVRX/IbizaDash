@@ -40,7 +40,17 @@ object MapHelper {
     val DEFAULT_ZOOM = 16.0
 
     fun configure(context: Context, map: MapView) {
-        map.setTileSource(EsriDarkTileSource())
+        val source = EsriDarkTileSource()
+        // En Android 10+ osmdroid usa por defecto una caché SQL e ignora el
+        // árbol de teselas. El módulo offline y el teléfono escriben archivos,
+        // así que se fuerza el proveedor de sistema de archivos.
+        val provider = org.osmdroid.tileprovider.MapTileProviderBasic(
+            context,
+            source,
+            org.osmdroid.tileprovider.modules.TileWriter()
+        )
+        map.setTileProvider(provider)
+        map.setTileSource(source)
         // El estéreo no descarga mapas: usa la caché y las teselas que el
         // teléfono envía por Wi-Fi Direct (TILE_BATCH).
         map.setUseDataConnection(false)

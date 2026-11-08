@@ -1981,6 +1981,9 @@ class MainActivity : AppCompatActivity(), LocationListener {
             applyFocus(Focus.NAV)
         }
         addDockItem(R.drawable.ic_media, "MÚSICA") {
+            // Al volver a MÚSICA se muestra el reproductor, no la radio.
+            radioSource = false
+            updateSourceToggle()
             applyFocus(Focus.MEDIA)
         }
         addDockItem(R.drawable.ic_radio, "RADIO") {
