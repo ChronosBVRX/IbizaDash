@@ -75,8 +75,8 @@
 
             <ImageButton
                 android:id="@+id/sheetClose"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="Cerrar"
                 android:padding="11dp"

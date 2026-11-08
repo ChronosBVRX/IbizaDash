@@ -21,6 +21,8 @@ object Prefs {
     private const val FUEL_EMPTY_RAW = "fuel_empty_raw"
     private const val FUEL_UDS_ENABLED = "fuel_uds_enabled"
     private const val FUEL_UDS_DID = "fuel_uds_did"
+    private const val BRIGHTNESS_PCT = "brightness_pct"
+    private const val NIGHT_MODE = "night_mode"
 
     private fun p(context: Context) =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -72,6 +74,22 @@ object Prefs {
 
     fun setRadioPreset(context: Context, slot: Int, khz: Int) {
         p(context).edit().putInt("radio_preset_$slot", khz).apply()
+    }
+
+    /** Brillo de ventana elegido por el usuario (0–100). */
+    fun brightnessPct(context: Context): Int =
+        p(context).getInt(BRIGHTNESS_PCT, 80).coerceIn(0, 100)
+
+    fun setBrightnessPct(context: Context, value: Int) {
+        p(context).edit().putInt(BRIGHTNESS_PCT, value.coerceIn(0, 100)).apply()
+    }
+
+    /** Atenuación nocturna manual. */
+    fun nightMode(context: Context): Boolean =
+        p(context).getBoolean(NIGHT_MODE, false)
+
+    fun setNightMode(context: Context, value: Boolean) {
+        p(context).edit().putBoolean(NIGHT_MODE, value).apply()
     }
 
     fun totalOdometerKm(context: Context): Float =

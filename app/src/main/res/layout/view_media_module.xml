@@ -258,7 +258,7 @@
                 <TextView
                     android:id="@+id/mmOpenSource"
                     android:layout_width="wrap_content"
-                    android:layout_height="44dp"
+                    android:layout_height="48dp"
                     android:layout_marginTop="8dp"
                     android:background="@drawable/bg_action_pill"
                     android:fontFamily="sans-serif-medium"

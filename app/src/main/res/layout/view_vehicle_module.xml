@@ -82,7 +82,7 @@
                 android:paddingEnd="12dp"
                 android:text="OBD —"
                 android:textColor="@color/text_muted"
-                android:textSize="10sp" />
+                android:textSize="11sp" />
 
             <TextView
                 android:id="@+id/vBusChip"
@@ -95,7 +95,7 @@
                 android:paddingEnd="12dp"
                 android:text="GPS"
                 android:textColor="@color/accent_sky"
-                android:textSize="10sp" />
+                android:textSize="11sp" />
         </LinearLayout>
 
         <!-- Hero health status -->
@@ -170,7 +170,7 @@
                 android:paddingEnd="10dp"
                 android:text="ÓPTIMO"
                 android:textColor="@color/green"
-                android:textSize="9sp" />
+                android:textSize="10sp" />
         </LinearLayout>
 
         <!-- Health insight cards -->
@@ -255,7 +255,7 @@
                             android:maxLines="2"
                             android:text="El motor trabaja en su rango ideal"
                             android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
+                            android:textSize="11sp" />
                     </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
@@ -338,7 +338,7 @@
                             android:maxLines="2"
                             android:text="Sistema eléctrico funcionando sin problemas"
                             android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
+                            android:textSize="11sp" />
                     </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
@@ -425,7 +425,7 @@
                             android:maxLines="2"
                             android:text="Sin lectura"
                             android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
+                            android:textSize="11sp" />
                     </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
@@ -508,7 +508,7 @@
                             android:maxLines="2"
                             android:text="Faltan 9997 km para el próximo cambio"
                             android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
+                            android:textSize="11sp" />
                     </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
@@ -534,7 +534,7 @@
                 android:layout_height="wrap_content"
                 android:text="Toca para actualizar"
                 android:textColor="@color/text_faint"
-                android:textSize="9sp" />
+                android:textSize="10sp" />
         </LinearLayout>
 
         <LinearLayout
@@ -570,7 +570,7 @@
         <LinearLayout
             android:id="@+id/btnToggleTechData"
             android:layout_width="match_parent"
-            android:layout_height="42dp"
+            android:layout_height="48dp"
             android:layout_marginTop="10dp"
             android:background="@drawable/bg_toggle_row"
             android:clickable="true"
@@ -855,11 +855,29 @@
                         android:orientation="vertical"
                         android:padding="12dp">
 
-                        <TextView
-                            style="@style/Label"
-                            android:layout_width="wrap_content"
+                        <LinearLayout
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="RPM" />
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                style="@style/Label"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="RPM" />
+
+                            <TextView
+                                android:id="@+id/vRpmState"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="sans-serif-medium"
+                                android:maxLines="1"
+                                android:text="Sin dato"
+                                android:textColor="@color/text_muted"
+                                android:textSize="10sp" />
+                        </LinearLayout>
 
                         <TextView
                             android:id="@+id/vRpm"
@@ -880,7 +898,7 @@
                             android:maxLines="2"
                             android:text="Sin lectura"
                             android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
+                            android:textSize="11sp" />
                     </LinearLayout>
 
                     <LinearLayout
@@ -893,11 +911,29 @@
                         android:orientation="vertical"
                         android:padding="12dp">
 
-                        <TextView
-                            style="@style/Label"
-                            android:layout_width="wrap_content"
+                        <LinearLayout
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="CARGA MOTOR" />
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                style="@style/Label"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="CARGA MOTOR" />
+
+                            <TextView
+                                android:id="@+id/vLoadState"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="sans-serif-medium"
+                                android:maxLines="1"
+                                android:text="Sin dato"
+                                android:textColor="@color/text_muted"
+                                android:textSize="10sp" />
+                        </LinearLayout>
 
                         <TextView
                             android:id="@+id/vLoad"
@@ -918,7 +954,7 @@
                             android:maxLines="2"
                             android:text="Sin lectura"
                             android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
+                            android:textSize="11sp" />
                     </LinearLayout>
                 </LinearLayout>
 
@@ -939,11 +975,29 @@
                         android:orientation="vertical"
                         android:padding="12dp">
 
-                        <TextView
-                            style="@style/Label"
-                            android:layout_width="wrap_content"
+                        <LinearLayout
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="ACELERADOR" />
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                style="@style/Label"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="ACELERADOR" />
+
+                            <TextView
+                                android:id="@+id/vThrottleState"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="sans-serif-medium"
+                                android:maxLines="1"
+                                android:text="Sin dato"
+                                android:textColor="@color/text_muted"
+                                android:textSize="10sp" />
+                        </LinearLayout>
 
                         <TextView
                             android:id="@+id/vThrottle"
@@ -964,7 +1018,7 @@
                             android:maxLines="2"
                             android:text="Sin lectura"
                             android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
+                            android:textSize="11sp" />
                     </LinearLayout>
 
                     <LinearLayout
@@ -977,11 +1031,29 @@
                         android:orientation="vertical"
                         android:padding="12dp">
 
-                        <TextView
-                            style="@style/Label"
-                            android:layout_width="wrap_content"
+                        <LinearLayout
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="REFRIGERANTE" />
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                style="@style/Label"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="REFRIGERANTE" />
+
+                            <TextView
+                                android:id="@+id/vCoolantState"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="sans-serif-medium"
+                                android:maxLines="1"
+                                android:text="Sin dato"
+                                android:textColor="@color/text_muted"
+                                android:textSize="10sp" />
+                        </LinearLayout>
 
                         <TextView
                             android:id="@+id/vCoolant"
@@ -1002,7 +1074,7 @@
                             android:maxLines="2"
                             android:text="Sin lectura"
                             android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
+                            android:textSize="11sp" />
                     </LinearLayout>
                 </LinearLayout>
 
@@ -1023,11 +1095,29 @@
                         android:orientation="vertical"
                         android:padding="12dp">
 
-                        <TextView
-                            style="@style/Label"
-                            android:layout_width="wrap_content"
+                        <LinearLayout
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="ADMISIÓN" />
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                style="@style/Label"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="ADMISIÓN" />
+
+                            <TextView
+                                android:id="@+id/vIntakeState"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="sans-serif-medium"
+                                android:maxLines="1"
+                                android:text="Sin dato"
+                                android:textColor="@color/text_muted"
+                                android:textSize="10sp" />
+                        </LinearLayout>
 
                         <TextView
                             android:id="@+id/vIntake"
@@ -1048,7 +1138,7 @@
                             android:maxLines="2"
                             android:text="Sin lectura"
                             android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
+                            android:textSize="11sp" />
                     </LinearLayout>
 
                     <LinearLayout
@@ -1061,11 +1151,29 @@
                         android:orientation="vertical"
                         android:padding="12dp">
 
-                        <TextView
-                            style="@style/Label"
-                            android:layout_width="wrap_content"
+                        <LinearLayout
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="AVANCE" />
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                style="@style/Label"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="AVANCE" />
+
+                            <TextView
+                                android:id="@+id/vTimingState"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="sans-serif-medium"
+                                android:maxLines="1"
+                                android:text="Sin dato"
+                                android:textColor="@color/text_muted"
+                                android:textSize="10sp" />
+                        </LinearLayout>
 
                         <TextView
                             android:id="@+id/vTiming"
@@ -1086,7 +1194,7 @@
                             android:maxLines="2"
                             android:text="Sin lectura"
                             android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
+                            android:textSize="11sp" />
                     </LinearLayout>
                 </LinearLayout>
 
@@ -1107,11 +1215,29 @@
                         android:orientation="vertical"
                         android:padding="12dp">
 
-                        <TextView
-                            style="@style/Label"
-                            android:layout_width="wrap_content"
+                        <LinearLayout
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="MEZCLA TRIM" />
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                style="@style/Label"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="MEZCLA" />
+
+                            <TextView
+                                android:id="@+id/vTrimState"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="sans-serif-medium"
+                                android:maxLines="1"
+                                android:text="Sin dato"
+                                android:textColor="@color/text_muted"
+                                android:textSize="10sp" />
+                        </LinearLayout>
 
                         <TextView
                             android:id="@+id/vTrim"
@@ -1132,7 +1258,7 @@
                             android:maxLines="2"
                             android:text="Sin lectura"
                             android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
+                            android:textSize="11sp" />
                     </LinearLayout>
 
                     <LinearLayout
@@ -1170,7 +1296,7 @@
                             android:maxLines="2"
                             android:text="PID 010D de la ECU"
                             android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
+                            android:textSize="11sp" />
                     </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
@@ -1235,7 +1361,7 @@
                     android:layout_marginTop="8dp"
                     android:text="Leído vía ATRV + PID 0142. Con motor en marcha lo sano es 13.2–14.8 V."
                     android:textColor="@color/text_faint"
-                    android:textSize="10sp" />
+                    android:textSize="11sp" />
             </LinearLayout>
 
             <!-- PAGE: fallas -->
@@ -1299,7 +1425,7 @@
                         android:layout_marginTop="6dp"
                         android:text="El ELM327 lee la ECU de motor (modo 03). ABS, airbags y cuadro se leen con VCDS."
                         android:textColor="@color/text_faint"
-                        android:textSize="10sp" />
+                        android:textSize="11sp" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -1335,7 +1461,7 @@
                     android:layout_marginTop="8dp"
                     android:text="Si el check parpadea, detente: hay fallo de encendido activo."
                     android:textColor="@color/text_faint"
-                    android:textSize="10sp" />
+                    android:textSize="11sp" />
             </LinearLayout>
 
             <!-- PAGE: consola Tx/Rx -->
@@ -1384,15 +1510,15 @@
                     android:id="@+id/btnFuelUds"
                     style="@style/VehicleActionButton"
                     android:layout_width="match_parent"
-                    android:layout_height="44dp"
+                    android:layout_height="48dp"
                     android:layout_marginTop="6dp"
-                    android:text="Nivel real de combustible · UDS cuadro (0x2206)" />
+                    android:text="Nivel real de combustible · sensores del tablero" />
 
                 <Button
                     android:id="@+id/btnFuelCal"
                     style="@style/VehicleActionButton"
                     android:layout_width="match_parent"
-                    android:layout_height="44dp"
+                    android:layout_height="48dp"
                     android:layout_marginTop="6dp"
                     android:text="Calibrar tanque lleno con la última lectura" />
 
@@ -1400,7 +1526,7 @@
                     android:id="@+id/btnFuelCalEmpty"
                     style="@style/VehicleActionButton"
                     android:layout_width="match_parent"
-                    android:layout_height="44dp"
+                    android:layout_height="48dp"
                     android:layout_marginTop="6dp"
                     android:text="Calibrar reserva/vacío con la última lectura" />
 
@@ -1418,7 +1544,7 @@
                         android:padding="10dp"
                         android:text="Sin tráfico todavía."
                         android:textColor="@color/text_secondary"
-                        android:textSize="9sp" />
+                        android:textSize="10sp" />
                 </ScrollView>
 
                 <LinearLayout

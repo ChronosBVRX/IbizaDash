@@ -208,21 +208,28 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private lateinit var vReverseIcon: ImageView
     private lateinit var vCoolant: TextView
     private lateinit var vCoolantAdv: TextView
+    private lateinit var vCoolantState: TextView
     private lateinit var vObdChip: TextView
     private lateinit var vThrottle: TextView
     private lateinit var vThrottleAdv: TextView
+    private lateinit var vThrottleState: TextView
     private lateinit var vRpm: TextView
     private lateinit var vRpmAdv: TextView
+    private lateinit var vRpmState: TextView
     private lateinit var vLoad: TextView
     private lateinit var vLoadAdv: TextView
+    private lateinit var vLoadState: TextView
     private lateinit var vVoltage: TextView
     private lateinit var vVoltageState: TextView
     private lateinit var vIntake: TextView
     private lateinit var vIntakeAdv: TextView
+    private lateinit var vIntakeState: TextView
     private lateinit var vTiming: TextView
     private lateinit var vTimingAdv: TextView
+    private lateinit var vTimingState: TextView
     private lateinit var vTrim: TextView
     private lateinit var vTrimAdv: TextView
+    private lateinit var vTrimState: TextView
     private lateinit var vSpeedObd: TextView
     private lateinit var vSpeedObdAdv: TextView
     private lateinit var vVin: TextView
@@ -287,6 +294,19 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
     private val navStateListener: (NavState?) -> Unit = { state ->
         runOnUiThread { renderNavState(state) }
+    }
+
+    /**
+     * Listener de rutas guardado en un campo para poder retirarlo en
+     * onDestroy. Antes era un lambda anónimo: quedaba registrado en el
+     * repositorio global y retenía la Activity después de recrearla.
+     */
+    private val routeRepoListener: (NavRoute?) -> Unit = { route ->
+        runOnUiThread { onRouteChanged(route) }
+    }
+
+    private val weatherUpdate: (WeatherRepository.State) -> Unit = { state ->
+        runOnUiThread { renderWeather(state) }
     }
 
     /**
@@ -445,6 +465,9 @@ class MainActivity : AppCompatActivity(), LocationListener {
     }
 
     private val DEBUG_NAV_ACTION = "com.chronosbvrx.ibizadash.DEBUG_NAV_NOTIFICATION"
+
+    /** Ventana de reutilización del estado OTA verificado. */
+    private val OTA_STATUS_TTL_MS = 30_000L
     private val DEBUG_CALL_ACTION = "com.chronosbvrx.ibizadash.DEBUG_INCOMING_CALL"
     private var bluetoothClient: BluetoothStatusClient? = null
 
@@ -502,6 +525,21 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private var lastSpeedAlert = 0L
     private var lastBarUpdate = 0L
     private var lastTextUpdate = 0L
+
+    // Odómetro: acumulado en memoria y volcado periódico a prefs.
+    private var odometerPendingKm = 0f
+    private var lastOdometerMs = 0L
+    private var odometerFlushMs = 0L
+
+    private fun flushOdometer() {
+        if (odometerPendingKm <= 0f) return
+        try {
+            Prefs.addOdometerKm(this, odometerPendingKm)
+        } catch (_: Exception) {
+        }
+        odometerPendingKm = 0f
+        odometerFlushMs = SystemClock.elapsedRealtime()
+    }
 
     private val alertHide = Runnable {
         alertCapsule.animate().alpha(0f).setDuration(180L).withEndAction {
@@ -580,9 +618,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         requestLocationPermission()
 
         // El clima lo calcula el teléfono y llega por Wi-Fi Direct (WEATHER).
-        WeatherRepository.onUpdate = { state ->
-            runOnUiThread { renderWeather(state) }
-        }
+        WeatherRepository.onUpdate = weatherUpdate
         renderWeather(WeatherRepository.state)
         applyPrefs()
         syncMediaMode()
@@ -787,21 +823,28 @@ class MainActivity : AppCompatActivity(), LocationListener {
         vReverseIcon = findViewById(R.id.vReverseIcon)
         vCoolant = findViewById(R.id.vCoolant)
         vCoolantAdv = findViewById(R.id.vCoolantAdv)
+        vCoolantState = findViewById(R.id.vCoolantState)
         vObdChip = findViewById(R.id.vObdChip)
         vThrottle = findViewById(R.id.vThrottle)
         vThrottleAdv = findViewById(R.id.vThrottleAdv)
+        vThrottleState = findViewById(R.id.vThrottleState)
         vRpm = findViewById(R.id.vRpm)
         vRpmAdv = findViewById(R.id.vRpmAdv)
+        vRpmState = findViewById(R.id.vRpmState)
         vLoad = findViewById(R.id.vLoad)
         vLoadAdv = findViewById(R.id.vLoadAdv)
+        vLoadState = findViewById(R.id.vLoadState)
         vVoltage = findViewById(R.id.vVoltage)
         vVoltageState = findViewById(R.id.vVoltageState)
         vIntake = findViewById(R.id.vIntake)
         vIntakeAdv = findViewById(R.id.vIntakeAdv)
+        vIntakeState = findViewById(R.id.vIntakeState)
         vTiming = findViewById(R.id.vTiming)
         vTimingAdv = findViewById(R.id.vTimingAdv)
+        vTimingState = findViewById(R.id.vTimingState)
         vTrim = findViewById(R.id.vTrim)
         vTrimAdv = findViewById(R.id.vTrimAdv)
+        vTrimState = findViewById(R.id.vTrimState)
         vSpeedObd = findViewById(R.id.vSpeedObd)
         vSpeedObdAdv = findViewById(R.id.vSpeedObdAdv)
         vVin = findViewById(R.id.vVin)
@@ -821,7 +864,9 @@ class MainActivity : AppCompatActivity(), LocationListener {
         btStatus.setOnClickListener { showBluetoothDetails() }
         btChip.setOnClickListener { showBluetoothDetails() }
         navPill.setOnClickListener {
-            startActivity(Intent(this, MapActivity::class.java))
+            // El lienzo principal conserva la ruta y la guía activas; abrir
+            // MapActivity llevaba a un mapa sin la ruta del viaje.
+            applyFocus(Focus.NAV)
         }
         findViewById<View>(R.id.miniExpand).setOnClickListener {
             applyFocus(Focus.COCKPIT)
@@ -916,27 +961,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
     }
 
     private fun setupNavBridge() {
-        NavRouteRepository.addListener { route ->
-            runOnUiThread {
-                if (route == null) {
-                    clearNavRoute()
-                    RouteNavigator.stop()
-                    PhoneNavBridge.reset()
-                    RemoteMapBridge.stop()
-                    NavStateRepository.clear()
-                    NavStateRelay.onRouteCleared()
-                    lastMapBearing = 0f
-                    try {
-                        map.mapOrientation = 0f
-                    } catch (_: Exception) {
-                    }
-                } else {
-                    drawNavRoute(route)
-                    NavStateRelay.onRouteSet(route)
-                    RouteNavigator.start(this@MainActivity)
-                }
-            }
-        }
+        NavRouteRepository.addListener(routeRepoListener)
         PhoneNavBridge.start(this)
         RemoteMapBridge.attach(
             onFrame = { bmp -> runOnUiThread { showRemoteMap(bmp) } },
@@ -947,6 +972,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
         // cápsula (sin modal) para que el usuario lo instale cuando quiera.
         com.chronosbvrx.ibizadash.ota.OtaReceiver.onReady = { pending ->
             runOnUiThread {
+                otaStatusCheckedMs = 0L
+                otaStatusPending = pending
                 showAlert("Actualización v${pending.versionName} lista · Ajustes rápidos")
             }
         }
@@ -958,6 +985,26 @@ class MainActivity : AppCompatActivity(), LocationListener {
         try {
             registerReceiver(debugRouteReceiver, IntentFilter("com.chronosbvrx.ibizadash.DEBUG_ROUTE_SET"))
         } catch (_: Exception) {
+        }
+    }
+
+    private fun onRouteChanged(route: NavRoute?) {
+        if (route == null) {
+            clearNavRoute()
+            RouteNavigator.stop()
+            PhoneNavBridge.reset()
+            RemoteMapBridge.stop()
+            NavStateRepository.clear()
+            NavStateRelay.onRouteCleared()
+            lastMapBearing = 0f
+            try {
+                map.mapOrientation = 0f
+            } catch (_: Exception) {
+            }
+        } else {
+            drawNavRoute(route)
+            NavStateRelay.onRouteSet(route)
+            RouteNavigator.start(this)
         }
     }
 
@@ -1084,7 +1131,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private fun updateNavPill(turn: TurnInstruction?) {
         val title = if (turn == null) "Sin destino activo" else turn.title.ifBlank { turn.text }
         val subtitle = if (turn == null) {
-            "Toca para abrir la navegación"
+            "Toca para ver el mapa"
         } else {
             turn.text.takeIf { it.isNotBlank() && it != turn.title } ?: (turn.sub ?: "")
         }
@@ -1144,20 +1191,24 @@ class MainActivity : AppCompatActivity(), LocationListener {
             val chipColor = when {
                 state.error != null -> R.color.amber
                 state.demo -> R.color.amber
-                state.connected -> R.color.green
+                state.hasLiveData -> R.color.green
+                state.connected -> R.color.amber
                 else -> R.color.text_muted
             }
             vObdChip.setTextColor(ContextCompat.getColor(this, chipColor))
             vObdChip.text = when {
                 state.error != null -> state.error.take(14)
                 state.demo -> "OBD DEMO"
-                state.connected -> "OBD OK"
+                state.hasLiveData -> "OBD OK"
+                // Enlace abierto pero la ECU no contesta: no decir "OK".
+                state.connected -> "OBD sin datos"
                 else -> "OBD —"
             }
         }
 
         if (updateTexts) {
-            // Sin conexión: mostrar guiones honestos en vez de valores viejos.
+            // Sin conexión o sin lecturas vivas: guiones honestos en vez de
+            // valores viejos.
             val s = if (!state.connected && !state.demo) ObdTelemetry() else state
             vRpm.text = s.rpm?.toString() ?: "--"
             vRpmAdv.text = rpmAdvice(s.rpm)
@@ -1178,21 +1229,34 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
             vVoltage.text = s.batteryV?.let { "%.1f V".format(it) } ?: "--"
             vVoltageState.text = batteryAdvice(s.batteryV, s.rpm)
+            vVoltageState.setTextColor(
+                ContextCompat.getColor(this, batteryStateColor(s.batteryV, s.rpm))
+            )
+
+            applyMetricState(vRpmState, rpmState(s.rpm))
+            applyMetricState(vLoadState, loadState(s.loadPct))
+            applyMetricState(vThrottleState, throttleState(s.throttlePct))
+            applyMetricState(vCoolantState, coolantState(s.coolantC))
+            applyMetricState(vIntakeState, intakeState(s.intakeC))
+            applyMetricState(vTimingState, timingState(s.timingAdvanceDeg))
+            applyMetricState(vTrimState, trimState(s.fuelTrimPct))
 
             state.vin?.let { vVin.text = it }
             renderFaults(state)
         }
 
-        val parts = mutableListOf<String>()
-        state.coolantC?.let { parts.add("${it.roundToInt()} °C") }
-        state.intakeC?.let { parts.add("adm ${it.roundToInt()} °C") }
-        state.batteryV?.let { parts.add("%.1f V".format(it)) }
-        state.loadPct?.let { parts.add("${it.roundToInt()} %") }
-
-        // Accumulate odometer when OBD reports speed (used for oil-change math).
+        // Odómetro: se integra por tiempo real entre publicaciones. Antes se
+        // sumaba una fracción fija por cada aviso, así que dependía del ritmo
+        // del adaptador y escribía prefs cada segundo. Ahora se acumula en
+        // memoria y se vuelca cada minuto (y al pausar).
         val spd = state.speedKmh ?: 0
-        if (spd > 2) {
-            Prefs.addOdometerKm(this, (spd / 3600f) * 0.35f)
+        if (spd > 2 && lastOdometerMs > 0L) {
+            val dtHours = (now - lastOdometerMs).coerceIn(0L, 5_000L) / 3_600_000f
+            odometerPendingKm += spd * dtHours
+        }
+        lastOdometerMs = now
+        if (odometerPendingKm >= 0.05f && now - odometerFlushMs >= 60_000L) {
+            flushOdometer()
         }
 
         if (updateTexts) {
@@ -1372,67 +1436,137 @@ class MainActivity : AppCompatActivity(), LocationListener {
         dialog.show()
     }
 
+    /** Estado corto y visual de cada métrica: color + palabra cotidiana. */
+    private data class MetricState(val label: String, val color: Int)
+
+    private fun applyMetricState(view: TextView, state: MetricState) {
+        view.text = state.label
+        view.setTextColor(ContextCompat.getColor(this, state.color))
+    }
+
+    private fun rpmState(rpm: Int?): MetricState = when {
+        rpm == null -> MetricState("Sin dato", R.color.text_muted)
+        rpm < 300 -> MetricState("Apagado", R.color.text_muted)
+        rpm < 1000 -> MetricState("Ralentí", R.color.accent_sky)
+        rpm <= 2500 -> MetricState("Óptimo", R.color.green)
+        rpm <= 3400 -> MetricState("Alto", R.color.accent_sky)
+        else -> MetricState("Muy alto", R.color.amber)
+    }
+
+    private fun loadState(load: Float?): MetricState = when {
+        load == null -> MetricState("Sin dato", R.color.text_muted)
+        load < 60f -> MetricState("Normal", R.color.green)
+        load < 85f -> MetricState("Alto", R.color.accent_sky)
+        else -> MetricState("Exigido", R.color.amber)
+    }
+
+    private fun throttleState(pct: Float?): MetricState = when {
+        pct == null -> MetricState("Sin dato", R.color.text_muted)
+        pct < 5f -> MetricState("En reposo", R.color.text_muted)
+        pct < 40f -> MetricState("Suave", R.color.green)
+        pct < 80f -> MetricState("Acelerando", R.color.accent_sky)
+        else -> MetricState("A fondo", R.color.amber)
+    }
+
+    private fun coolantState(t: Float?): MetricState = when {
+        t == null -> MetricState("Sin dato", R.color.text_muted)
+        t < 60f -> MetricState("Frío", R.color.accent_sky)
+        t <= 104f -> MetricState("Óptimo", R.color.green)
+        t <= 111f -> MetricState("Caliente", R.color.amber)
+        else -> MetricState("Peligro", R.color.danger)
+    }
+
+    private fun intakeState(t: Float?): MetricState = when {
+        t == null -> MetricState("Sin dato", R.color.text_muted)
+        t < 50f -> MetricState("Fresco", R.color.green)
+        t <= 70f -> MetricState("Tibio", R.color.accent_sky)
+        else -> MetricState("Caliente", R.color.amber)
+    }
+
+    private fun timingState(t: Float?): MetricState = when {
+        t == null -> MetricState("Sin dato", R.color.text_muted)
+        t in 5f..20f -> MetricState("Normal", R.color.green)
+        t < 0f -> MetricState("Atrasado", R.color.amber)
+        else -> MetricState("Avanzado", R.color.accent_sky)
+    }
+
+    private fun trimState(t: Float?): MetricState = when {
+        t == null -> MetricState("Sin dato", R.color.text_muted)
+        t in -10f..10f -> MetricState("Equilibrada", R.color.green)
+        t > 10f -> MetricState("Pobre", R.color.amber)
+        else -> MetricState("Rica", R.color.amber)
+    }
+
+    private fun batteryStateColor(v: Float?, rpm: Int?): Int = when {
+        v == null -> R.color.text_muted
+        (rpm ?: 0) < 300 && v < 11.9f -> R.color.amber
+        (rpm ?: 0) >= 500 && v < 13.1f -> R.color.danger
+        v in 13.2f..14.8f -> R.color.green
+        v > 14.8f -> R.color.amber
+        else -> R.color.accent_sky
+    }
+
     private fun rpmAdvice(rpm: Int?): String = when {
         rpm == null -> "Sin lectura."
         rpm < 300 -> "Motor apagado o apenas arrancando."
-        rpm < 1000 -> "Ralentí normal (~750-850). Si tiembla, revisa bujías y cuerpo de aceleración."
-        rpm <= 2500 -> "Rango eficiente para circular."
-        rpm <= 3400 -> "Rango medio; normal al acelerar o subir."
-        else -> "RPM altas: sube de marcha si vas constante, y no lo sostengas en frío."
+        rpm < 1000 -> "En reposo. Si tiembla, conviene revisar bujías."
+        rpm <= 2500 -> "Rango cómodo para circular."
+        rpm <= 3400 -> "Normal al acelerar o subir una cuesta."
+        else -> "Gira muy alto: sube de marcha y no lo sostengas en frío."
     }
 
     private fun loadAdvice(load: Float?, rpm: Int?): String = when {
         load == null -> "Sin lectura."
-        load < 25 && (rpm ?: 0) < 1000 -> "Ralentí ligero, normal."
-        load < 60 -> "Esfuerzo moderado, buen rango."
-        load < 85 -> "Esfuerzo alto: aceleración o subida."
-        else -> "Carga muy alta: si es constante a baja velocidad, revisa frenos atascados o peso."
+        load < 25 && (rpm ?: 0) < 1000 -> "Trabajo ligero en reposo, normal."
+        load < 60 -> "Esfuerzo moderado, buen ritmo."
+        load < 85 -> "Va trabajando fuerte: aceleración o subida."
+        else -> "Trabajo muy alto: si sigue así en plano, revisa frenos o peso."
     }
 
     private fun throttleAdvice(p: Float?): String = when {
         p == null -> "Sin lectura."
         p < 5 -> "Pie fuera del acelerador."
-        p < 40 -> "Apertura parcial normal."
+        p < 40 -> "Aceleración suave."
         p < 80 -> "Acelerando con ganas."
-        else -> "A fondo: solo para rebases, no lo sostengas."
+        else -> "A fondo: solo para rebasar, no lo sostengas."
     }
 
     private fun coolantAdvice(t: Float?): String = when {
         t == null -> "Sin lectura."
-        t < 60 -> "Motor frío: maneja suave y evita acelerones."
-        t <= 104 -> "Rango ideal (tu 6J vive ~90 °C)."
-        t <= 111 -> "Más caliente de lo normal: modera la marcha y vigila el tráfico."
-        else -> "PELIGRO de sobrecalentamiento: detente en lugar seguro, NO abras el tapón caliente."
+        t < 60 -> "Aún frío: maneja suave y evita acelerones."
+        t <= 104 -> "En su temperatura ideal."
+        t <= 111 -> "Más caliente de lo normal: modera la marcha y vigila."
+        else -> "PELIGRO: detente en un lugar seguro y no abras el tapón caliente."
     }
 
     private fun intakeAdvice(t: Float?): String = when {
         t == null -> "Sin lectura."
-        t < 50 -> "Aire de admisión fresco, buena combustión."
-        t <= 70 -> "Admisión tibia; normal en tráfico."
-        else -> "Aire muy caliente: pierdes potencia; revisa filtro y mangueras."
+        t < 50 -> "Aire fresco, buena combustión."
+        t <= 70 -> "Aire tibio; normal en tráfico."
+        else -> "Aire muy caliente: pierdes potencia; revisa el filtro."
     }
 
     private fun batteryAdvice(v: Float?, rpm: Int?): String = when {
-        v == null -> "Sin lectura (se lee vía ATRV cada ~4 ciclos)."
-        (rpm ?: 0) < 300 && v < 11.9 -> "Batería débil con motor apagado: enciende pronto o carga."
-        (rpm ?: 0) >= 500 && v < 13.1 -> "CRÍTICO: el alternador no carga. Revisa banda, alternador y terminales."
-        v in 13.2f..14.8f -> "Carga sana."
-        v > 14.8 -> "Sobrevoltaje: revisa el regulador del alternador."
-        else -> "Valor en transición; observa si baja de 12 V apagado."
+        v == null -> "Sin lectura todavía."
+        (rpm ?: 0) < 300 && v < 11.9 -> "Batería baja con el motor apagado: enciende o carga pronto."
+        (rpm ?: 0) >= 500 && v < 13.1 -> "No está cargando: revisa la banda del alternador y las terminales."
+        v in 13.2f..14.8f -> "Cargando bien."
+        v > 14.8 -> "Voltaje alto: conviene revisar el regulador."
+        else -> "Valor en transición; observa si baja de 12 V con el motor apagado."
     }
 
     private fun trimAdvice(t: Float?): String = when {
         t == null -> "Sin lectura."
-        t in -10f..10f -> "Mezcla bien ajustada por la ECU."
-        t > 10 -> "La ECU agrega gasolina (+): posible fuga de vacío o MAF sucio."
-        else -> "La ECU quita gasolina (−): posible exceso de presión o inyector."
+        t in -10f..10f -> "Mezcla bien ajustada."
+        t > 10 -> "El motor pide más gasolina: puede entrar aire de más."
+        else -> "El motor recibe gasolina de más: conviene revisar inyectores."
     }
 
     private fun timingAdvice(t: Float?): String = when {
         t == null -> "Sin lectura."
-        t in 5f..20f -> "Avance típico en marcha."
-        t < 0 -> "Avance atrasado: la ECU protege el motor (carga alta)."
-        else -> "Avance alto: normal a carga ligera."
+        t in 5f..20f -> "Encendido bien ajustado en marcha."
+        t < 0 -> "Encendido atrasado: el motor se está protegiendo."
+        else -> "Encendido adelantado: normal con poca carga."
     }
 
     private fun trimInsight(state: ObdTelemetry): HumanInsight {
@@ -1514,12 +1648,21 @@ class MainActivity : AppCompatActivity(), LocationListener {
         }
 
         val heroColor = severityColor(human.headlineSeverity)
+        val noLiveData = !state.demo && !state.hasLiveData
+        val monitored = monitoredSystems(state)
+        val systemsLabel =
+            if (monitored == 1) "1 sistema monitoreado" else "$monitored sistemas monitoreados"
         vHumanHeadline.text = human.headlineStatus
-        vHumanHeroSub.text = when (human.headlineSeverity) {
-            Severity.GOOD -> "4 sistemas monitoreados · todo al día"
-            Severity.INFO -> "4 sistemas monitoreados · revisa las sugerencias"
-            Severity.WARNING -> "4 sistemas monitoreados · revisa los avisos"
-            Severity.CRITICAL -> "Atención prioritaria antes de continuar"
+        vHumanHeroSub.text = when {
+            noLiveData && state.connected ->
+                "El adaptador responde pero la ECU no entrega datos"
+            noLiveData ->
+                "Conecta el adaptador OBD para ver el motor"
+            human.headlineSeverity == Severity.CRITICAL ->
+                "Atención prioritaria antes de continuar"
+            human.headlineSeverity == Severity.WARNING -> "$systemsLabel · revisa los avisos"
+            human.headlineSeverity == Severity.INFO -> "$systemsLabel · revisa las sugerencias"
+            else -> "$systemsLabel · sin avisos pendientes"
         }
         vHumanHeroIcon.setImageResource(
             when (human.headlineSeverity) {
@@ -1528,11 +1671,12 @@ class MainActivity : AppCompatActivity(), LocationListener {
             }
         )
         vHumanHeroIcon.setColorFilter(heroColor)
-        vHumanStatusPill.text = when (human.headlineSeverity) {
-            Severity.GOOD -> "ÓPTIMO"
-            Severity.INFO -> "SUGERENCIA"
-            Severity.WARNING -> "ATENCIÓN"
-            Severity.CRITICAL -> "REVISAR"
+        vHumanStatusPill.text = when {
+            noLiveData -> "SIN DATOS"
+            human.headlineSeverity == Severity.GOOD -> "ÓPTIMO"
+            human.headlineSeverity == Severity.INFO -> "SUGERENCIA"
+            human.headlineSeverity == Severity.WARNING -> "ATENCIÓN"
+            else -> "REVISAR"
         }
         vHumanStatusPill.setTextColor(heroColor)
         vHumanStatusPill.backgroundTintList =
@@ -1563,6 +1707,15 @@ class MainActivity : AppCompatActivity(), LocationListener {
         )
 
         cockpitHealth.text = "${human.headlineStatus}\n${human.thermalMessage.title} · ${human.electricalMessage.title}"
+    }
+
+    /** Cantidad de sistemas con datos reales (mantenimiento siempre cuenta). */
+    private fun monitoredSystems(state: ObdTelemetry): Int {
+        var n = 1 // aceite/mantenimiento se basa en el odómetro local
+        if (state.coolantC != null || state.intakeC != null) n++
+        if (state.batteryV != null) n++
+        if (state.fuelLevelPct != null || state.fuelPct != null) n++
+        return n
     }
 
     private fun renderHumanInsight(
@@ -1706,9 +1859,13 @@ class MainActivity : AppCompatActivity(), LocationListener {
             applyFocus(Focus.MEDIA)
         }
         addDockItem(R.drawable.ic_radio, "RADIO") {
-            if (!openPackage("com.tw.radio")) {
-                openPackage("com.tw.bt")
-            }
+            // La radio integrada vive en el módulo Media; abrir la app nativa
+            // sacaba del launcher y dejaba el dock sin control real.
+            radioSource = true
+            applyFocus(Focus.MEDIA)
+            setupRadio()
+            updateSourceToggle()
+            setActiveDock(3)
         }
         addDockItem(R.drawable.ic_car, "VEHÍCULO") {
             applyFocus(Focus.VEHICLE)
@@ -2509,6 +2666,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
     override fun onPause() {
         super.onPause()
+        flushOdometer()
+        lastOdometerMs = 0L
         map.onPause()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (::locationManager.isInitialized) {
@@ -2522,6 +2681,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
     }
 
     override fun onDestroy() {
+        flushOdometer()
         uiHandler.removeCallbacks(clockRunnable)
         uiHandler.removeCallbacks(alertHide)
         carSignals?.stop()
@@ -2535,6 +2695,9 @@ class MainActivity : AppCompatActivity(), LocationListener {
         try { unregisterReceiver(phoneStateReceiver) } catch (_: Exception) { }
         NavRepository.removeListener(navListener)
         NavStateRepository.removeListener(navStateListener)
+        NavRouteRepository.removeListener(routeRepoListener)
+        if (WeatherRepository.onUpdate === weatherUpdate) WeatherRepository.onUpdate = null
+        com.chronosbvrx.ibizadash.ota.OtaReceiver.onReady = null
         MapTileBridge.removeListener(mapTileListener)
         RemoteMapBridge.detach()
         PhoneNotifyBridge.detach()
@@ -2701,19 +2864,53 @@ class MainActivity : AppCompatActivity(), LocationListener {
     }
 
     /** Estado de la actualización OTA recibida desde el teléfono. */
+    private var otaStatusCheckedMs = 0L
+    private var otaStatusInFlight = false
+
+    @Volatile
+    private var otaStatusPending: com.chronosbvrx.ibizadash.ota.OtaReceiver.PendingUpdate? = null
+
+    /**
+     * El SHA-256 del APK pendiente se calculaba en el hilo principal cada 3 s
+     * mientras el panel estaba abierto. Ahora se verifica en segundo plano y
+     * el resultado se reutiliza 30 s.
+     */
     private fun refreshOtaStatus() {
+        if (!::otaStatus.isInitialized) return
+        if (otaStatusInFlight) return
+        val now = SystemClock.elapsedRealtime()
+        if (otaStatusCheckedMs != 0L && now - otaStatusCheckedMs < OTA_STATUS_TTL_MS) return
+        otaStatusInFlight = true
+        Thread {
+            val pending = try {
+                com.chronosbvrx.ibizadash.ota.OtaReceiver.pendingUpdate(this)
+            } catch (_: Exception) {
+                null
+            }
+            val current = try {
+                packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
+            } catch (_: Exception) {
+                "?"
+            }
+            otaStatusPending = pending
+            otaStatusCheckedMs = SystemClock.elapsedRealtime()
+            otaStatusInFlight = false
+            runOnUiThread { applyOtaStatus(pending, current) }
+        }.apply {
+            name = "OtaStatus"
+            isDaemon = true
+        }.start()
+    }
+
+    private fun applyOtaStatus(
+        pending: com.chronosbvrx.ibizadash.ota.OtaReceiver.PendingUpdate?,
+        current: String
+    ) {
         try {
-            if (!::otaStatus.isInitialized) return
-            val pending = com.chronosbvrx.ibizadash.ota.OtaReceiver.pendingUpdate(this)
             if (pending != null) {
                 otaStatus.text = "v${pending.versionName} lista · toca para instalar"
                 otaStatus.setTextColor(ContextCompat.getColor(this, R.color.accent_cyan))
             } else {
-                val current = try {
-                    packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
-                } catch (_: Exception) {
-                    "?"
-                }
                 otaStatus.text = "v$current instalada"
                 otaStatus.setTextColor(ContextCompat.getColor(this, R.color.text_muted))
             }
@@ -2736,9 +2933,9 @@ class MainActivity : AppCompatActivity(), LocationListener {
         otaStatus = findViewById(R.id.otaStatus)
         refreshMapsStatus()
 
-        brightnessSeek.progress = 80
-        brightnessValue.text = "80%"
-        applyBrightness(80)
+        brightnessSeek.progress = Prefs.brightnessPct(this)
+        brightnessValue.text = "${Prefs.brightnessPct(this)}%"
+        applyBrightness(brightnessSeek.progress)
 
         brightnessSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -2748,11 +2945,25 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
             override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
 
-            override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                // Se guarda al soltar para conservar el brillo entre arranques.
+                seekBar?.let { Prefs.setBrightnessPct(this@MainActivity, it.progress) }
+            }
         })
 
+        // Modo noche y silencio reflejan (y conservan) el estado real.
+        val night = Prefs.nightMode(this)
+        swNight.isChecked = night
+        nightDim.visibility = if (night) View.VISIBLE else View.GONE
         swNight.setOnCheckedChangeListener { _, checked ->
             nightDim.visibility = if (checked) View.VISIBLE else View.GONE
+            Prefs.setNightMode(this, checked)
+        }
+        val audio = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        swMute.isChecked = try {
+            audio?.isStreamMute(AudioManager.STREAM_MUSIC) == true
+        } catch (_: Exception) {
+            false
         }
         swMute.setOnCheckedChangeListener { _, checked -> setMuted(checked) }
 
@@ -2787,7 +2998,10 @@ class MainActivity : AppCompatActivity(), LocationListener {
             }
         }
         findViewById<View>(R.id.rowOta).setOnClickListener {
-            val pending = com.chronosbvrx.ibizadash.ota.OtaReceiver.pendingUpdate(this)
+            // Se usa el pendiente ya verificado por refreshOtaStatus para no
+            // calcular el SHA-256 otra vez en el hilo principal.
+            val pending = otaStatusPending
+                ?: com.chronosbvrx.ibizadash.ota.OtaReceiver.pendingUpdate(this)
             if (pending == null) {
                 Toast.makeText(this, "Sin actualizaciones pendientes", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener

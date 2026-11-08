@@ -207,7 +207,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:id="@+id/navPillSub"
-                    android:text="Toca para abrir la navegación"
+                    android:text="Toca para ver el mapa"
                         android:textColor="@color/text_muted"
                         android:textSize="9sp" />
                 </LinearLayout>

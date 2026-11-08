@@ -38,13 +38,25 @@ object HumanCarAssistant {
         val maintenance = maintenanceMessage(context, state)
         val coach = drivingCoach(state, speedKmh)
 
-        val headlineSeverity = listOf(thermal, electrical, maintenance)
-            .maxByOrNull { it.severity.ordinal }?.severity ?: Severity.GOOD
-        val headlineStatus = when (headlineSeverity) {
-            Severity.GOOD -> "Todo en orden • Listo para viajar"
-            Severity.INFO -> "Todo bien • Revisa las sugerencias"
-            Severity.WARNING -> "Atención • Revisa los avisos"
-            Severity.CRITICAL -> "¡Atención! Revisa el auto"
+        // Sin lecturas reales no se puede afirmar que el auto esté bien: el
+        // enlace puede estar abierto y la ECU muda (contacto apagado, PID no
+        // soportado). En ese caso el titular debe decirlo.
+        val noLiveData = !state.demo && (!state.connected || !state.hasLiveData)
+        val headlineSeverity = if (noLiveData) {
+            Severity.INFO
+        } else {
+            listOf(thermal, electrical, maintenance)
+                .maxByOrNull { it.severity.ordinal }?.severity ?: Severity.GOOD
+        }
+        val headlineStatus = if (noLiveData) {
+            "Sin datos del motor • Revisa la conexión OBD"
+        } else {
+            when (headlineSeverity) {
+                Severity.GOOD -> "Todo en orden • Listo para viajar"
+                Severity.INFO -> "Todo bien • Revisa las sugerencias"
+                Severity.WARNING -> "Atención • Revisa los avisos"
+                Severity.CRITICAL -> "¡Atención! Revisa el auto"
+            }
         }
 
         return HumanVehicleStatus(
@@ -100,8 +112,8 @@ object HumanCarAssistant {
         } else {
             when {
                 v < MIN_CHARGE_V -> HumanInsight(
-                    "alt_fail", "Falla en sistema de carga (Alternador)",
-                    "La batería no se está recargando correctamente", Severity.CRITICAL, true
+                    "alt_fail", "El motor no está cargando la batería",
+                    "Revisa la banda del alternador y las terminales", Severity.CRITICAL, true
                 )
                 v <= MAX_CHARGE_V -> HumanInsight(
                     "bat_charge_ok", "Batería y carga al 100%",
@@ -167,8 +179,8 @@ object HumanCarAssistant {
         val milOn = state.milOn == true
         if (milOn || dtcCount > 0) {
             return HumanInsight(
-                "dtc", "Atención: El motor reporta $dtcCount anomalía(s)",
-                "Lleva el auto a revisión. Toca aquí para ver detalles.", Severity.WARNING, true
+                "dtc", "El motor reporta $dtcCount falla(s)",
+                "Abre la pestaña Fallas para ver el detalle", Severity.WARNING, true
             )
         }
         return HumanInsight(
