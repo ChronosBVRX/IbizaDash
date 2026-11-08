@@ -11,6 +11,8 @@ Abre `gallery.html` en cualquier navegador:
 start docs\screenshots\gallery.html
 ```
 
+Versión en Markdown para leer en GitHub: [`GALLERY.md`](GALLERY.md).
+
 Haz clic en cualquier captura para verla a tamaño completo.
 
 ## Contenido
