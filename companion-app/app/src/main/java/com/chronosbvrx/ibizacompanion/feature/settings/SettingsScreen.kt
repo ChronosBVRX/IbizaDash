@@ -16,6 +16,17 @@ private data class SettingItem(val title: String, val subtitle: String, val deta
 @Composable
 fun SettingsScreen() {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val companionState by com.chronosbvrx.ibizacompanion.core.state.CompanionState.state
+        .collectAsState()
+    val appVersion = remember {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull() ?: "?"
+    }
+    val stereoVersion = companionState.stereoVersionName
+        .takeIf { it.isNotBlank() }
+        ?: companionState.stereoVersionCode.takeIf { it > 0 }?.let { "v$it" }
+        ?: "sin conectar"
     val items = listOf(
         SettingItem(
             "General",
@@ -41,7 +52,8 @@ fun SettingsScreen() {
         SettingItem(
             "Segundo plano",
             "Servicio, batería, notificaciones",
-            "Servicio foreground activo. Se recomienda desactivar la optimización de batería para IbizaCompanion."
+            "Servicio en primer plano activo. Si el teléfono lo suspende, desactiva la " +
+                "optimización de batería para IbizaCompanion en los ajustes del sistema."
         ),
         SettingItem(
             "Apariencia",
@@ -50,14 +62,14 @@ fun SettingsScreen() {
         ),
         SettingItem(
             "Diagnóstico",
-            "Logs, versión, estado",
-            "Versión 0.5.1. Wi-Fi Direct: puerto 47800. Navegación y mapa en el teléfono; " +
-                "OTA desde GitHub."
+            "Versiones y enlace",
+            "IbizaCompanion v$appVersion. Estéreo: $stereoVersion. " +
+                "Wi-Fi Direct: puerto 47800. OTA desde GitHub."
         ),
         SettingItem(
             "Acerca de",
             "IbizaCompanion, IbizaDash",
-            "IbizaCompanion v0.5.1 · IbizaDash v0.6.1 · Enlace Wi-Fi Direct."
+            "IbizaCompanion v$appVersion · IbizaDash $stereoVersion · Enlace Wi-Fi Direct."
         )
     )
     var selected by remember { mutableStateOf<SettingItem?>(null) }
