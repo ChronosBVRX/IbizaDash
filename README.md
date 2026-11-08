@@ -232,6 +232,19 @@ Si el release no incluye `modules.json`, la app simplemente indica que no hay m�
 Para pruebas locales se puede apuntar el catálogo a un servidor de la PC (solo `10.0.2.2`,
 `localhost` y `127.0.0.1` permiten HTTP en claro; el resto exige HTTPS).
 
+#### Publicar un pack de tu ciudad
+
+```powershell
+# 1) Descarga las teselas (caja de 24×24 km alrededor del centro, z13–z16)
+python scripts\build_city_pack.py --name tiles-morelia --lat 19.7060 --lon -101.1950 --km 12 --zooms 13-16
+
+# 2) Súbelo al release más reciente
+gh release upload v1.4.0 dist\city-pack\tiles-morelia.zip dist\city-pack\modules.json --clobber
+```
+
+El script genera el ZIP con la estructura `{z}/{x}/{y}.png` y el `modules.json` con tamaño y
+SHA-256 ya calculados. En **Ajustes → Módulos** aparece y se instala con un toque.
+
 ---
 
 ## Mapas offline
