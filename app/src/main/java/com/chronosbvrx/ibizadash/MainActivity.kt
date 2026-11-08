@@ -13,6 +13,7 @@ import android.content.res.ColorStateList
 import android.graphics.Color
 import android.location.Location
 import android.location.LocationListener
+import java.io.File
 import android.location.LocationManager
 import android.media.AudioManager
 import android.os.Bundle
@@ -3110,6 +3111,25 @@ class MainActivity : AppCompatActivity(), LocationListener {
                     val mb = files.sumOf { it.length() } / 1048576L
                     text = "${files.size} packs · ${mb}MB"
                     colorRes = R.color.green
+                } else {
+                    // El módulo y el teléfono guardan teselas sueltas; también
+                    // cuentan como mapa offline.
+                    val tilesDir = File(
+                        org.osmdroid.config.Configuration.getInstance().osmdroidTileCache,
+                        "EsriDark"
+                    )
+                    val tiles = if (tilesDir.exists()) {
+                        tilesDir.walkTopDown()
+                            .filter { it.isFile && it.extension.equals("tile", true) }
+                            .toList()
+                    } else {
+                        emptyList()
+                    }
+                    if (tiles.isNotEmpty()) {
+                        val mb = tiles.sumOf { it.length() } / 1048576.0
+                        text = "Morelia · %.1f MB".format(mb)
+                        colorRes = R.color.green
+                    }
                 }
             } catch (_: Exception) {
             }
