@@ -19,8 +19,8 @@ android {
         applicationId = "com.chronosbvrx.ibizacompanion"
         minSdk = 26
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.1.0"
+        versionCode = 10
+        versionName = "1.2.0"
         manifestPlaceholders["redirectSchemeName"] = "spotify-sdk"
         manifestPlaceholders["redirectHostName"] = "auth"
 
@@ -32,6 +32,15 @@ android {
             "String",
             "YOUTUBE_API_KEY",
             "\"${youtubeKey.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+        )
+
+        // Clave de tráfico (Fase C). Igual que la de YouTube, nunca se versiona.
+        // Se define en local.properties: TOMTOM_API_KEY=...
+        val tomtomKey = localProps.getProperty("TOMTOM_API_KEY", "")
+        buildConfigField(
+            "String",
+            "TOMTOM_API_KEY",
+            "\"${tomtomKey.replace("\\", "\\\\").replace("\"", "\\\"")}\""
         )
     }
 

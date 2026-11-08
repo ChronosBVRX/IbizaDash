@@ -96,6 +96,7 @@ class MediaBridgeService : Service() {
             BridgeLink.router = it
         }
         PhoneNavController.init(this)
+        com.chronosbvrx.ibizacompanion.voice.VoiceSynthesizer.init(this)
         wifiClient?.start()
         startConnectionWatchdog()
         job = scope.launch {
@@ -287,6 +288,7 @@ class MediaBridgeService : Service() {
                     com.chronosbvrx.ibizacompanion.map.MapFrameSender
                         .setSuppressed(!obj.optBoolean("on", true))
                 }
+                "VOICE_REQ" -> handleVoiceRequest(obj)
             }
         } catch (e: Exception) {
             Log.w(TAG, "inbox parse: ${e.message}")
@@ -329,8 +331,29 @@ class MediaBridgeService : Service() {
      * Comandos que llegan del estéreo (botones de play/pausa/siguiente).
      * Usan la MediaSession activa del teléfono, sin depender de AVRCP.
      */
-    private fun handleMediaCommand(cmd: String) {
-        if (cmd.isBlank()) return
+    /**
+     * El estéreo pide las voces de la ruta. La síntesis corre en un hilo de
+     * fondo: bloquear el lector del socket retrasaría rutas y portadas.
+     */
+    private fun handleVoiceRequest(obj: org.json.JSONObject) {
+        val lang = obj.optString("lang", "es-MX")
+        val arr = obj.optJSONArray("items") ?: return
+        val items = ArrayList<Pair<String, String>>()
+        for (i in 0 until arr.length()) {
+            val item = arr.optJSONObject(i) ?: continue
+            val key = item.optString("key", "")
+            val text = item.optString("text", "")
+            if (key.isNotBlank() && text.isNotBlank()) items.add(key to text)
+        }
+        if (items.isEmpty()) return
+        Log.i(TAG, "VOICE_REQ ${items.size} frases")
+        scope.launch {
+            com.chronosbvrx.ibizacompanion.voice.VoiceSynthesizer
+                .handleRequest(this@MediaBridgeService, lang, items)
+        }
+    }
+
+    private fun handleMediaCommand(cmd: String) {        if (cmd.isBlank()) return
         val controller = currentController ?: findMediaController()
         if (controller == null) {
             Log.w(TAG, "MEDIA_CMD $cmd sin MediaSession")
@@ -693,6 +716,7 @@ class MediaBridgeService : Service() {
         weatherJob?.cancel()
         selfUpdateJob?.cancel()
         com.chronosbvrx.ibizacompanion.update.CompanionUpdater.onReady = null
+        com.chronosbvrx.ibizacompanion.voice.VoiceSynthesizer.shutdown()
         scope.cancel()
         PhoneNavController.clear()
         BridgeLink.router = null

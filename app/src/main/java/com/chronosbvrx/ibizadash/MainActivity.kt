@@ -265,6 +265,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private lateinit var brightnessValue: TextView
     private lateinit var swNight: Switch
     private lateinit var swMute: Switch
+    private lateinit var swVoice: Switch
+    private lateinit var navVoiceStatus: TextView
     private lateinit var canStatus: TextView
     private lateinit var mapsStatus: TextView
     private lateinit var wifiLinkStatus: TextView
@@ -394,6 +396,11 @@ class MainActivity : AppCompatActivity(), LocationListener {
             }
         }
         renderNavOverlay()
+        com.chronosbvrx.ibizadash.nav.VoiceGuidance.onState(
+            this,
+            state,
+            NavRouteRepository.current
+        )
     }
 
     /** Muestra un frame del mapa renderizado por el teléfono (Fase 2). */
@@ -1053,6 +1060,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
             PhoneNavBridge.reset()
             NavStateRepository.clear()
             NavStateRelay.onRouteCleared()
+            com.chronosbvrx.ibizadash.nav.VoiceGuidance.onRouteCleared()
+            com.chronosbvrx.ibizadash.nav.VoicePlayer.stop(this)
             lastNavState = null
             lastMapBearing = 0f
             resetMapBearing()
@@ -1065,6 +1074,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
             drawNavRoute(route)
             NavStateRelay.onRouteSet(route)
             RouteNavigator.start(this)
+            // Pide al teléfono las voces de esta ruta (si faltan).
+            com.chronosbvrx.ibizadash.nav.VoiceGuidance.onRouteSet(this, route)
             // Con ruta, el estéreo dibuja su propio mapa (60 fps) y el teléfono
             // deja de mandar vídeo: menos red y mejor sensación.
             requestMapStream(false)
@@ -3080,6 +3091,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         }
         refreshHomeStatus()
         refreshOtaStatus()
+        refreshVoiceStatus()
         uiHandler.removeCallbacks(linkStatusRunnable)
         uiHandler.postDelayed(linkStatusRunnable, 3000L)
     }
@@ -3165,6 +3177,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
         brightnessValue = findViewById(R.id.brightnessValue)
         swNight = findViewById(R.id.swNight)
         swMute = findViewById(R.id.swMute)
+        swVoice = findViewById(R.id.swVoice)
+        navVoiceStatus = findViewById(R.id.navVoiceStatus)
         canStatus = findViewById(R.id.canStatus)
         mapsStatus = findViewById(R.id.mapsStatus)
         wifiLinkStatus = findViewById(R.id.wifiLinkStatus)
@@ -3205,6 +3219,25 @@ class MainActivity : AppCompatActivity(), LocationListener {
             false
         }
         swMute.setOnCheckedChangeListener { _, checked -> setMuted(checked) }
+
+        // Voz de navegación
+        swVoice.isChecked = Prefs.voiceOn(this)
+        swVoice.setOnCheckedChangeListener { _, checked ->
+            Prefs.setVoiceOn(this, checked)
+            if (!checked) com.chronosbvrx.ibizadash.nav.VoicePlayer.stop(this)
+            refreshVoiceStatus()
+        }
+        findViewById<View>(R.id.navVoiceClear).setOnClickListener {
+            val removed = com.chronosbvrx.ibizadash.nav.VoiceStore.clear(this)
+            com.chronosbvrx.ibizadash.nav.VoicePlayer.stop(this)
+            Toast.makeText(
+                this,
+                if (removed > 0) "Voces liberadas: $removed clips" else "No había voces guardadas",
+                Toast.LENGTH_SHORT
+            ).show()
+            refreshVoiceStatus()
+        }
+        refreshVoiceStatus()
 
         sheetScrim.setOnClickListener { closeQuickSettings() }
         findViewById<View>(R.id.sheetClose).setOnClickListener { closeQuickSettings() }
@@ -3247,6 +3280,20 @@ class MainActivity : AppCompatActivity(), LocationListener {
             }
             closeQuickSettings()
             com.chronosbvrx.ibizadash.ota.OtaInstaller.install(this, pending)
+        }
+    }
+
+    private fun refreshVoiceStatus() {
+        try {
+            if (!::navVoiceStatus.isInitialized) return
+            val count = com.chronosbvrx.ibizadash.nav.VoiceStore.count(this)
+            val kb = com.chronosbvrx.ibizadash.nav.VoiceStore.totalBytes(this) / 1024
+            navVoiceStatus.text = if (count == 0) {
+                "Voces: aún sin descargar"
+            } else {
+                "Voces: $count clips · ${kb} KB"
+            }
+        } catch (_: Exception) {
         }
     }
 

@@ -23,6 +23,7 @@ object Prefs {
     private const val FUEL_UDS_DID = "fuel_uds_did"
     private const val BRIGHTNESS_PCT = "brightness_pct"
     private const val NIGHT_MODE = "night_mode"
+    private const val VOICE_ON = "voice_on"
 
     private fun p(context: Context) =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -90,6 +91,14 @@ object Prefs {
 
     fun setNightMode(context: Context, value: Boolean) {
         p(context).edit().putBoolean(NIGHT_MODE, value).apply()
+    }
+
+    /** Avisos de voz de la navegación. */
+    fun voiceOn(context: Context): Boolean =
+        p(context).getBoolean(VOICE_ON, true)
+
+    fun setVoiceOn(context: Context, value: Boolean) {
+        p(context).edit().putBoolean(VOICE_ON, value).apply()
     }
 
     fun totalOdometerKm(context: Context): Float =

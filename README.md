@@ -10,7 +10,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
   (`IbizaDash.apk` para el estéreo, `IbizaCompanion.apk` para el teléfono).
 - **Paquete del estéreo:** `com.chronosbvrx.ibizadash`
 - **Paquete del teléfono:** `com.chronosbvrx.ibizacompanion`
-- **Versiones actuales:** IbizaDash **1.1.0** (versionCode 14) · IbizaCompanion **1.1.0** (versionCode 9)
+- **Versiones actuales:** IbizaDash **1.2.0** (versionCode 15) · IbizaCompanion **1.2.0** (versionCode 10)
 - **minSdk 23 / targetSdk 33 / compileSdk 36** (estéreo)
 - Hecho con **Views** (sin Compose) en el estéreo para que sea liviano en el Cortex-A7.
 
@@ -184,6 +184,31 @@ IbizaCompanion también se actualiza desde el mismo release de GitHub:
 
 La primera vez hay que permitir **Instalar apps desconocidas** para IbizaCompanion; si falta,
 la app abre directamente ese ajuste.
+
+### Voz de navegación (sin Internet en el coche)
+
+El estéreo no tiene motor de voz ni conexión. El teléfono sintetiza cada frase con el TTS
+del sistema y la envía por Wi-Fi Direct como un WAV corto:
+
+1. Al fijar una ruta, el estéreo pide al teléfono solo las frases que le faltan
+   (`VOICE_REQ`): maniobras de esa ruta y distancias fijas (800/400/200/100/50 m).
+2. El teléfono las sintetiza en español de México, las cachea y las envía (`VOICE_CLIP`).
+3. El estéreo las guarda en `files/voice/` y las reproduce cuando toca, bajando la música
+   (audio focus con *ducking*).
+
+Se activa o desactiva en **Ajustes rápidos → Navegación → Voz de navegación**, donde también
+se ve el peso de la caché y se puede liberar. Las frases se piden una sola vez.
+
+### Tráfico (Fase C, pendiente de clave)
+
+La ruta y la ETA con tráfico usan un proveedor externo. La clave se pone en
+`companion-app/local.properties` (no versionado):
+
+```properties
+TOMTOM_API_KEY=tu_clave
+```
+
+Sin clave, la app sigue funcionando igual: ruta por OSRM y sin datos de tráfico.
 
 ---
 

@@ -133,8 +133,23 @@ object NavBridgeProtocol {
 
             "TILE_BATCH" -> saveTile(context, obj)
 
-            "MEDIA_ART" -> {
-                val b64 = obj.optString("pngBase64", "")
+            // Clip de voz sintetizado por el teléfono (WAV corto en base64).
+            "VOICE_CLIP" -> {
+                val key = obj.optString("key", "")
+                val b64 = obj.optString("wavBase64", "")
+                if (key.isNotBlank() && b64.isNotBlank()) {
+                    try {
+                        val bytes = Base64.decode(b64, Base64.DEFAULT)
+                        if (VoiceStore.save(context, key, bytes)) {
+                            Log.i(TAG, "VOICE_CLIP ${bytes.size}B key=$key")
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "VOICE_CLIP: ${e.message}")
+                    }
+                }
+            }
+
+            "MEDIA_ART" -> {                val b64 = obj.optString("pngBase64", "")
                 val title = obj.optString("title", "")
                 val artist = obj.optString("artist", "")
                 val album = obj.optString("album", "")
