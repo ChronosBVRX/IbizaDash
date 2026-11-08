@@ -1,16 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Botón interno: superficie 2; el ripple hace el pressed state -->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
-    android:color="#33FFFFFF">
+    android:color="#33E07A5F">
     <item>
-        <shape>
-            <gradient
-                android:angle="270"
-                android:endColor="#111A26"
-                android:startColor="#1A2636" />
-            <corners android:radius="14dp" />
-            <stroke
-                android:width="1dp"
-                android:color="#1FFFFFFF" />
-        </shape>
+        <layer-list>
+            <item>
+                <shape>
+                    <gradient
+                        android:angle="270"
+                        android:endColor="#05FFFFFF"
+                        android:startColor="#22FFFFFF" />
+                    <corners android:radius="12dp" />
+                </shape>
+            </item>
+            <item
+                android:bottom="1dp"
+                android:left="1dp"
+                android:right="1dp"
+                android:top="1dp">
+                <shape>
+                    <gradient
+                        android:angle="270"
+                        android:endColor="#1B2330"
+                        android:startColor="#232D3E" />
+                    <corners android:radius="11dp" />
+                </shape>
+            </item>
+        </layer-list>
     </item>
 </ripple>

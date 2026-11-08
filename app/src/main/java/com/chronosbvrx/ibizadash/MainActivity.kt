@@ -11,6 +11,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.drawable.LayerDrawable
 import android.location.Location
 import android.location.LocationListener
 import java.io.File
@@ -26,6 +27,7 @@ import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
@@ -56,6 +58,7 @@ import com.chronosbvrx.ibizadash.map.MapHelper
 import com.chronosbvrx.ibizadash.media.MediaKeys
 import com.chronosbvrx.ibizadash.media.MediaRepository
 import com.chronosbvrx.ibizadash.media.NowPlaying
+import com.chronosbvrx.ibizadash.ui.AutomotiveBarDrawable
 import com.chronosbvrx.ibizadash.nav.NavRepository
 import com.chronosbvrx.ibizadash.nav.NavRoute
 import com.chronosbvrx.ibizadash.nav.NavRouteRepository
@@ -186,6 +189,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
     // Media module
     private lateinit var mmArt: ImageView
+    private lateinit var mmBackdrop: ImageView
     private lateinit var mmTitle: TextView
     private lateinit var mmArtist: TextView
     private lateinit var mmAlbum: TextView
@@ -209,6 +213,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private lateinit var vHumanFuel: TextView
     private lateinit var vHumanFuelSub: TextView
     private lateinit var vHumanFuelLevel: android.widget.ProgressBar
+    private val metricBars = HashMap<Int, AutomotiveBarDrawable>()
     private lateinit var vHumanMaintenance: TextView
     private lateinit var vHumanMaintenanceSub: TextView
     private lateinit var vHumanThermalBar: View
@@ -615,6 +620,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         setContentView(R.layout.activity_main)
         bindViews()
         goImmersive()
+        setupMetricBars()
 
         setupMap()
         setupDock()
@@ -651,6 +657,20 @@ class MainActivity : AppCompatActivity(), LocationListener {
         bluetoothClient = BluetoothStatusClient(this) { status ->
             runOnUiThread { renderBluetooth(status) }
         }.also { it.start() }
+
+        applyPressFeedback(window.decorView)
+    }
+
+    private fun applyPressFeedback(view: View) {
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) applyPressFeedback(view.getChildAt(i))
+        }
+        if (view.isClickable && (view is Button || view is ImageButton || view is TextView)) {
+            view.stateListAnimator = android.animation.AnimatorInflater.loadStateListAnimator(
+                this,
+                R.animator.press_scale
+            )
+        }
     }
 
     private fun bindViews() {
@@ -761,6 +781,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         miniMavAction = findViewById(R.id.miniMavAction)
 
         mmArt = findViewById(R.id.mmArt)
+        mmBackdrop = findViewById(R.id.mmBackdrop)
         mmTitle = findViewById(R.id.mmTitle)
         mmArtist = findViewById(R.id.mmArtist)
         mmAlbum = findViewById(R.id.mmAlbum)
@@ -1054,7 +1075,12 @@ class MainActivity : AppCompatActivity(), LocationListener {
         NavStateRelay.start()
         // Debug route injection.
         try {
-            registerReceiver(debugRouteReceiver, IntentFilter("com.chronosbvrx.ibizadash.DEBUG_ROUTE_SET"))
+            ContextCompat.registerReceiver(
+                this,
+                debugRouteReceiver,
+                IntentFilter("com.chronosbvrx.ibizadash.DEBUG_ROUTE_SET"),
+                ContextCompat.RECEIVER_EXPORTED
+            )
         } catch (_: Exception) {
         }
     }
@@ -1302,6 +1328,168 @@ class MainActivity : AppCompatActivity(), LocationListener {
         }
     }
 
+    private fun setupMetricBars() {
+        val d = resources.displayMetrics.density
+        val cyan = 0xFF38BDF8.toInt()
+        val blue = 0xFF0284C7.toInt()
+
+        attachMetricBar(
+            R.id.vRpm,
+            AutomotiveBarDrawable(
+                0f, 6500f, d,
+                segmented = true,
+                segmentCount = 13,
+                initialLow = cyan,
+                initialHigh = blue
+            )
+        )
+        attachMetricBar(
+            R.id.vLoad,
+            AutomotiveBarDrawable(
+                0f, 100f, d,
+                initialLow = 0xFF4F46E5.toInt(),
+                initialHigh = 0xFF818CF8.toInt()
+            )
+        )
+        attachMetricBar(
+            R.id.vThrottle,
+            AutomotiveBarDrawable(
+                0f, 100f, d,
+                initialLow = 0xFF06B6D4.toInt(),
+                initialHigh = 0xFF67E8F9.toInt()
+            )
+        )
+        attachMetricBar(
+            R.id.vCoolant,
+            AutomotiveBarDrawable(
+                0f, 130f, d,
+                centerBand = 85f to 95f,
+                initialLow = cyan,
+                initialHigh = 0xFF10B981.toInt()
+            )
+        )
+        attachMetricBar(
+            R.id.vIntake,
+            AutomotiveBarDrawable(
+                -20f, 60f, d,
+                initialLow = cyan,
+                initialHigh = 0xFF10B981.toInt()
+            )
+        )
+        attachMetricBar(
+            R.id.vTiming,
+            AutomotiveBarDrawable(
+                -10f, 40f, d,
+                bipolar = true,
+                initialLow = 0xFF64748B.toInt(),
+                initialHigh = 0xFFE2E8F0.toInt()
+            )
+        )
+        attachMetricBar(
+            R.id.vTrim,
+            AutomotiveBarDrawable(
+                -25f, 25f, d,
+                bipolar = true,
+                initialLow = 0xFF64748B.toInt(),
+                initialHigh = 0xFFE2E8F0.toInt()
+            )
+        )
+        attachMetricBar(
+            R.id.vVoltage,
+            AutomotiveBarDrawable(
+                11f, 15.5f, d,
+                barHeightDp = 6f,
+                insetDp = 14f,
+                bottomDp = 10f,
+                markerOnly = true,
+                zones = listOf(
+                    AutomotiveBarDrawable.Zone(11.0f, 12.1f, 0xFFEF4444.toInt()),
+                    AutomotiveBarDrawable.Zone(12.2f, 12.8f, 0xFFF59E0B.toInt()),
+                    AutomotiveBarDrawable.Zone(12.9f, 13.4f, 0xFF64748B.toInt()),
+                    AutomotiveBarDrawable.Zone(13.5f, 14.6f, 0xFF10B981.toInt()),
+                    AutomotiveBarDrawable.Zone(14.7f, 15.5f, 0xFFF59E0B.toInt())
+                )
+            ),
+            levelsUp = 2
+        )
+        attachMetricBar(
+            R.id.vHumanFuel,
+            AutomotiveBarDrawable(
+                0f, 100f, d,
+                barHeightDp = 5f,
+                insetDp = 14f,
+                bottomDp = 8f,
+                initialLow = 0xFF059669.toInt(),
+                initialHigh = 0xFF34D399.toInt()
+            ),
+            levelsUp = 2
+        )
+    }
+
+    private fun attachMetricBar(
+        anchorId: Int,
+        bar: AutomotiveBarDrawable,
+        levelsUp: Int = 1
+    ) {
+        var view: View? = findViewById(anchorId)
+        repeat(levelsUp) { view = view?.parent as? View }
+        val card = view ?: return
+        val base = ContextCompat.getDrawable(this, R.drawable.bg_insight_card)?.mutate() ?: return
+        card.background = LayerDrawable(arrayOf(base, bar))
+        metricBars[anchorId] = bar
+    }
+
+    private fun updateMetricBars(s: ObdTelemetry) {
+        val cyan = 0xFF38BDF8.toInt()
+        val blue = 0xFF0284C7.toInt()
+        val amber = 0xFFF59E0B.toInt()
+        val red = 0xFFEF4444.toInt()
+        val neutralLow = 0xFF64748B.toInt()
+        val neutralHigh = 0xFFE2E8F0.toInt()
+
+        metricBars[R.id.vRpm]?.let { bar ->
+            val rpm = s.rpm?.toFloat()
+            when {
+                rpm == null -> bar.setColors(cyan, blue)
+                rpm >= 5500f -> bar.setColors(red, red)
+                rpm >= 3500f -> bar.setColors(amber, amber)
+                else -> bar.setColors(cyan, blue)
+            }
+            bar.animateTo(rpm)
+        }
+        metricBars[R.id.vLoad]?.let { bar ->
+            val load = s.loadPct
+            if (load != null && load > 85f) bar.setColors(0xFF4F46E5.toInt(), amber)
+            else bar.setColors(0xFF4F46E5.toInt(), 0xFF818CF8.toInt())
+            bar.animateTo(load)
+        }
+        metricBars[R.id.vThrottle]?.animateTo(s.throttlePct)
+        metricBars[R.id.vCoolant]?.let { bar ->
+            val temp = s.coolantC
+            when {
+                temp == null -> bar.setColors(cyan, 0xFF10B981.toInt())
+                temp < 75f -> bar.setColors(cyan, cyan)
+                temp > 105f -> bar.setColors(red, red)
+                else -> bar.setColors(0xFF059669.toInt(), 0xFF10B981.toInt())
+            }
+            bar.animateTo(temp)
+        }
+        metricBars[R.id.vIntake]?.animateTo(s.intakeC)
+        metricBars[R.id.vTiming]?.let { bar ->
+            val timing = s.timingAdvanceDeg
+            if (timing != null && kotlin.math.abs(timing) > 10f) bar.setColors(amber, amber)
+            else bar.setColors(neutralLow, neutralHigh)
+            bar.animateTo(timing)
+        }
+        metricBars[R.id.vTrim]?.let { bar ->
+            val trim = s.fuelTrimPct
+            if (trim != null && kotlin.math.abs(trim) > 10f) bar.setColors(amber, amber)
+            else bar.setColors(neutralLow, neutralHigh)
+            bar.animateTo(trim)
+        }
+        metricBars[R.id.vVoltage]?.animateTo(s.batteryV)
+    }
+
     private fun renderObd(state: ObdTelemetry) {
         val now = SystemClock.elapsedRealtime()
         val updateTexts = now - lastTextUpdate >= 250L
@@ -1328,10 +1516,12 @@ class MainActivity : AppCompatActivity(), LocationListener {
             }
         }
 
+        val s = if (!state.connected && !state.demo) ObdTelemetry() else state
+        if (updateBars) updateMetricBars(s)
+
         if (updateTexts) {
             // Sin conexión o sin lecturas vivas: guiones honestos en vez de
             // valores viejos.
-            val s = if (!state.connected && !state.demo) ObdTelemetry() else state
             vRpm.text = s.rpm?.toString() ?: "--"
             vRpmAdv.text = rpmAdvice(s.rpm)
             vLoad.text = s.loadPct?.let { "${it.roundToInt()} %" } ?: "--"
@@ -1762,15 +1952,25 @@ class MainActivity : AppCompatActivity(), LocationListener {
             cockpitFuel.text = "F ${fuelPct.roundToInt()}%"
             hudPillFuel.setTextColor(fuelColor)
             cockpitFuel.setTextColor(fuelColor)
-            vHumanFuelLevel.visibility = View.VISIBLE
-            vHumanFuelLevel.progress = fuelPct.roundToInt().coerceIn(0, 100)
-            vHumanFuelLevel.progressTintList = ColorStateList.valueOf(fuelColor)
+            vHumanFuelLevel.visibility = View.GONE
+            metricBars[R.id.vHumanFuel]?.let { bar ->
+                if (fuelPct <= 15f) {
+                    bar.setColors(
+                        ContextCompat.getColor(this, R.color.danger),
+                        ContextCompat.getColor(this, R.color.danger)
+                    )
+                } else {
+                    bar.setColors(0xFF059669.toInt(), 0xFF34D399.toInt())
+                }
+                bar.animateTo(fuelPct)
+            }
         } else {
             // Sin lectura de combustible no se muestra el chip: un "F --"
             // permanente se lee como algo roto.
             hudPillFuel.visibility = View.GONE
             cockpitFuel.visibility = View.GONE
             vHumanFuelLevel.visibility = View.GONE
+            metricBars[R.id.vHumanFuel]?.animateTo(null)
         }
 
         val heroColor = severityColor(human.headlineSeverity)
@@ -2015,6 +2215,10 @@ class MainActivity : AppCompatActivity(), LocationListener {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
             isClickable = true
             isFocusable = true
+            stateListAnimator = android.animation.AnimatorInflater.loadStateListAnimator(
+                this@MainActivity,
+                R.animator.press_scale
+            )
             setPadding(dp(4), dp(6), dp(4), dp(4))
         }
         val icon = ImageView(this).apply {
@@ -2299,6 +2503,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             mmArtist.text = "Bluetooth · Radio FM"
             mmAlbum.text = ""
             renderArt(mmArt, null, 70)
+        mmBackdrop.setImageDrawable(null)
             mmPlay.setImageResource(R.drawable.ic_play)
             mmProgress.visibility = View.GONE
             mmTime.visibility = View.GONE
@@ -2321,6 +2526,13 @@ class MainActivity : AppCompatActivity(), LocationListener {
         renderArt(albumArt, nowPlaying.artwork, 14)
         renderArt(miniArt, nowPlaying.artwork, 9)
         renderArt(mmArt, nowPlaying.artwork, 70)
+        val art = nowPlaying.artwork
+        if (art != null) {
+            mmBackdrop.setImageBitmap(blurBackdrop(art))
+            mmBackdrop.alpha = 0.20f
+        } else {
+            mmBackdrop.setImageDrawable(null)
+        }
 
         miniTitle.text = title
         mmTitle.text = title
@@ -2350,6 +2562,16 @@ class MainActivity : AppCompatActivity(), LocationListener {
             view.setPadding(pad, pad, pad, pad)
             view.scaleType = ImageView.ScaleType.CENTER_INSIDE
         }
+    }
+
+    private fun blurBackdrop(src: android.graphics.Bitmap): android.graphics.Bitmap {
+        // Desenfoque barato y estable: reducir a 48 px y volver a escalar.
+        val width = 48
+        val height = (src.height * width / src.width).coerceAtLeast(1)
+        val tiny = android.graphics.Bitmap.createScaledBitmap(src, width, height, true)
+        val out = android.graphics.Bitmap.createScaledBitmap(tiny, src.width, src.height, true)
+        if (tiny !== out) tiny.recycle()
+        return out
     }
 
     private fun renderProgress(positionMs: Long, durationMs: Long) {

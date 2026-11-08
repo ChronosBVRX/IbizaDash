@@ -38,8 +38,8 @@ class MainActivity : ComponentActivity() {
 
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-        window.statusBarColor = android.graphics.Color.parseColor("#080D14")
-        window.navigationBarColor = android.graphics.Color.parseColor("#101925")
+        window.statusBarColor = android.graphics.Color.parseColor("#0B0E14")
+        window.navigationBarColor = android.graphics.Color.parseColor("#151A23")
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, true)
         val controller = androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
         controller.isAppearanceLightStatusBars = false

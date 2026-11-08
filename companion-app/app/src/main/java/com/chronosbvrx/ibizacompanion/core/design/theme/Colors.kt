@@ -3,15 +3,30 @@ package com.chronosbvrx.ibizacompanion.core.design.theme
 import androidx.compose.ui.graphics.Color
 
 object IbizaColors {
-    val Background = Color(0xFF080D14)
-    val Surface = Color(0xFF101925)
-    val SurfaceElevated = Color(0xFF172536)
-    val Primary = Color(0xFF42C8E8)
-    val Secondary = Color(0xFF7297BA)
-    val Success = Color(0xFF36C98F)
-    val Warning = Color(0xFFF0B75A)
-    val Error = Color(0xFFF16C72)
-    val TextPrimary = Color(0xFFF2F6FA)
-    val TextSecondary = Color(0xFF91A2B5)
-    val Border = Color(0x1FFFFFFF)
+    // Carbón profundo con subtono frío
+    val Background = Color(0xFF0B0E14)
+
+    // Elevación por luminancia
+    val Surface = Color(0xFF151A23)
+    val SurfaceElevated = Color(0xFF1F2735)
+    val SurfacePressed = Color(0xFF2A3546)
+
+    // Cobre Cupra para selección/acción; el cian queda para datos
+    val Primary = Color(0xFFE07A5F)
+    val PrimarySoft = Color(0x26E07A5F)
+    val Secondary = Color(0xFF94A3B8)
+    val AccentCyan = Color(0xFF22D3EE)
+
+    // Semántica suavizada
+    val Success = Color(0xFF10B981)
+    val Warning = Color(0xFFF59E0B)
+    val Error = Color(0xFFEF4444)
+
+    val TextPrimary = Color(0xFFF8FAFC)
+    val TextSecondary = Color(0xFF94A3B8)
+    val TextFaint = Color(0xFF64748B)
+
+    // Bordes especulares
+    val Border = Color(0x12FFFFFF)
+    val BorderStrong = Color(0x24FFFFFF)
 }

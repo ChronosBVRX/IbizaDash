@@ -1,25 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Hoja lateral: cristal oscuro + filo de cobre -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
         <shape>
             <gradient
                 android:angle="270"
-                android:endColor="#F20A0F17"
-                android:startColor="#F2121A26" />
-            <corners android:radius="28dp" />
-            <stroke
-                android:width="1dp"
-                android:color="#1FFFFFFF" />
+                android:endColor="#05FFFFFF"
+                android:startColor="#2AFFFFFF" />
+            <corners android:radius="24dp" />
         </shape>
     </item>
     <item
-        android:width="1dp"
+        android:bottom="1dp"
+        android:left="1dp"
+        android:right="1dp"
+        android:top="1dp">
+        <shape>
+            <gradient
+                android:angle="270"
+                android:endColor="#F20C1118"
+                android:startColor="#F2181F2C" />
+            <corners android:radius="23dp" />
+        </shape>
+    </item>
+    <item
+        android:width="2dp"
         android:gravity="start">
         <shape>
             <gradient
                 android:angle="270"
-                android:endColor="#0038BDF8"
-                android:startColor="#6638BDF8" />
+                android:endColor="#00E07A5F"
+                android:startColor="#99E07A5F" />
         </shape>
     </item>
 </layer-list>

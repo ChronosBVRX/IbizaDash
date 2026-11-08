@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <dimen name="radius_panel">24dp</dimen>
-    <dimen name="radius_card">20dp</dimen>
+    <dimen name="radius_card">16dp</dimen>
     <dimen name="radius_chip">26dp</dimen>
     <dimen name="radius_dock">28dp</dimen>
     <dimen name="radius_art">8dp</dimen>

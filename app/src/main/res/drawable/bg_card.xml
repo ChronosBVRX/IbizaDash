@@ -1,8 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="@color/card" />
-    <corners android:radius="@dimen/radius_card" />
-    <stroke
-        android:width="1dp"
-        android:color="@color/glass_border" />
-</shape>
+<!-- Superficie nivel 1 con borde especular cenital -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape>
+            <gradient
+                android:angle="270"
+                android:endColor="#05FFFFFF"
+                android:startColor="#24FFFFFF" />
+            <corners android:radius="16dp" />
+        </shape>
+    </item>
+    <item
+        android:bottom="1dp"
+        android:left="1dp"
+        android:right="1dp"
+        android:top="1dp">
+        <shape>
+            <gradient
+                android:angle="270"
+                android:endColor="#151A23"
+                android:startColor="#1A2130" />
+            <corners android:radius="15dp" />
+        </shape>
+    </item>
+</layer-list>

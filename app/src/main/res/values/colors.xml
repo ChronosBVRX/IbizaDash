@@ -1,38 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Deep Obsidian -->
-    <color name="obsidian_900">#0B0F17</color>
-    <color name="obsidian_800">#0F1520</color>
-    <color name="obsidian_700">#121824</color>
-    <color name="obsidian_600">#182130</color>
+    <!-- Fondos carbón con subtono frío (menos fatiga, menos bleeding) -->
+    <color name="obsidian_900">#0B0E14</color>
+    <color name="obsidian_800">#0F141C</color>
+    <color name="obsidian_700">#151A23</color>
+    <color name="obsidian_600">#1F2735</color>
+
+    <!-- Superficies por elevación de luminancia -->
+    <color name="surface_1">#151A23</color>
+    <color name="surface_2">#1F2735</color>
+    <color name="surface_2_pressed">#2A3546</color>
 
     <!-- Legacy names used by the app -->
-    <color name="bg">#0B0F17</color>
-    <color name="panel">#CC0F1622</color>
-    <color name="card">#B3121A26</color>
-    <color name="card2">#99121A26</color>
+    <color name="bg">#0B0E14</color>
+    <color name="panel">#F2151A23</color>
+    <color name="card">#F2151A23</color>
+    <color name="card2">#F21F2735</color>
 
-    <!-- Electric accents -->
-    <color name="accent">#38BDF8</color>
-    <color name="accent_sky">#38BDF8</color>
-    <color name="accent_deep">#0284C7</color>
+    <!-- Acento de marca: cobre Cupra; el azul queda para datos/mapa -->
+    <color name="accent">#E07A5F</color>
+    <color name="accent_sky">#E07A5F</color>
+    <color name="accent_deep">#B85F49</color>
+    <color name="accent_copper">#E07A5F</color>
+    <color name="accent_copper_soft">#26E07A5F</color>
     <color name="accent_cyan">#22D3EE</color>
     <color name="accent_electric">#00D2FF</color>
-    <color name="accent_blue">#0099FF</color>
+    <color name="accent_blue">#3B82F6</color>
 
-    <!-- Warm accents -->
-    <color name="amber">#FF9500</color>
-    <color name="copper">#D97706</color>
+    <!-- Semántica suavizada, sin colores puros que vibren -->
+    <color name="amber">#F59E0B</color>
+    <color name="copper">#E07A5F</color>
     <color name="warning">#F59E0B</color>
-    <color name="danger">#FF3B30</color>
-    <color name="red">#FF3B30</color>
+    <color name="danger">#EF4444</color>
+    <color name="red">#EF4444</color>
 
-    <!-- Semantic -->
     <color name="green">#10B981</color>
     <color name="teal">#14B8A6</color>
-    <color name="success">#22C55E</color>
+    <color name="success">#10B981</color>
 
-    <!-- Type -->
+    <!-- Tipografía -->
     <color name="text">#F8FAFC</color>
     <color name="text_primary">#F8FAFC</color>
     <color name="text_secondary">#CBD5E1</color>
@@ -40,10 +46,12 @@
     <color name="text_muted">#94A3B8</color>
     <color name="text_faint">#64748B</color>
 
-    <!-- Glass -->
-    <color name="line">#14FFFFFF</color>
-    <color name="glass_border">#1FFFFFFF</color>
-    <color name="glass_border_soft">#14FFFFFF</color>
-    <color name="glass_surface">#CC0F1622</color>
-    <color name="glass_surface_soft">#99121A26</color>
+    <!-- Bordes especulares: luz cenital arriba, casi invisible abajo -->
+    <color name="line">#12FFFFFF</color>
+    <color name="glass_border">#12FFFFFF</color>
+    <color name="glass_border_soft">#0AFFFFFF</color>
+    <color name="glass_border_top">#24FFFFFF</color>
+    <color name="glass_border_bottom">#05FFFFFF</color>
+    <color name="glass_surface">#E6151A23</color>
+    <color name="glass_surface_soft">#CC1F2735</color>
 </resources>

@@ -19,8 +19,8 @@ android {
         applicationId = "com.chronosbvrx.ibizacompanion"
         minSdk = 26
         targetSdk = 34
-        versionCode = 17
-        versionName = "1.5.3"
+        versionCode = 18
+        versionName = "1.6.0"
         manifestPlaceholders["redirectSchemeName"] = "spotify-sdk"
         manifestPlaceholders["redirectHostName"] = "auth"
 

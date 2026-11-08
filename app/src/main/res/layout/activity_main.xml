@@ -28,6 +28,13 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent" />
 
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_map_vignette"
+                android:clickable="false"
+                android:focusable="false" />
+
             <ImageView
                 android:id="@+id/remoteMap"
                 android:layout_width="match_parent"

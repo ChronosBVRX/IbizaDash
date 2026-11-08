@@ -1,4 +1,4 @@
-# Galería de pantallas · IbizaDash 1.5.5 + IbizaCompanion 1.5.3
+# Galería de pantallas · IbizaDash 1.6.0 + IbizaCompanion 1.6.0
 
 Capturas reales del emulador a 1280×720, con datos OBD de demostración y el
 paquete offline de Morelia. Haz clic en cualquier imagen para verla completa.
@@ -95,12 +95,6 @@ Preferencias del sistema: clima, demo de media, 5 GHz, unidades y permisos.
 
 Acceso a todas las apps instaladas sin salir del launcher.
 
-### Guía en ruta
-
-[![Guía en ruta](stereo/16-guia.png)](stereo/16-guia.png)
-
-Ruta real con maniobra, distancia, ETA, destino y botón para finalizar.
-
 ---
 
 ## IbizaCompanion · teléfono
@@ -116,18 +110,6 @@ Estado del enlace, ruta activa con ETA y accesos rápidos.
 [![Rutas](phone/02-rutas.png)](phone/02-rutas.png)
 
 Búsqueda de calles, negocios o destinos.
-
-### Sugerencias
-
-[![Sugerencias](phone/03-rutas-sugerencias.png)](phone/03-rutas-sugerencias.png)
-
-Resultados de búsqueda con acceso directo a cada destino.
-
-### Ruta calculada
-
-[![Ruta calculada](phone/04-ruta.png)](phone/04-ruta.png)
-
-Distancia, duración y envío de la ruta al estéreo.
 
 ### Música
 

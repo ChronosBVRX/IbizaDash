@@ -14,11 +14,11 @@
         <item name="android:textColorSecondary">@color/text_muted</item>
     </style>
 
-    <!-- 9sp uppercase, 0.12 tracking, medium -->
+    <!-- 11sp uppercase, 0.08 tracking, medium -->
     <style name="Label">
-        <item name="android:textColor">@color/text_muted</item>
+        <item name="android:textColor">@color/text_faint</item>
         <item name="android:textSize">@dimen/label_size</item>
-        <item name="android:letterSpacing">0.12</item>
+        <item name="android:letterSpacing">0.08</item>
         <item name="android:textAllCaps">true</item>
         <item name="android:fontFamily">sans-serif-medium</item>
     </style>
@@ -28,6 +28,7 @@
         <item name="android:textColor">@color/text_secondary</item>
         <item name="android:textSize">@dimen/value_size</item>
         <item name="android:fontFamily">sans-serif</item>
+        <item name="android:fontFeatureSettings">tnum</item>
     </style>
 
     <!-- 96sp light tabular HUD -->
@@ -55,7 +56,7 @@
         <item name="android:minHeight">0dp</item>
         <item name="android:paddingStart">8dp</item>
         <item name="android:paddingEnd">8dp</item>
-        <item name="android:stateListAnimator">@null</item>
+        <item name="android:stateListAnimator">@animator/press_scale</item>
     </style>
 
     <!-- Secondary action row used by Settings -->
@@ -73,7 +74,7 @@
         <item name="android:paddingEnd">16dp</item>
         <item name="android:minWidth">0dp</item>
         <item name="android:minHeight">0dp</item>
-        <item name="android:stateListAnimator">@null</item>
+        <item name="android:stateListAnimator">@animator/press_scale</item>
     </style>
 
     <!-- Primary gradient action -->
@@ -88,7 +89,7 @@
         <item name="android:gravity">center</item>
         <item name="android:minWidth">0dp</item>
         <item name="android:minHeight">0dp</item>
-        <item name="android:stateListAnimator">@null</item>
+        <item name="android:stateListAnimator">@animator/press_scale</item>
     </style>
 
     <!-- Tinted switches -->

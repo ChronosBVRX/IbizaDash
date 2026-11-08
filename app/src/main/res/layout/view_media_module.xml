@@ -18,6 +18,19 @@
         android:layout_gravity="center"
         android:background="@drawable/bg_media_glow" />
 
+    <ImageView
+        android:id="@+id/mmBackdrop"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0"
+        android:contentDescription="@null"
+        android:scaleType="centerCrop" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bg_media_scrim" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"

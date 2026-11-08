@@ -12,9 +12,21 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
   (capturas reales del estéreo y del teléfono, con hojas de contacto).
 - **Paquete del estéreo:** `com.chronosbvrx.ibizadash`
 - **Paquete del teléfono:** `com.chronosbvrx.ibizacompanion`
-- **Versiones actuales:** IbizaDash **1.5.5** (versionCode 24) · IbizaCompanion **1.5.3** (versionCode 17)
+- **Versiones actuales:** IbizaDash **1.6.0** (versionCode 25) · IbizaCompanion **1.6.0** (versionCode 18)
 - **minSdk 23 / targetSdk 33 / compileSdk 36** (estéreo)
 - Hecho con **Views** (sin Compose) en el estéreo para que sea liviano en el Cortex-A7.
+
+## Sistema visual 1.6.0
+
+- **Carbón profundo** `#0B0E14`, superficies `#151A23` / `#1F2735` y pressed `#2A3546`.
+- **Bordes especulares** de 1 px: luz cenital arriba, casi invisible abajo.
+- **Acento cobre Cupra** `#E07A5F` para selección/acción; azul y cian quedan para datos.
+- **Semántica suavizada:** esmeralda `#10B981`, ámbar `#F59E0B`, coral `#EF4444`.
+- **Barras OEM** en Motor, Eléctrico y combustible: riel hundido, marcas, gradiente,
+  punta luminosa, zonas de voltaje y animación de 160 ms.
+- **Mapa con viñeta** y **Música con portada desenfocada** al 20 %.
+- **Feedback al tocar:** escala al 97 % durante 90 ms en botones, tabs y dock.
+
 
 ---
 
