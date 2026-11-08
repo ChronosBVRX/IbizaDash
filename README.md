@@ -126,13 +126,12 @@ Requisitos:
 
 Las dos apps usan una **keystore fija** para que las actualizaciones entren sin desinstalar:
 
-- Ruta local: `C:\Users\Axel Rosete\.android\ibizadash-release.jks`
-- Respaldo: `C:\Users\Axel Rosete\Documents\IbizaDash-keys\ibizadash-release.jks`
-- Alias: `androiddebugkey` · contraseña: `android`
+- Ruta local en esta PC: `%USERPROFILE%\.android\ibizadash-release.jks`
+- Respaldo: `%USERPROFILE%\Documents\IbizaDash-keys\ibizadash-release.jks`
 - Certificado SHA-256: `95:93:CB:0D:2B:44:B8:C5:A4:7C:15:7C:13:34:2C:3D:4A:55:62:98:43:D5:62:D2:C0:49:33:1E:C7:74:73:F3`
 
-La ruta y las contraseñas se leen de `local.properties` (ignorado por Git), nunca del repo.
-Si cambias de PC, copia la keystore y crea el mismo `local.properties`.
+La ruta, el alias y las contraseñas se leen de `local.properties` (ignorado por Git), nunca
+del repo. Si cambias de PC, copia la keystore y crea el mismo `local.properties`.
 
 ---
 
