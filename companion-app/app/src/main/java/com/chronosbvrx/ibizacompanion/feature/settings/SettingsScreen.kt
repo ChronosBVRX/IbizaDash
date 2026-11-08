@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import com.chronosbvrx.ibizacompanion.core.design.theme.IbizaColors
 import com.chronosbvrx.ibizacompanion.core.state.CompanionState
 import com.chronosbvrx.ibizacompanion.data.CompanionPrefs
+import com.chronosbvrx.ibizacompanion.modules.ModuleCatalog
+import com.chronosbvrx.ibizacompanion.modules.ModuleSender
 import com.chronosbvrx.ibizacompanion.update.CompanionUpdater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -60,6 +62,8 @@ fun SettingsScreen() {
         SelfUpdateCard()
         Spacer(Modifier.height(8.dp))
         TrafficKeyCard()
+        Spacer(Modifier.height(8.dp))
+        ModulesCard()
         Spacer(Modifier.height(8.dp))
         if (spotifyInstalled) {
             SpotifyCard()
@@ -430,6 +434,155 @@ private fun TrafficKeyCard() {
             },
             containerColor = IbizaColors.Surface
         )
+    }
+}
+
+/**
+ * Módulos descargables para el estéreo (Fase D).
+ *
+ * El teléfono descarga el paquete y lo envía por Wi-Fi Direct; el estéreo
+ * verifica el SHA-256 y lo instala. Aquí solo se listan los disponibles.
+ */
+@Composable
+private fun ModulesCard() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    var loading by remember { mutableStateOf(true) }
+    var modules by remember { mutableStateOf<List<ModuleCatalog.ModuleInfo>>(emptyList()) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var progress by remember { mutableStateOf<ModuleSender.Progress?>(null) }
+    var installed by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    fun load() {
+        loading = true
+        error = null
+        scope.launch {
+            val result = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                ModuleCatalog.fetch(context)
+            }
+            modules = result.orEmpty()
+            error = if (result == null) "No se pudo leer el catálogo" else null
+            loading = false
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        ModuleSender.onProgress = { p ->
+            scope.launch(Dispatchers.Main) {
+                progress = p
+                if (p.done) installed = installed + p.id
+            }
+        }
+        load()
+    }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = IbizaColors.Surface,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                "MÓDULOS PARA EL ESTÉREO",
+                style = MaterialTheme.typography.labelSmall,
+                color = IbizaColors.TextSecondary
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                when {
+                    loading -> "Buscando módulos…"
+                    error != null -> error!!
+                    modules.isEmpty() -> "No hay módulos publicados"
+                    else -> "${modules.size} módulos disponibles"
+                },
+                style = MaterialTheme.typography.titleMedium,
+                color = IbizaColors.TextPrimary
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Se descargan aquí y viajan por Wi-Fi Direct. El estéreo comprueba el SHA-256 antes de instalar.",
+                style = MaterialTheme.typography.bodySmall,
+                color = IbizaColors.TextSecondary
+            )
+
+            modules.forEach { module ->
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            module.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = IbizaColors.TextPrimary,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                        Text(
+                            listOf(
+                                module.type,
+                                "v${module.version}",
+                                ModuleCatalog.formatSize(module.sizeBytes)
+                            ).filter { it.isNotBlank() }.joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = IbizaColors.TextSecondary
+                        )
+                    }
+                    val p = progress
+                    val busy = p != null && !p.done && !p.error && p.id == module.id
+                    Button(
+                        onClick = {
+                            android.util.Log.i("Modules", "tap instalar ${module.id}")
+                            scope.launch(Dispatchers.IO) {
+                                ModuleSender.send(context, module)
+                            }
+                        },
+                        enabled = !busy,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = IbizaColors.Primary,
+                            contentColor = IbizaColors.Background
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            when {
+                                busy -> "Enviando…"
+                                module.id in installed -> "Reinstalar"
+                                else -> "Instalar"
+                            }
+                        )
+                    }
+                }
+            }
+
+            progress?.let { p ->
+                Spacer(Modifier.height(10.dp))
+                val fraction = if (p.total > 0) (p.received.toFloat() / p.total).coerceIn(0f, 1f) else 0f
+                if (!p.done && !p.error) {
+                    LinearProgressIndicator(
+                        progress = { fraction },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = IbizaColors.Primary,
+                        trackColor = IbizaColors.SurfaceElevated
+                    )
+                    Spacer(Modifier.height(4.dp))
+                }
+                Text(
+                    p.status,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = when {
+                        p.error -> IbizaColors.Warning
+                        p.done -> IbizaColors.Success
+                        else -> IbizaColors.TextSecondary
+                    }
+                )
+            }
+
+            if (error != null || modules.isEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                TextButton(onClick = { load() }) {
+                    Text("Volver a buscar", color = IbizaColors.Primary)
+                }
+            }
+        }
     }
 }
 

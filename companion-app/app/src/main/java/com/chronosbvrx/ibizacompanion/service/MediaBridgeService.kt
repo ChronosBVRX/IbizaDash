@@ -289,6 +289,9 @@ class MediaBridgeService : Service() {
                         .setSuppressed(!obj.optBoolean("on", true))
                 }
                 "VOICE_REQ" -> handleVoiceRequest(obj)
+                "MODULE_META_ACK", "MODULE_END_OK", "MODULE_ERROR" -> {
+                    com.chronosbvrx.ibizacompanion.modules.ModuleSender.onReply(obj)
+                }
             }
         } catch (e: Exception) {
             Log.w(TAG, "inbox parse: ${e.message}")

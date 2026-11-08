@@ -268,6 +268,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private lateinit var swMute: Switch
     private lateinit var swVoice: Switch
     private lateinit var navVoiceStatus: TextView
+    private lateinit var modulesStatus: TextView
     private lateinit var canStatus: TextView
     private lateinit var mapsStatus: TextView
     private lateinit var wifiLinkStatus: TextView
@@ -2817,6 +2818,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         NavRepository.removeListener(navListener)
         NavStateRepository.removeListener(navStateListener)
         NavRouteRepository.removeListener(routeRepoListener)
+        com.chronosbvrx.ibizadash.nav.ModulesBridge.removeListener(modulesListener)
         if (WeatherRepository.onUpdate === weatherUpdate) WeatherRepository.onUpdate = null
         com.chronosbvrx.ibizadash.ota.OtaReceiver.onReady = null
         MapTileBridge.removeListener(mapTileListener)
@@ -3232,6 +3234,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         swMute = findViewById(R.id.swMute)
         swVoice = findViewById(R.id.swVoice)
         navVoiceStatus = findViewById(R.id.navVoiceStatus)
+        modulesStatus = findViewById(R.id.modulesStatus)
         canStatus = findViewById(R.id.canStatus)
         mapsStatus = findViewById(R.id.mapsStatus)
         wifiLinkStatus = findViewById(R.id.wifiLinkStatus)
@@ -3292,6 +3295,11 @@ class MainActivity : AppCompatActivity(), LocationListener {
         }
         refreshVoiceStatus()
 
+        // Módulos descargables (Fase D): el teléfono los envía y aquí se ven.
+        findViewById<View>(R.id.rowModules).setOnClickListener { showModulesDialog() }
+        com.chronosbvrx.ibizadash.nav.ModulesBridge.addListener(modulesListener)
+        refreshModulesStatus()
+
         sheetScrim.setOnClickListener { closeQuickSettings() }
         findViewById<View>(R.id.sheetClose).setOnClickListener { closeQuickSettings() }
         findViewById<View>(R.id.openSettings).setOnClickListener {
@@ -3348,6 +3356,78 @@ class MainActivity : AppCompatActivity(), LocationListener {
             }
         } catch (_: Exception) {
         }
+    }
+
+    // ---------------------------------------------------------------------
+    // Módulos descargables (Fase D)
+    // ---------------------------------------------------------------------
+
+    private val modulesListener: () -> Unit = {
+        runOnUiThread { refreshModulesStatus() }
+    }
+
+    private fun refreshModulesStatus() {
+        try {
+            if (!::modulesStatus.isInitialized) return
+            val list = com.chronosbvrx.ibizadash.modules.ModuleManager.installed(this)
+            modulesStatus.text = if (list.isEmpty()) {
+                "ninguno"
+            } else {
+                val bytes = com.chronosbvrx.ibizadash.modules.ModuleManager.totalBytes(this)
+                val size = if (bytes < 1024) "$bytes B"
+                else if (bytes < 1024 * 1024) "${bytes / 1024} KB"
+                else "%.1f MB".format(bytes / 1048576f)
+                "${list.size} · $size"
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    /** "976 B", "512 KB", "1.2 MB". */
+    private fun formatBytes(bytes: Long): String = when {
+        bytes <= 0 -> "—"
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        else -> "%.1f MB".format(bytes / 1048576f)
+    }
+
+    private fun showModulesDialog() {        val list = com.chronosbvrx.ibizadash.modules.ModuleManager.installed(this)
+        if (list.isEmpty()) {
+            AlertDialog.Builder(this)
+                .setTitle("Módulos del estéreo")
+                .setMessage(
+                    "No hay módulos instalados.\n\n" +
+                        "Se instalan desde IbizaCompanion → Ajustes → Módulos: " +
+                        "el teléfono los descarga y los envía por Wi-Fi Direct."
+                )
+                .setPositiveButton("OK", null)
+                .show()
+            return
+        }
+        val labels = list.map { m ->
+            "${m.name} · v${m.version} · ${formatBytes(m.sizeBytes)}"
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Módulos instalados")
+            .setItems(labels) { _, which ->
+                val m = list[which]
+                AlertDialog.Builder(this)
+                    .setTitle(m.name)
+                    .setMessage(
+                        "Tipo: ${m.type}\nVersión: ${m.version}\n" +
+                            "Tamaño: ${formatBytes(m.sizeBytes)}\n\n" +
+                            "Quitar solo borra el registro del módulo: las teselas y " +
+                            "voces ya descargadas se conservan."
+                    )
+                    .setPositiveButton("Quitar registro") { _, _ ->
+                        com.chronosbvrx.ibizadash.modules.ModuleManager.remove(this, m.id)
+                        refreshModulesStatus()
+                    }
+                    .setNegativeButton("Cerrar", null)
+                    .show()
+            }
+            .setNegativeButton("Cerrar", null)
+            .show()
     }
 
     private fun applyBrightness(percent: Int) {

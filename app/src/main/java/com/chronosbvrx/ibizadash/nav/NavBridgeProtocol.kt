@@ -135,6 +135,11 @@ object NavBridgeProtocol {
 
             "TILE_BATCH" -> saveTile(context, obj)
 
+            // Módulos descargables (Fase D): llegan por chunks como el OTA.
+            "MODULE_META" -> handleModuleMeta(context, obj, reply)
+            "MODULE_CHUNK" -> handleModuleChunk(context, obj, reply)
+            "MODULE_END" -> handleModuleEnd(context, obj, reply)
+
             // Clip de voz sintetizado por el teléfono (WAV corto en base64).
             "VOICE_CLIP" -> {
                 val key = obj.optString("key", "")
@@ -226,8 +231,97 @@ object NavBridgeProtocol {
         }
     }
 
-    /** Tramos lentos que manda el teléfono (fracción 0..1 del recorrido). */
-    private fun parseTrafficSections(obj: JSONObject): List<TrafficSpan> {
+    // ------------------------------------------------------------------
+    // Módulos descargables
+    // ------------------------------------------------------------------
+
+    private data class PendingModule(
+        val id: String,
+        val name: String,
+        val type: String,
+        val version: Int,
+        val size: Long,
+        val sha: String
+    )
+
+    private val pendingModules = java.util.concurrent.ConcurrentHashMap<String, PendingModule>()
+
+    private fun handleModuleMeta(context: Context, obj: JSONObject, reply: (JSONObject) -> Unit) {
+        val id = obj.optString("id", "")
+        if (id.isBlank()) return
+        com.chronosbvrx.ibizadash.modules.ModuleManager.clearPart(context, id)
+        try {
+            com.chronosbvrx.ibizadash.modules.ModuleManager
+                .partFile(context, id).writeBytes(ByteArray(0))
+        } catch (e: Exception) {
+            reply(JSONObject().put("type", "MODULE_ERROR").put("id", id).put("reason", "sin espacio"))
+            return
+        }
+        pendingModules[id] = PendingModule(
+            id = id,
+            name = obj.optString("name", id),
+            type = obj.optString("moduleType", "raw"),
+            version = obj.optInt("version", 1),
+            size = obj.optLong("size", 0L),
+            sha = obj.optString("sha256", "")
+        )
+        Log.i(TAG, "MODULE_META $id tipo=${obj.optString("moduleType")} ${obj.optLong("size")}B")
+        reply(JSONObject().put("type", "MODULE_META_ACK").put("id", id))
+    }
+
+    private fun handleModuleChunk(context: Context, obj: JSONObject, reply: (JSONObject) -> Unit) {
+        val id = obj.optString("id", "")
+        if (id.isBlank()) return
+        val meta = pendingModules[id] ?: return
+        val b64 = obj.optString("data", "")
+        if (b64.isBlank()) return
+        try {
+            val bytes = Base64.decode(b64, Base64.DEFAULT)
+            java.io.FileOutputStream(
+                com.chronosbvrx.ibizadash.modules.ModuleManager.partFile(context, id),
+                true
+            ).use { it.write(bytes) }
+        } catch (e: Exception) {
+            Log.w(TAG, "MODULE_CHUNK: ${e.message}")
+            if (meta.size > 0) {
+                // Sin ACK por chunk: el teléfono continúa y el END validará.
+            }
+        }
+    }
+
+    private fun handleModuleEnd(context: Context, obj: JSONObject, reply: (JSONObject) -> Unit) {
+        val id = obj.optString("id", "")
+        val meta = pendingModules.remove(id) ?: run {
+            reply(JSONObject().put("type", "MODULE_ERROR").put("id", id).put("reason", "meta desconocida"))
+            return
+        }
+        val (ok, reason) = com.chronosbvrx.ibizadash.modules.ModuleManager.install(
+            context = context,
+            id = meta.id,
+            name = meta.name,
+            type = meta.type,
+            version = meta.version,
+            expectedSize = meta.size,
+            expectedSha = meta.sha
+        )
+        if (ok) {
+            if (meta.type == "tiles") MapTileBridge.notifyTileSaved()
+            ModulesBridge.notifyChanged()
+            reply(
+                JSONObject().put("type", "MODULE_END_OK")
+                    .put("id", id)
+                    .put("version", meta.version)
+            )
+        } else {
+            reply(
+                JSONObject().put("type", "MODULE_ERROR")
+                    .put("id", id)
+                    .put("reason", reason)
+            )
+        }
+    }
+
+    /** Tramos lentos que manda el teléfono (fracción 0..1 del recorrido). */    private fun parseTrafficSections(obj: JSONObject): List<TrafficSpan> {
         val arr = obj.optJSONArray("trafficSections") ?: return emptyList()
         val out = ArrayList<TrafficSpan>(arr.length())
         for (i in 0 until arr.length()) {
@@ -282,8 +376,29 @@ object NavBridgeProtocol {
     }
 }
 
-/** Avisa a la UI cuando llegan teselas nuevas para refrescar el MapView. */
-object MapTileBridge {
+/** Avisa a la UI cuando cambia la lista de módulos instalados. */
+object ModulesBridge {
+    private val listeners = java.util.concurrent.CopyOnWriteArraySet<() -> Unit>()
+
+    fun addListener(listener: () -> Unit) {
+        listeners.add(listener)
+    }
+
+    fun removeListener(listener: () -> Unit) {
+        listeners.remove(listener)
+    }
+
+    fun notifyChanged() {
+        listeners.forEach {
+            try {
+                it()
+            } catch (_: Exception) {
+            }
+        }
+    }
+}
+
+/** Avisa a la UI cuando llegan teselas nuevas para refrescar el MapView. */object MapTileBridge {
     private val listeners = java.util.concurrent.CopyOnWriteArraySet<() -> Unit>()
 
     fun addListener(listener: () -> Unit) {

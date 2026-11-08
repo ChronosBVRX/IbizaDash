@@ -7,6 +7,7 @@ object CompanionPrefs {
     private const val FILE = "companion_prefs"
     private const val KEY_AUTO_UPDATE = "auto_update"
     private const val KEY_TRAFFIC = "traffic_key"
+    private const val KEY_MODULE_MANIFEST = "module_manifest_url"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -35,6 +36,19 @@ object CompanionPrefs {
     fun setTrafficKey(context: Context, key: String) {
         prefs(context).edit()
             .putString(KEY_TRAFFIC, key.trim())
+            .apply()
+    }
+
+    /**
+     * URL alternativa del catálogo de módulos. Vacío = el release de GitHub.
+     * Sirve para probar con un servidor local sin publicar nada.
+     */
+    fun moduleManifestUrl(context: Context): String =
+        prefs(context).getString(KEY_MODULE_MANIFEST, "").orEmpty().trim()
+
+    fun setModuleManifestUrl(context: Context, url: String) {
+        prefs(context).edit()
+            .putString(KEY_MODULE_MANIFEST, url.trim())
             .apply()
     }
 }

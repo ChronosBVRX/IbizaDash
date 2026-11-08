@@ -10,7 +10,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
   (`IbizaDash.apk` para el estéreo, `IbizaCompanion.apk` para el teléfono).
 - **Paquete del estéreo:** `com.chronosbvrx.ibizadash`
 - **Paquete del teléfono:** `com.chronosbvrx.ibizacompanion`
-- **Versiones actuales:** IbizaDash **1.3.0** (versionCode 16) · IbizaCompanion **1.3.0** (versionCode 11)
+- **Versiones actuales:** IbizaDash **1.4.0** (versionCode 17) · IbizaCompanion **1.4.0** (versionCode 12)
 - **minSdk 23 / targetSdk 33 / compileSdk 36** (estéreo)
 - Hecho con **Views** (sin Compose) en el estéreo para que sea liviano en el Cortex-A7.
 
@@ -213,6 +213,24 @@ El estéreo pinta los tramos con retraso en rojo/ámbar sobre la ruta y muestra
 
 Si el proveedor falla o agota la cuota, `RouteBuilder` cae automáticamente a OSRM: nunca se
 queda sin ruta.
+
+### Módulos descargables
+
+Contenido extra (teselas offline, voces, datos) que viaja del teléfono al estéreo:
+
+1. El release publica `modules.json` con la lista (id, tipo, versión, tamaño, SHA-256 y URL).
+2. **Ajustes → Módulos** muestra lo disponible y lo instala con un toque.
+3. El teléfono descarga el ZIP y lo envía por Wi-Fi Direct en bloques.
+4. El estéreo verifica **SHA-256**, descomprime evitando rutas maliciosas y registra el
+   módulo en `files/modules.json`.
+
+Tipos soportados: `tiles` (PNG en `{z}/{x}/{y}.png` que van a la caché de osmdroid) y
+`voice` (WAV por clave de frase). En **Ajustes rápidos → Módulos del estéreo** se ven los
+instalados, su tamaño y se puede quitar el registro.
+
+Si el release no incluye `modules.json`, la app simplemente indica que no hay módulos.
+Para pruebas locales se puede apuntar el catálogo a un servidor de la PC (solo `10.0.2.2`,
+`localhost` y `127.0.0.1` permiten HTTP en claro; el resto exige HTTPS).
 
 ---
 
