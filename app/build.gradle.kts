@@ -21,8 +21,8 @@ android {
         applicationId = "com.chronosbvrx.ibizadash"
         minSdk = 23
         targetSdk = 33
-        versionCode = 19
-        versionName = "1.5.0"
+        versionCode = 20
+        versionName = "1.5.1"
         ndk {
             abiFilters += listOf("armeabi-v7a")
         }

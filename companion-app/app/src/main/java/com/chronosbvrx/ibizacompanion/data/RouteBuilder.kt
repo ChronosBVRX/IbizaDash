@@ -41,6 +41,11 @@ object RouteBuilder {
                 null
             }
             if (traffic != null && traffic.encodedPolyline.isNotBlank()) {
+                Log.i(
+                    "RouteBuilder",
+                    "tomtom ${traffic.distanceMeters} m, ${traffic.durationSeconds} s, " +
+                        "retraso ${traffic.trafficDelaySeconds} s"
+                )
                 return BuiltRoute(
                     destinationName = destinationName,
                     distanceMeters = traffic.distanceMeters,

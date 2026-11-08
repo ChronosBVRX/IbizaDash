@@ -10,7 +10,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
   (`IbizaDash.apk` para el estéreo, `IbizaCompanion.apk` para el teléfono).
 - **Paquete del estéreo:** `com.chronosbvrx.ibizadash`
 - **Paquete del teléfono:** `com.chronosbvrx.ibizacompanion`
-- **Versiones actuales:** IbizaDash **1.5.0** (versionCode 19) · IbizaCompanion **1.5.0** (versionCode 14)
+- **Versiones actuales:** IbizaDash **1.5.1** (versionCode 20) · IbizaCompanion **1.5.1** (versionCode 15)
 - **minSdk 23 / targetSdk 33 / compileSdk 36** (estéreo)
 - Hecho con **Views** (sin Compose) en el estéreo para que sea liviano en el Cortex-A7.
 
@@ -118,7 +118,8 @@ Requisitos:
 - JDK 17 y Android SDK 34.
 - El AAR de Spotify está en `companion-app/app/libs/` (13 MB); no se descarga de Maven.
 - La búsqueda exacta de YouTube usa una API key **opcional** en
-  `companion-app/local.properties` (`YOUTUBE_API_KEY=...`). No subas esa key al repositorio.
+  `companion-app/local.properties` (`YOUTUBE_API_KEY=...`). El tráfico usa
+  `TOMTOM_API_KEY=...` en el mismo archivo. No subas ese archivo al repositorio.
 
 ---
 
@@ -203,9 +204,10 @@ se ve el peso de la caché y se puede liberar. Las frases se piden una sola vez.
 
 La ruta se calcula con **tráfico real**: ETA, tramos lentos coloreados y aviso de retraso.
 
-La clave se pega **una vez en el teléfono**: `Ajustes → TRÁFICO EN TIEMPO REAL → Añadir clave`.
-Se guarda en las preferencias del teléfono y **no viaja dentro del APK**, porque el release es
-público en GitHub. Si no hay clave, la app calcula la ruta igual (OSRM) sin datos de tráfico.
+La clave puede quedar **incluida en la compilación** desde `companion-app/local.properties`
+(`TOMTOM_API_KEY=...`, ignorado por Git). En **Ajustes → TRÁFICO EN TIEMPO REAL** se ve si
+está activa y se puede sustituir por otra en el teléfono. Sin clave, la app calcula la ruta
+igual (OSRM) sin datos de tráfico.
 
 El estéreo pinta los tramos con retraso en rojo/ámbar sobre la ruta y muestra
 `TRÁFICO +X MIN` cuando el retraso supera un minuto. Esa información viaja en `ROUTE_SET`

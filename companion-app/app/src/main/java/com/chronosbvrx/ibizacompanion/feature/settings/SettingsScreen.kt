@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.chronosbvrx.ibizacompanion.BuildConfig
 import com.chronosbvrx.ibizacompanion.core.design.theme.IbizaColors
 import com.chronosbvrx.ibizacompanion.core.state.CompanionState
 import com.chronosbvrx.ibizacompanion.data.CompanionPrefs
@@ -326,12 +327,14 @@ private fun SelfUpdateCard() {
 }
 
 /**
- * Clave del proveedor de tráfico. Se guarda en el teléfono y nunca va dentro
- * del APK publicado: así el release de GitHub no expone la clave.
+ * Clave del proveedor de tráfico. La compilación personal puede traer una
+ * clave incluida (BuildConfig.TOMTOM_API_KEY); si el usuario guarda otra en
+ * este teléfono, esa tiene prioridad.
  */
 @Composable
 private fun TrafficKeyCard() {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val builtIn = BuildConfig.TOMTOM_API_KEY.isNotBlank()
     var saved by remember { mutableStateOf(CompanionPrefs.trafficKey(context)) }
     var editing by remember { mutableStateOf(false) }
     var draft by remember { mutableStateOf("") }
@@ -350,14 +353,21 @@ private fun TrafficKeyCard() {
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                if (saved.isBlank()) "Sin clave · ruta sin datos de tráfico"
-                else "Clave configurada · ruta con tráfico y ETA real",
+                when {
+                    saved.isNotBlank() -> "Clave propia configurada · tráfico y ETA real"
+                    builtIn -> "Clave incluida en la app · tráfico y ETA real"
+                    else -> "Sin clave · ruta sin datos de tráfico"
+                },
                 style = MaterialTheme.typography.titleMedium,
                 color = IbizaColors.TextPrimary
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                status ?: "Se guarda solo en este teléfono. El APK publicado no incluye claves.",
+                status ?: when {
+                    builtIn && saved.isBlank() ->
+                        "Esta compilación ya trae una clave de TomTom. Puedes cambiarla por otra."
+                    else -> "Se guarda solo en este teléfono. El APK publicado no incluye claves."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = IbizaColors.TextSecondary
             )
@@ -373,13 +383,17 @@ private fun TrafficKeyCard() {
                         contentColor = IbizaColors.Background
                     ),
                     shape = RoundedCornerShape(12.dp)
-                ) { Text(if (saved.isBlank()) "Añadir clave" else "Cambiar clave") }
+                ) { Text(if (saved.isBlank() && !builtIn) "Añadir clave" else "Cambiar clave") }
                 if (saved.isNotBlank()) {
                     OutlinedButton(
                         onClick = {
                             CompanionPrefs.setTrafficKey(context, "")
                             saved = ""
-                            status = "Clave borrada"
+                            status = if (builtIn) {
+                                "Se usará la clave incluida en la app"
+                            } else {
+                                "Clave borrada"
+                            }
                         },
                         shape = RoundedCornerShape(12.dp)
                     ) { Text("Borrar", color = IbizaColors.TextSecondary) }
@@ -395,7 +409,11 @@ private fun TrafficKeyCard() {
             text = {
                 Column {
                     Text(
-                        "Pega la clave de TomTom (Routing/Traffic). Se guarda solo en este teléfono.",
+                        if (builtIn) {
+                            "Pega otra clave de TomTom (Routing/Traffic). Si la dejas vacía, se usará la incluida en la app."
+                        } else {
+                            "Pega la clave de TomTom (Routing/Traffic). Se guarda solo en este teléfono."
+                        },
                         color = IbizaColors.TextSecondary,
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -424,7 +442,11 @@ private fun TrafficKeyCard() {
                     CompanionPrefs.setTrafficKey(context, clean)
                     saved = clean
                     editing = false
-                    status = if (clean.isBlank()) "Clave borrada" else "Clave guardada"
+                    status = when {
+                        clean.isNotBlank() -> "Clave guardada"
+                        builtIn -> "Se usará la clave incluida en la app"
+                        else -> "Clave borrada"
+                    }
                 }) { Text("Guardar", color = IbizaColors.Primary) }
             },
             dismissButton = {
