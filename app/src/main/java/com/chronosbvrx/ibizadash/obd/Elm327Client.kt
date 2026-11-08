@@ -54,7 +54,49 @@ class Elm327Client(private val context: Context) {
     @Volatile
     private var lastFuelOkMs = 0L
 
+    /** PIDs que la ECU declaró soportar en 0100/0120/0140. */
+    private val supportedPids = java.util.Collections.synchronizedSet(HashSet<Int>())
+
+    /**
+     * El mapa de PIDs solo se usa si se pudo leer y contiene RPM (0x0C), que es
+     * obligatorio en OBD-II. Si el clon responde algo raro, se ignora y se
+     * consulta todo como antes (fail-open).
+     */
+    @Volatile
+    private var pidMaskTrusted = false
+
     private data class FuelReading(val raw: Int)
+
+    /**
+     * Última lectura válida de un PID con su marca de tiempo.
+     *
+     * Antes se conservaba el último valor aunque la ECU dejara de responder:
+     * con el socket abierto pero sin datos, la UI seguía mostrando RPM o
+     * velocidad viejas como si fueran actuales (y el velocímetro no caía a
+     * GPS). Ahora cada dato caduca por separado.
+     */
+    private class FreshReading {
+        private val values = HashMap<String, Float>()
+        private val stamps = HashMap<String, Long>()
+
+        fun put(key: String, value: Float?, now: Long) {
+            if (value == null || !value.isFinite()) return
+            values[key] = value
+            stamps[key] = now
+        }
+
+        /** Devuelve el valor solo si sigue vigente; null si nunca llegó o caducó. */
+        fun get(key: String, now: Long, ttlMs: Long): Float? {
+            val stamp = stamps[key] ?: return null
+            if (now - stamp > ttlMs) return null
+            return values[key]
+        }
+
+        fun clear() {
+            values.clear()
+            stamps.clear()
+        }
+    }
 
     /** Relee MIL/DTC sin reconectar (se ejecuta en el hilo OBD, no bloquea la UI). */
     fun refreshDtcs() {
@@ -263,6 +305,8 @@ class Elm327Client(private val context: Context) {
 
     private fun runReal(mac: String?, gen: Int) {
         var last = ObdTelemetry()
+        val fast = FreshReading()
+        val slow = FreshReading()
         while (alive(gen)) {
             val device = resolveDevice(mac)
             if (device == null) {
@@ -276,6 +320,8 @@ class Elm327Client(private val context: Context) {
                 last = last.copy(connected = true, demo = false, deviceName = device.name, error = null)
 
                 initialize()
+                fast.clear()
+                slow.clear()
                 val vin = queryVin()
                 val (mil, dtcCount, dtcs) = queryDtcs()
                 last = last.copy(vin = vin, milOn = mil, dtcCount = dtcCount, dtcs = dtcs)
@@ -283,50 +329,54 @@ class Elm327Client(private val context: Context) {
 
                 var slowCounter = 0
                 while (alive(gen)) {
-                    val rpm = queryValue("010C", "410C") { bytes ->
+                    val now = SystemClock.elapsedRealtime()
+                    val rpm = if (supports(0x0C)) queryValue("010C", "410C") { bytes ->
                         if (bytes.size >= 2) {
                             (((bytes[0] * 256) + bytes[1]) / 4).toFloat()
                         } else {
                             null
                         }
-                    }?.toInt()
-                    val load = queryValue("0104", "4104") { bytes ->
+                    } else null
+                    val load = if (supports(0x04)) queryValue("0104", "4104") { bytes ->
                         if (bytes.isNotEmpty()) bytes[0] * 100f / 255f else null
-                    }
-                    val throttle = queryValue("0111", "4111") { bytes ->
+                    } else null
+                    val throttle = if (supports(0x11)) queryValue("0111", "4111") { bytes ->
                         if (bytes.isNotEmpty()) bytes[0] * 100f / 255f else null
-                    }
-                    val speed = queryValue("010D", "410D") { bytes ->
+                    } else null
+                    val speed = if (supports(0x0D)) queryValue("010D", "410D") { bytes ->
                         if (bytes.isNotEmpty()) bytes[0].toFloat() else null
-                    }?.toInt()
+                    } else null
+
+                    fast.put(K_RPM, rpm, now)
+                    fast.put(K_LOAD, load, now)
+                    fast.put(K_THROTTLE, throttle, now)
+                    fast.put(K_SPEED, speed, now)
 
                     if (++slowCounter % 4 == 0) {
-                        val coolant = queryValue("0105", "4105") { bytes ->
+                        val coolant = if (supports(0x05)) queryValue("0105", "4105") { bytes ->
                             if (bytes.isNotEmpty()) (bytes[0] - 40).toFloat() else null
-                        }
-                        val intake = queryValue("010F", "410F") { bytes ->
+                        } else null
+                        val intake = if (supports(0x0F)) queryValue("010F", "410F") { bytes ->
                             if (bytes.isNotEmpty()) (bytes[0] - 40).toFloat() else null
-                        }
-                        val fuel = queryValue("012F", "412F") { bytes ->
+                        } else null
+                        val fuel = if (supports(0x2F)) queryValue("012F", "412F") { bytes ->
                             if (bytes.isNotEmpty()) bytes[0] * 100f / 255f else null
-                        }
-                        val battery = queryValue("0142", "4142") { bytes ->
+                        } else null
+                        val battery = (if (supports(0x42)) queryValue("0142", "4142") { bytes ->
                             if (bytes.size >= 2) ((bytes[0] * 256) + bytes[1]) / 1000f else null
-                        } ?: queryAtrv()
-                        val fuelTrim = queryValue("0106", "4106") { bytes ->
+                        } else null) ?: queryAtrv()
+                        val fuelTrim = if (supports(0x06)) queryValue("0106", "4106") { bytes ->
                             if (bytes.isNotEmpty()) (bytes[0] - 128) * 100f / 128f else null
-                        }
-                        val timing = queryValue("010E", "410E") { bytes ->
+                        } else null
+                        val timing = if (supports(0x0E)) queryValue("010E", "410E") { bytes ->
                             if (bytes.isNotEmpty()) bytes[0] / 2f - 64f else null
-                        }
-                        last = last.copy(
-                            coolantC = coolant ?: last.coolantC,
-                            intakeC = intake ?: last.intakeC,
-                            fuelPct = fuel ?: last.fuelPct,
-                            fuelTrimPct = fuelTrim ?: last.fuelTrimPct,
-                            timingAdvanceDeg = timing ?: last.timingAdvanceDeg,
-                            batteryV = battery ?: last.batteryV
-                        )
+                        } else null
+                        slow.put(K_COOLANT, coolant, now)
+                        slow.put(K_INTAKE, intake, now)
+                        slow.put(K_FUEL, fuel, now)
+                        slow.put(K_BATTERY, battery, now)
+                        slow.put(K_TRIM, fuelTrim, now)
+                        slow.put(K_TIMING, timing, now)
                         // Nivel real del cuadro por UDS (cada 60 s; cambia lento).
                         val nowFuel = SystemClock.elapsedRealtime()
                         if (Prefs.fuelUdsEnabled(context) && nowFuel - lastFuelUdsMs > 60_000L) {
@@ -342,9 +392,10 @@ class Elm327Client(private val context: Context) {
                                     fuelSource = "UDS"
                                 )
                             } else if (last.fuelSource == "UDS" &&
-                                nowFuel - lastFuelOkMs > 300_000L
+                                nowFuel - lastFuelOkMs > FUEL_UDS_TTL_MS
                             ) {
-                                // Sin respuesta durante 5 min: deja de mostrar un valor viejo.
+                                // Sin respuesta durante demasiado tiempo: deja de
+                                // mostrar un nivel viejo.
                                 last = last.copy(
                                     fuelRaw = null,
                                     fuelLevelPct = null,
@@ -355,12 +406,22 @@ class Elm327Client(private val context: Context) {
                         }
                     }
 
+                    // Un valor solo sigue visible mientras esté vigente: si la
+                    // ECU deja de contestar, el campo pasa a "sin lectura" y el
+                    // velocímetro puede caer a CAN o GPS.
                     last = last.copy(
                         connected = true,
-                        rpm = rpm ?: last.rpm,
-                        loadPct = load ?: last.loadPct,
-                        throttlePct = throttle ?: last.throttlePct,
-                        speedKmh = speed ?: last.speedKmh
+                        rpm = fast.get(K_RPM, now, FAST_TTL_MS)?.toInt(),
+                        loadPct = fast.get(K_LOAD, now, FAST_TTL_MS),
+                        throttlePct = fast.get(K_THROTTLE, now, FAST_TTL_MS),
+                        speedKmh = fast.get(K_SPEED, now, FAST_TTL_MS)?.toInt(),
+                        coolantC = slow.get(K_COOLANT, now, SLOW_TTL_MS),
+                        intakeC = slow.get(K_INTAKE, now, SLOW_TTL_MS),
+                        fuelPct = slow.get(K_FUEL, now, SLOW_TTL_MS),
+                        fuelTrimPct = slow.get(K_TRIM, now, SLOW_TTL_MS),
+                        timingAdvanceDeg = slow.get(K_TIMING, now, SLOW_TTL_MS),
+                        batteryV = slow.get(K_BATTERY, now, SLOW_TTL_MS),
+                        updatedAtMs = now
                     )
                     ObdRepository.publish(last)
                     Log.d(
@@ -381,6 +442,8 @@ class Elm327Client(private val context: Context) {
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "OBD session: ${e.message}")
+                fast.clear()
+                slow.clear()
                 val msg = if (e.message?.contains("BLE") == true || e.message?.contains("no-OBD") == true) {
                     e.message ?: "Dispositivo BLE o no-OBD (requiere ELM327 SPP clásico)"
                 } else {
@@ -400,6 +463,8 @@ class Elm327Client(private val context: Context) {
     }
 
     private fun initialize() {
+        supportedPids.clear()
+        pidMaskTrusted = false
         sendCommand("ATZ", 2500L)
         Thread.sleep(700L)
         sendCommand("ATE0", 1200L)
@@ -429,6 +494,42 @@ class Elm327Client(private val context: Context) {
         Log.d(TAG, "0120: ${pids21.replace("\n", " ").take(120)}")
         val pids41 = sendCommand("0140", 2500L)
         Log.d(TAG, "0140: ${pids41.replace("\n", " ").take(120)}")
+
+        // Mapa de PIDs soportados: evita pedir datos que la ECU no tiene y
+        // esperar el timeout de cada uno en cada ciclo.
+        parseSupported(supported, "4100", 0x00)
+        if (supportedPids.contains(0x0C)) {
+            // 0x0C (RPM) es obligatorio; si no aparece, la respuesta no se
+            // entendió y se ignora el mapa para no perder datos.
+            pidMaskTrusted = true
+            parseSupported(pids21, "4120", 0x20)
+            parseSupported(pids41, "4140", 0x40)
+            Log.i(
+                TAG,
+                "PIDs soportados (${supportedPids.size}): " +
+                    supportedPids.sorted().joinToString(",") { "%02X".format(it) }
+            )
+        } else {
+            supportedPids.clear()
+            Log.w(TAG, "0100 sin PIDs interpretables; se consultan todos")
+        }
+    }
+
+    /** ¿La ECU declara este PID? Si el mapa no es fiable, se consulta igual. */
+    private fun supports(pid: Int): Boolean =
+        !pidMaskTrusted || supportedPids.isEmpty() || supportedPids.contains(pid)
+
+    /** Decodifica una respuesta de máscara de PIDs (4 bytes = 32 PIDs). */
+    private fun parseSupported(response: String, prefix: String, basePid: Int) {
+        val bytes = payload(response, prefix) ?: return
+        for (i in bytes.indices) {
+            val value = bytes[i]
+            for (bit in 0..7) {
+                if ((value shr (7 - bit)) and 1 == 1) {
+                    supportedPids.add(basePid + i * 8 + bit + 1)
+                }
+            }
+        }
     }
 
     private fun resolveDevice(mac: String?): BluetoothDevice? {
@@ -928,5 +1029,25 @@ class Elm327Client(private val context: Context) {
         private const val TAG = "ObdElm327"
         private val SPP_UUID: UUID =
             UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+
+        /** PIDs rápidos: caducan antes para no mostrar valores viejos. */
+        private const val FAST_TTL_MS = 6_000L
+
+        /** PIDs lentos (cada 4 ciclos, con posibles timeouts): más margen. */
+        private const val SLOW_TTL_MS = 30_000L
+
+        /** Nivel UDS del cuadro: se relee cada 60 s; 3 min sin respuesta lo borra. */
+        private const val FUEL_UDS_TTL_MS = 180_000L
+
+        private const val K_RPM = "rpm"
+        private const val K_LOAD = "load"
+        private const val K_THROTTLE = "throttle"
+        private const val K_SPEED = "speed"
+        private const val K_COOLANT = "coolant"
+        private const val K_INTAKE = "intake"
+        private const val K_FUEL = "fuel"
+        private const val K_BATTERY = "battery"
+        private const val K_TRIM = "trim"
+        private const val K_TIMING = "timing"
     }
 }

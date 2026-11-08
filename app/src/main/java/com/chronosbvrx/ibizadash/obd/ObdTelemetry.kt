@@ -28,7 +28,25 @@ data class ObdTelemetry(
     val dtcs: List<String> = emptyList(),
     val vin: String? = null,
     val updatedAtMs: Long = SystemClock.elapsedRealtime()
-)
+) {
+    /**
+     * Hay al menos una lectura utilizable en pantalla.
+     *
+     * `connected` solo dice que el enlace con el adaptador está abierto; la ECU
+     * puede estar sin responder (contacto apagado o PID no soportado). La UI usa
+     * esta bandera para no afirmar "todo en orden" sin datos reales.
+     */
+    val hasLiveData: Boolean
+        get() = (connected || demo) && (
+            rpm != null || coolantC != null || speedKmh != null ||
+                loadPct != null || throttlePct != null || intakeC != null ||
+                batteryV != null || fuelPct != null || fuelLevelPct != null
+            )
+
+    /** Segundos desde la última publicación de telemetría. */
+    fun ageSeconds(nowMs: Long = SystemClock.elapsedRealtime()): Long =
+        ((nowMs - updatedAtMs).coerceAtLeast(0L)) / 1000L
+}
 
 object ObdRepository {
     private val listeners = CopyOnWriteArraySet<(ObdTelemetry) -> Unit>()
