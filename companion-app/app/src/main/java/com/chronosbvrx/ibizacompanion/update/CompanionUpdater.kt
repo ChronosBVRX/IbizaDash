@@ -412,10 +412,6 @@ class CompanionInstallReceiver : BroadcastReceiver() {
         val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: ""
         Log.i("CompanionInstall", "status=$status msg=$message")
         when (status) {
-            -1 -> {
-                Log.w("CompanionInstall", "sin estado de sesión; se usa el instalador clásico")
-                CompanionUpdater.fallbackInstall(context)
-            }
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 val confirmIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
@@ -430,6 +426,8 @@ class CompanionInstallReceiver : BroadcastReceiver() {
                     } catch (e: Exception) {
                         Log.w("CompanionInstall", "confirm: ${e.message}")
                     }
+                } else {
+                    CompanionUpdater.fallbackInstall(context)
                 }
             }
             PackageInstaller.STATUS_SUCCESS -> {

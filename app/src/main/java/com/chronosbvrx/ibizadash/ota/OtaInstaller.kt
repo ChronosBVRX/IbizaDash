@@ -132,11 +132,6 @@ class OtaInstallReceiver : BroadcastReceiver() {
             "status=$status msg=$message extras=${intent.extras?.keySet()?.joinToString("|")}"
         )
         when (status) {
-            -1 -> {
-                // Algunos sistemas no entregan los extras de la sesión.
-                Log.w("OtaInstall", "sin estado de sesión; se usa el instalador clásico")
-                OtaInstaller.fallbackInstall(context)
-            }
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 val confirmIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
@@ -148,11 +143,9 @@ class OtaInstallReceiver : BroadcastReceiver() {
                     confirmIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     context.startActivity(confirmIntent)
                 } else {
-                    Toast.makeText(
-                        context,
-                        "No se pudo abrir el instalador del sistema",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    // Sin EXTRA_INTENT no hay diálogo del sistema: se abre el
+                    // instalador clásico con el APK ya verificado.
+                    OtaInstaller.fallbackInstall(context)
                 }
             }
             PackageInstaller.STATUS_SUCCESS -> {
