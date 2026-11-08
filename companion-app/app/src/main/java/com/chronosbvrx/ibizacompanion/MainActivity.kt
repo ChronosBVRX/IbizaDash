@@ -114,6 +114,9 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onOpenRoute = {
                                     navController.navigate(IbizaRoute.Navigation.route) { launchSingleTop = true }
+                                },
+                                onOpenConnection = {
+                                    navController.navigate(IbizaRoute.Connection.route) { launchSingleTop = true }
                                 }
                             )
                         }

@@ -1873,6 +1873,9 @@ class MainActivity : AppCompatActivity(), LocationListener {
         addDockItem(R.drawable.ic_apps, "APPS") {
             startActivity(Intent(this, AppsActivity::class.java))
         }
+        addDockItem(R.drawable.ic_settings, "AJUSTES") {
+            openQuickSettings()
+        }
         applyFocus(Focus.COCKPIT, animate = false)
     }
 

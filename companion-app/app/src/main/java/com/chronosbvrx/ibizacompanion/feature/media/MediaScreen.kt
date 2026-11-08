@@ -53,6 +53,7 @@ fun MediaScreen() {
     var queue by remember { mutableStateOf<List<android.media.session.MediaSession.QueueItem>>(emptyList()) }
     var queueTitle by remember { mutableStateOf<String?>(null) }
     var actions by remember { mutableStateOf(0L) }
+    var showNoAppsDialog by remember { mutableStateOf(false) }
     val installedApps = remember { detectMusicApps(context) }
     val runSearch: () -> Unit = {
         val fav = favoritePkg
@@ -62,6 +63,9 @@ fun MediaScreen() {
             showAppChooser = true
         } else if (installedApps.size == 1) {
             openSearch(context, installedApps.first().packageName, query)
+        } else {
+            // Antes el botón no hacía nada visible si no había reproductor.
+            showNoAppsDialog = true
         }
     }
 
@@ -436,6 +440,40 @@ fun MediaScreen() {
                 Icon(Icons.Default.Search, contentDescription = "Buscar", tint = IbizaColors.Background)
             }
         }
+    }
+
+    if (showNoAppsDialog) {
+        AlertDialog(
+            onDismissRequest = { showNoAppsDialog = false },
+            title = { Text("Sin app de música", color = IbizaColors.TextPrimary) },
+            text = {
+                Text(
+                    "Para buscar y reproducir desde aquí instala Spotify o YouTube Music. " +
+                        "La app puede seguir mostrando lo que suene en otras sesiones.",
+                    color = IbizaColors.TextSecondary
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showNoAppsDialog = false
+                    try {
+                        context.startActivity(
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://play.google.com/store/search?q=spotify%20o%20youtube%20music&c=apps")
+                            )
+                        )
+                    } catch (_: Exception) {
+                    }
+                }) { Text("Buscar en Play Store", color = IbizaColors.Primary) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNoAppsDialog = false }) {
+                    Text("Cerrar", color = IbizaColors.TextSecondary)
+                }
+            },
+            containerColor = IbizaColors.Surface
+        )
     }
 
     if (showAppChooser) {

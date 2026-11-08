@@ -38,7 +38,8 @@ import com.chronosbvrx.ibizacompanion.core.state.CompanionUiState
 @Composable
 fun DashboardScreen(
     onOpenMedia: () -> Unit = {},
-    onOpenRoute: () -> Unit = {}
+    onOpenRoute: () -> Unit = {},
+    onOpenConnection: () -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val state by CompanionState.state.collectAsState()
@@ -58,7 +59,7 @@ fun DashboardScreen(
         Surface(
             shape = RoundedCornerShape(20.dp),
             color = IbizaColors.Surface,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().clickable { onOpenConnection() }
         ) {
             Row(
                 modifier = Modifier
@@ -207,16 +208,20 @@ fun DashboardScreen(
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = IbizaColors.Surface,
-                modifier = Modifier.weight(1f).clickable { startService(context) }
+                modifier = Modifier.weight(1f).clickable { onOpenConnection() }
             ) {
                 Column(Modifier.padding(16.dp)) {
-                    Icon(Icons.Default.Settings, contentDescription = null, tint = IbizaColors.Primary, modifier = Modifier.size(22.dp))
+                    Icon(Icons.Default.Wifi, contentDescription = null, tint = IbizaColors.Primary, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.height(8.dp))
-                    Text("Servicio", style = MaterialTheme.typography.labelSmall, color = IbizaColors.TextSecondary)
+                    Text("Enlace", style = MaterialTheme.typography.labelSmall, color = IbizaColors.TextSecondary)
                     Text(
-                        if (state.serviceRunning) "Activo" else "Detenido",
+                        when {
+                            state.wifiConnected -> "Conectado"
+                            state.serviceRunning -> "Buscando"
+                            else -> "Detenido"
+                        },
                         style = MaterialTheme.typography.titleMedium,
-                        color = if (state.serviceRunning) IbizaColors.Success else IbizaColors.Warning
+                        color = if (state.wifiConnected) IbizaColors.Success else IbizaColors.Warning
                     )
                 }
             }

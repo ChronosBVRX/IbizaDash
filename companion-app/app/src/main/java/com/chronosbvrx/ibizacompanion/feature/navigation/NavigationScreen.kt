@@ -193,11 +193,16 @@ fun NavigationScreen() {
     }
 
     fun centerOnMe() {
-        webView?.evaluateJavascript("center($currentLat,$currentLon)", null)
-    }
-
-    fun drawRoute(points: List<android.location.Location>) {
-        // not used
+        val view = webView
+        if (view == null) {
+            status = "El mapa todavía se está cargando"
+            return
+        }
+        if (!hasLocationPermission) {
+            status = "Activa el permiso de ubicación para centrar el mapa"
+            return
+        }
+        view.evaluateJavascript("center($currentLat,$currentLon)", null)
     }
 
     fun drawRouteFromPolyline(encoded: String) {

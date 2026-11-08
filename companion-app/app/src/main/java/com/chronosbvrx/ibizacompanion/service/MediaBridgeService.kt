@@ -128,8 +128,12 @@ class MediaBridgeService : Service() {
             delay(15_000L)
             while (isActive) {
                 try {
-                    com.chronosbvrx.ibizacompanion.update.CompanionUpdater
-                        .checkForUpdate(this@MediaBridgeService)
+                    if (com.chronosbvrx.ibizacompanion.data.CompanionPrefs
+                            .autoUpdate(this@MediaBridgeService)
+                    ) {
+                        com.chronosbvrx.ibizacompanion.update.CompanionUpdater
+                            .checkForUpdate(this@MediaBridgeService)
+                    }
                 } catch (e: Exception) {
                     Log.w(TAG, "self-update: ${e.message}")
                 }
