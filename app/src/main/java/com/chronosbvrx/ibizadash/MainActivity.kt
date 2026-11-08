@@ -91,6 +91,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
     private lateinit var map: MapView
     private lateinit var remoteMap: ImageView
+    private lateinit var remoteArrow: View
+    private lateinit var mapSourceChip: TextView
     private lateinit var clock: TextView
     private lateinit var date: TextView
     private lateinit var weatherTop: TextView
@@ -112,6 +114,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private lateinit var mediaTime: TextView
     private lateinit var cockpitHealth: TextView
     private lateinit var cockpitHealthIcon: ImageView
+    private lateinit var healthRow: View
     private lateinit var headlightState: TextView
     private lateinit var headlightGlow: View
     private lateinit var dock: LinearLayout
@@ -243,6 +246,13 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private lateinit var canStatus: TextView
     private lateinit var mapsStatus: TextView
     private lateinit var wifiLinkStatus: TextView
+    private lateinit var homeStatus: TextView
+    private lateinit var otaStatus: TextView
+
+    /** Sin dato, no se muestra: la fila de salud solo aparece cuando hay
+        datos OBD o del sensor de luces del MCU. */
+    private var hasObdData = false
+    private var hasLightData = false
 
     private val uiHandler = Handler(Looper.getMainLooper())
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -361,6 +371,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         try {
             if (remoteMap.visibility != View.VISIBLE) {
                 remoteMap.visibility = View.VISIBLE
+                remoteArrow.visibility = View.VISIBLE
                 map.visibility = View.GONE
                 try {
                     map.onPause()
@@ -368,6 +379,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
                 }
             }
             remoteMap.setImageBitmap(bmp)
+            updateMapSourceChip()
         } catch (_: Exception) {
         }
     }
@@ -377,10 +389,38 @@ class MainActivity : AppCompatActivity(), LocationListener {
         try {
             if (remoteMap.visibility != View.VISIBLE) return
             remoteMap.visibility = View.GONE
+            remoteArrow.visibility = View.GONE
             remoteMap.setImageBitmap(null)
             map.visibility = View.VISIBLE
             map.onResume()
             map.invalidate()
+            updateMapSourceChip()
+        } catch (_: Exception) {
+        }
+    }
+
+    /** Chip de origen del mapa: TELÉFONO (frame remoto) o LOCAL (osmdroid). */
+    private fun updateMapSourceChip() {
+        try {
+            if (!::mapSourceChip.isInitialized) return
+            val remote = RemoteMapBridge.active
+            mapSourceChip.text = if (remote) "TELÉFONO" else "LOCAL"
+            mapSourceChip.setTextColor(
+                ContextCompat.getColor(
+                    this,
+                    if (remote) R.color.accent_cyan else R.color.text_muted
+                )
+            )
+        } catch (_: Exception) {
+        }
+    }
+
+    /** La fila de salud solo existe cuando hay algo real que mostrar. */
+    private fun refreshHealthRow() {
+        try {
+            if (!::healthRow.isInitialized) return
+            healthRow.visibility =
+                if (hasObdData || hasLightData) View.VISIBLE else View.GONE
         } catch (_: Exception) {
         }
     }
@@ -477,6 +517,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
             val max = intent.getIntExtra("LightMax", 0)
             val value = intent.getIntExtra("LightValue", 0)
             val ratio = if (max > 0) value.toFloat() / max else 0.5f
+            hasLightData = true
+            refreshHealthRow()
             headlightGlow.visibility = if (value > 0) View.VISIBLE else View.GONE
             headlightState.text = if (value > 0) "Luces ON" else "Luces off"
             headlightState.setTextColor(
@@ -554,6 +596,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private fun bindViews() {
         map = findViewById(R.id.map)
         remoteMap = findViewById(R.id.remoteMap)
+        remoteArrow = findViewById(R.id.remoteArrow)
+        mapSourceChip = findViewById(R.id.mapSourceChip)
         clock = findViewById(R.id.clock)
         date = findViewById(R.id.date)
         weatherTop = findViewById(R.id.weatherTop)
@@ -575,6 +619,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
         mediaTime = findViewById(R.id.mediaTime)
         cockpitHealth = findViewById(R.id.cockpitHealth)
         headlightState = findViewById(R.id.headlightState)
+        healthRow = findViewById(R.id.healthRow)
+        healthRow.visibility = View.GONE // Sin dato, no se muestra (ver refreshHealthRow).
         headlightGlow = findViewById(R.id.headlightGlow)
         callBanner = findViewById(R.id.callBanner)
         callText = findViewById(R.id.callText)
@@ -899,6 +945,13 @@ class MainActivity : AppCompatActivity(), LocationListener {
             onStop = { runOnUiThread { hideRemoteMap() } }
         )
         PhoneNotifyBridge.attach { msg -> runOnUiThread { showAlert(msg) } }
+        // OTA: cuando el teléfono termina de enviar el APK, avisar en la
+        // cápsula (sin modal) para que el usuario lo instale cuando quiera.
+        com.chronosbvrx.ibizadash.ota.OtaReceiver.onReady = { pending ->
+            runOnUiThread {
+                showAlert("Actualización v${pending.versionName} lista · Ajustes rápidos")
+            }
+        }
         // Wi-Fi Direct: portadas y teselas sin el cuello de botella de RFCOMM.
         WifiNavBridgeServer.start(this)
         // Bluetooth sigue escuchando como respaldo automático.
@@ -1439,12 +1492,16 @@ class MainActivity : AppCompatActivity(), LocationListener {
     }
 
     private fun renderHuman(human: HumanVehicleStatus, state: ObdTelemetry) {
+        hasObdData = state.connected || state.demo
+        refreshHealthRow()
         val fuelPct = if (state.connected || state.demo) {
             state.fuelLevelPct ?: state.fuelPct
         } else {
             null
         }
         if (fuelPct != null) {
+            hudPillFuel.visibility = View.VISIBLE
+            cockpitFuel.visibility = View.VISIBLE
             hudPillFuel.text = "F ${fuelPct.roundToInt()}%"
             cockpitFuel.text = "F ${fuelPct.roundToInt()}%"
             val fuelColor = ContextCompat.getColor(
@@ -1454,11 +1511,10 @@ class MainActivity : AppCompatActivity(), LocationListener {
             hudPillFuel.setTextColor(fuelColor)
             cockpitFuel.setTextColor(fuelColor)
         } else {
-            hudPillFuel.text = "F --"
-            cockpitFuel.text = "F --"
-            val muted = ContextCompat.getColor(this, R.color.text_muted)
-            hudPillFuel.setTextColor(muted)
-            cockpitFuel.setTextColor(muted)
+            // Sin lectura de combustible no se muestra el chip: un "F --"
+            // permanente se lee como algo roto.
+            hudPillFuel.visibility = View.GONE
+            cockpitFuel.visibility = View.GONE
         }
 
         val heroColor = severityColor(human.headlineSeverity)
@@ -1944,7 +2000,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private fun updateMedia(nowPlaying: NowPlaying?) {
         if (nowPlaying == null) {
             mediaTitle.text = getString(R.string.media_title)
-            mediaSubtitle.text = "Bluetooth / Radio / USB"
+            mediaSubtitle.text = "Bluetooth / Radio FM"
             renderArt(albumArt, null, 14)
             btnPlay.setImageResource(R.drawable.ic_play)
             mediaProgress.visibility = View.GONE
@@ -1955,7 +2011,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             miniPlay.setImageResource(R.drawable.ic_play)
 
             mmTitle.text = "Sin reproducción"
-            mmArtist.text = "Bluetooth · USB · Streaming"
+            mmArtist.text = "Bluetooth · Radio FM"
             mmAlbum.text = ""
             renderArt(mmArt, null, 70)
             mmPlay.setImageResource(R.drawable.ic_play)
@@ -2638,15 +2694,60 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private fun refreshLinkStatus() {
         if (!::wifiLinkStatus.isInitialized) return
         try {
-            wifiLinkStatus.text = WifiNavBridgeServer.statusText()
+            // Sufijo corto del origen del mapa: lo interesante es saber si el
+            // mapa que se ve viene del teléfono o es el nativo.
+            val mapSuffix =
+                if (RemoteMapBridge.active) " · mapa TEL" else ""
+            wifiLinkStatus.text = WifiNavBridgeServer.statusText() + mapSuffix
             val active = WifiNavBridgeServer.hasClients() || BtNavBridgeServer.hasClients()
             wifiLinkStatus.setTextColor(
                 ContextCompat.getColor(this, if (active) R.color.green else R.color.accent_sky)
             )
         } catch (_: Exception) {
         }
+        refreshHomeStatus()
+        refreshOtaStatus()
         uiHandler.removeCallbacks(linkStatusRunnable)
         uiHandler.postDelayed(linkStatusRunnable, 3000L)
+    }
+
+    /** ¿Qué app es el launcher por defecto del estéreo? */
+    private fun refreshHomeStatus() {
+        try {
+            if (!::homeStatus.isInitialized) return
+            val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            val resolve = packageManager.resolveActivity(homeIntent, 0)
+            val pkg = resolve?.activityInfo?.packageName
+            if (pkg == packageName) {
+                homeStatus.text = "IbizaDash ✓"
+                homeStatus.setTextColor(ContextCompat.getColor(this, R.color.green))
+            } else {
+                homeStatus.text = "No es IbizaDash"
+                homeStatus.setTextColor(ContextCompat.getColor(this, R.color.amber))
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    /** Estado de la actualización OTA recibida desde el teléfono. */
+    private fun refreshOtaStatus() {
+        try {
+            if (!::otaStatus.isInitialized) return
+            val pending = com.chronosbvrx.ibizadash.ota.OtaReceiver.pendingUpdate(this)
+            if (pending != null) {
+                otaStatus.text = "v${pending.versionName} lista · toca para instalar"
+                otaStatus.setTextColor(ContextCompat.getColor(this, R.color.accent_cyan))
+            } else {
+                val current = try {
+                    packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
+                } catch (_: Exception) {
+                    "?"
+                }
+                otaStatus.text = "v$current instalada"
+                otaStatus.setTextColor(ContextCompat.getColor(this, R.color.text_muted))
+            }
+        } catch (_: Exception) {
+        }
     }
 
     private fun setupQuickSettings() {
@@ -2660,6 +2761,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
         canStatus = findViewById(R.id.canStatus)
         mapsStatus = findViewById(R.id.mapsStatus)
         wifiLinkStatus = findViewById(R.id.wifiLinkStatus)
+        homeStatus = findViewById(R.id.homeStatus)
+        otaStatus = findViewById(R.id.otaStatus)
         refreshMapsStatus()
 
         brightnessSeek.progress = 80
@@ -2707,6 +2810,25 @@ class MainActivity : AppCompatActivity(), LocationListener {
             } catch (_: Exception) {
                 Toast.makeText(this, "WiFi no disponible", Toast.LENGTH_SHORT).show()
             }
+        }
+        findViewById<View>(R.id.rowHome).setOnClickListener {
+            // En API 27 no hay RoleManager: se abre el selector de app de
+            // inicio del sistema y el usuario elige IbizaDash "Siempre".
+            closeQuickSettings()
+            try {
+                startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
+            } catch (_: Exception) {
+                Toast.makeText(this, "No se pudo abrir el selector de inicio", Toast.LENGTH_SHORT).show()
+            }
+        }
+        findViewById<View>(R.id.rowOta).setOnClickListener {
+            val pending = com.chronosbvrx.ibizadash.ota.OtaReceiver.pendingUpdate(this)
+            if (pending == null) {
+                Toast.makeText(this, "Sin actualizaciones pendientes", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            closeQuickSettings()
+            com.chronosbvrx.ibizadash.ota.OtaInstaller.install(this, pending)
         }
     }
 

@@ -155,6 +155,8 @@ object PhoneNavController {
         lastStateMs = SystemClock.elapsedRealtime()
         if (snapshot.arrived) completed = true
         lastSnapshot = snapshot
+        // La velocidad alimenta el fps adaptativo del mapa remoto.
+        com.chronosbvrx.ibizacompanion.map.MapFrameSender.setSpeed(snapshot.speedKmh)
         Log.d(TAG, "state ${snapshot.icon} ${snapshot.actionText} · ${snapshot.remainingText}")
         sendToStereo(snapshot)
 

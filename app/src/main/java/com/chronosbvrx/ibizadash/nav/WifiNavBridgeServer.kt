@@ -282,6 +282,16 @@ object WifiNavBridgeServer {
                             .put("type", "WELCOME")
                             .put("proto", NavBridgeProtocol.PROTOCOL_VERSION)
                             .put("transport", "wifi")
+                            .put(
+                                "stereoVersionCode",
+                                com.chronosbvrx.ibizadash.ota.OtaReceiver
+                                    .installedVersionCode(context)
+                            )
+                            .put(
+                                "stereoVersionName",
+                                com.chronosbvrx.ibizadash.ota.OtaReceiver
+                                    .installedVersionName(context)
+                            )
                     )
                     // Snapshot inmediato para que el teléfono pinte la ruta
                     // activa aunque el estéreo llevara horas encendido.

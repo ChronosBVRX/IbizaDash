@@ -51,7 +51,14 @@ data class CompanionUiState(
     val routeIcon: String = "",
     val routeProgress: Float = 0f,
     val routeArrived: Boolean = false,
-    val routeOffRoute: Boolean = false
+    val routeOffRoute: Boolean = false,
+    /** Versión del estéreo conectado (0 = aún no la ha reportado en WELCOME). */
+    val stereoVersionCode: Int = 0,
+    val stereoVersionName: String = "",
+    /** Estado de la OTA al estéreo. */
+    val otaStatus: String = "",
+    val otaProgress: Float = 0f,
+    val otaSending: Boolean = false
 )
 
 object CompanionState {
