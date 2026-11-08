@@ -38,8 +38,8 @@ import androidx.core.content.ContextCompat
 import com.chronosbvrx.ibizacompanion.BridgeLink
 import com.chronosbvrx.ibizacompanion.core.design.theme.IbizaColors
 import com.chronosbvrx.ibizacompanion.core.state.CompanionState
-import com.chronosbvrx.ibizacompanion.data.NominatimClient
 import com.chronosbvrx.ibizacompanion.data.PlaceResult
+import com.chronosbvrx.ibizacompanion.data.PlaceSearch
 import com.chronosbvrx.ibizacompanion.map.MapFrameSender
 import com.chronosbvrx.ibizacompanion.nav.PhoneNavController
 import kotlinx.coroutines.Dispatchers
@@ -462,15 +462,11 @@ fun NavigationScreen() {
                     searchJob?.cancel()
                     if (q.length >= 3) {
                         searchJob = scope.launch {
-                            // Debounce: Nominatim allows ~1 request/second.
+                            // Debounce: no consultar en cada tecla.
                             delay(700L)
                             searching = true
                             val res = withContext(Dispatchers.IO) {
-                                val photon = com.chronosbvrx.ibizacompanion.data.PhotonClient.search(q, currentLat, currentLon)
-                                if (photon.isNotEmpty()) photon else {
-                                    val near = NominatimClient.searchNear(q, currentLat, currentLon)
-                                    if (near.isNotEmpty()) near else NominatimClient.search(q)
-                                }
+                                PlaceSearch.search(q, currentLat, currentLon)
                             }
                             results = res
                             searching = false
@@ -486,7 +482,7 @@ fun NavigationScreen() {
                         searching = false
                     }
                 },
-                placeholder = { Text("¿Qué quieres hacer o a dónde vamos?", color = IbizaColors.TextSecondary) },
+                placeholder = { Text("¿A dónde vamos? Negocios, calles o direcciones", color = IbizaColors.TextSecondary) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = IbizaColors.Primary) },
                 trailingIcon = {
                     if (searching) {
@@ -569,7 +565,7 @@ fun NavigationScreen() {
                 val preview = route
                 if (preview == null) {
                     Text("Sugerencias para \"$query\"", style = MaterialTheme.typography.titleMedium, color = IbizaColors.TextPrimary)
-                    Text("Calles, negocios, destinos o lo que quieras hacer", style = MaterialTheme.typography.bodySmall, color = IbizaColors.TextSecondary)
+                    Text("Negocios, calles y direcciones cerca de ti", style = MaterialTheme.typography.bodySmall, color = IbizaColors.TextSecondary)
                     Spacer(Modifier.height(10.dp))
                     LazyColumn(Modifier.heightIn(max = 420.dp)) {
                         items(results) { place ->
@@ -582,6 +578,13 @@ fun NavigationScreen() {
                                 Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(place.displayName, style = MaterialTheme.typography.bodyMedium, color = IbizaColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    place.distanceKm?.let { km ->
+                                        Text(
+                                            "a %.1f km".format(km),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = IbizaColors.Primary
+                                        )
+                                    }
                                 }
                                 TextButton(onClick = {
                                     query = place.displayName.take(48)

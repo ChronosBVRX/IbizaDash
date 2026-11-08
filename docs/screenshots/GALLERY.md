@@ -1,4 +1,4 @@
-# Galería de pantallas · IbizaDash 1.6.0 + IbizaCompanion 1.6.0
+# Galería de pantallas · IbizaDash 1.6.0 + IbizaCompanion 1.6.1
 
 Capturas reales del emulador a 1280×720, con datos OBD de demostración y el
 paquete offline de Morelia. Haz clic en cualquier imagen para verla completa.
@@ -109,7 +109,7 @@ Estado del enlace, ruta activa con ETA y accesos rápidos.
 
 [![Rutas](phone/02-rutas.png)](phone/02-rutas.png)
 
-Búsqueda de calles, negocios o destinos.
+Búsqueda local de negocios, calles y direcciones; prioriza tu zona en México.
 
 ### Música
 
