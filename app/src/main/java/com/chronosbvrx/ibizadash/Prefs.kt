@@ -8,7 +8,6 @@ object Prefs {
     private const val USE_MPH = "use_mph"
     private const val DEMO_MEDIA = "demo_media"
     private const val MAP_FOLLOW = "map_follow"
-    private const val ONLINE_COVERS = "online_covers"
     private const val OBD_MAC = "obd_mac"
     private const val OBD_DEMO = "obd_demo"
     private const val OBD_PIN = "obd_pin"
@@ -45,13 +44,6 @@ object Prefs {
 
     fun setDemoMedia(context: Context, value: Boolean) {
         p(context).edit().putBoolean(DEMO_MEDIA, value).apply()
-    }
-
-    fun onlineCovers(context: Context): Boolean =
-        p(context).getBoolean(ONLINE_COVERS, true)
-
-    fun setOnlineCovers(context: Context, value: Boolean) {
-        p(context).edit().putBoolean(ONLINE_COVERS, value).apply()
     }
 
     fun obdMac(context: Context): String? =

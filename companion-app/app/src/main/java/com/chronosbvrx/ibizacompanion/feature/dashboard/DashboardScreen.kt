@@ -77,23 +77,17 @@ fun DashboardScreen(
                     Text(
                         when {
                             state.wifiConnected ->
-                                "Wi-Fi Direct · ${state.wifiHost ?: "conectado"}"
-                            state.btConnected ->
-                                state.btDeviceName?.takeIf { it.isNotBlank() } ?: "Bluetooth conectado"
-                            state.serviceRunning -> "Buscando el estéreo…"
+                                "Wi-Fi Direct \u00B7 ${state.wifiHost ?: "conectado"}"
+                            state.serviceRunning -> "Buscando el est\u00E9reo..."
                             else -> "Servicio detenido"
                         },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (state.wifiConnected || state.btConnected) IbizaColors.Success else IbizaColors.TextSecondary
+                        color = if (state.wifiConnected) IbizaColors.Success else IbizaColors.TextSecondary
                     )
                 }
                 StatusChip(
-                    text = when {
-                        state.wifiConnected -> "Wi-Fi"
-                        state.btConnected -> "Bluetooth"
-                        else -> "Desconectado"
-                    },
-                    active = state.wifiConnected || state.btConnected
+                    text = if (state.wifiConnected) "Wi-Fi" else "Desconectado",
+                    active = state.wifiConnected
                 )
             }
         }
@@ -255,7 +249,7 @@ fun DashboardScreen(
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             QuickAction(
-                text = if (state.wifiConnected || state.btConnected) "Reconectar" else "Conectar",
+                text = if (state.wifiConnected) "Reconectar" else "Conectar",
                 modifier = Modifier.weight(1f)
             ) { reconnect(context) }
             QuickAction(text = "Enviar ruta", modifier = Modifier.weight(1f)) { onOpenRoute() }

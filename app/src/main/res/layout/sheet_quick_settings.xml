@@ -84,6 +84,18 @@
                 android:tint="@color/text_muted" />
         </LinearLayout>
 
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:fillViewport="true"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
         <!-- Brightness -->
         <TextView
             style="@style/Label"
@@ -298,43 +310,6 @@
             android:paddingTop="2dp"
             android:paddingBottom="2dp">
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="50dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingStart="12dp"
-                android:paddingEnd="8dp">
-
-                <FrameLayout
-                    android:layout_width="30dp"
-                    android:layout_height="30dp"
-                    android:background="@drawable/bg_icon_badge">
-
-                    <ImageView
-                        android:layout_width="16dp"
-                        android:layout_height="16dp"
-                        android:layout_gravity="center"
-                        android:contentDescription="Carátulas"
-                        android:src="@drawable/ic_cover"
-                        android:tint="@color/text_muted" />
-                </FrameLayout>
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="9dp"
-                    android:layout_weight="1"
-                    android:text="Carátulas online"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
-
-                <Switch
-                    android:id="@+id/swCovers"
-                    style="@style/SettingsSwitch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="48dp" />
-            </LinearLayout>
 
             <View
                 android:layout_width="match_parent"
@@ -636,10 +611,8 @@
             </LinearLayout>
         </LinearLayout>
 
-        <Space
-            android:layout_width="1dp"
-            android:layout_height="0dp"
-            android:layout_weight="1" />
+            </LinearLayout>
+        </ScrollView>
 
         <TextView
             android:id="@+id/openSettings"

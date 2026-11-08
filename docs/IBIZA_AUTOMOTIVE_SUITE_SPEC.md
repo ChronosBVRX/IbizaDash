@@ -1,3 +1,7 @@
+> **Documento histórico (2026-11-05/07).** La arquitectura vigente usa Wi-Fi Direct como
+> único canal de datos y OTA desde el teléfono. Ver `README.md` y
+> `docs/WIFI_DIRECT_TRANSPORT.md`.
+
 # Ibiza Automotive Suite Pro — Especificación de arquitectura y UI
 
 **Versión:** 1.0 · 2026-11-05  

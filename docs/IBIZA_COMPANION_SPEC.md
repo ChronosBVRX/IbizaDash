@@ -1,3 +1,7 @@
+> **Documento histórico (2026-11-05/07).** La arquitectura vigente usa Wi-Fi Direct como
+> único canal de datos y OTA desde el teléfono. Ver `README.md` y
+> `docs/WIFI_DIRECT_TRANSPORT.md`.
+
 # IbizaCompanion — Especificación de la app compañera del teléfono
 
 > App ligera para el teléfono del usuario (POCO F7) que calcula rutas pesadas y envía datos

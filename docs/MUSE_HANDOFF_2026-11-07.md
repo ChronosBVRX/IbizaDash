@@ -1,3 +1,13 @@
+> **Documento histórico.** Describe el handoff de v0.6.0. La versión vigente es 0.6.5:
+> el APK ya no se embute en `assets/`, la OTA descarga de GitHub y Bluetooth no se usa
+> para datos. Ver `README.md` y `docs/WIFI_DIRECT_TRANSPORT.md`.
+>
+> **Estado vigente (2026-11-08):** estéreo e instalación funcionando en **v0.6.5**; OTA
+> probada de punta a punta desde el teléfono. Las secciones "Estado actual" y "Firma"
+> de abajo describen el momento del handoff y **ya no aplican**. La firma vigente es la
+> keystore fija local documentada en `README.md`.
+
+
 # Handoff — IbizaDash v0.6.0 / IbizaCompanion v0.5.0 (Muse, 2026-11-07)
 
 Documento de traspaso para el agente de la laptop y el equipo. Todo el trabajo

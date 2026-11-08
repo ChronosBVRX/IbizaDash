@@ -240,7 +240,7 @@ fun NavigationScreen() {
         scope.launch {
             withContext(Dispatchers.IO) {
                 try {
-                    BridgeLink.clearRoute(context)
+                    BridgeLink.clearRoute()
                 } catch (_: Exception) {
                 }
             }
@@ -286,7 +286,6 @@ fun NavigationScreen() {
             status = "Enviando al IbizaDash…"
             val ok = withContext(Dispatchers.IO) {
                 BridgeLink.sendRouteSet(
-                    context,
                     preview.destination.displayName,
                     preview.distanceMeters,
                     preview.durationSeconds,
@@ -328,7 +327,7 @@ fun NavigationScreen() {
                     sendRouteTiles(preview)
                 }
             } else {
-                status = "No se pudo enviar (revisa Wi-Fi/Bluetooth)"
+                status = "No se pudo enviar: revisa Wi-Fi Direct"
             }
         }
     }

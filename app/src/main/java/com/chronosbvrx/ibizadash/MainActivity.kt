@@ -61,7 +61,6 @@ import com.chronosbvrx.ibizadash.nav.NavRouteRepository
 import com.chronosbvrx.ibizadash.nav.NavState
 import com.chronosbvrx.ibizadash.nav.NavStateRepository
 import com.chronosbvrx.ibizadash.nav.RouteNavigator
-import com.chronosbvrx.ibizadash.nav.BtNavBridgeServer
 import com.chronosbvrx.ibizadash.nav.MapTileBridge
 import com.chronosbvrx.ibizadash.nav.NavLink
 import com.chronosbvrx.ibizadash.nav.NavStateRelay
@@ -74,7 +73,7 @@ import com.chronosbvrx.ibizadash.obd.DtcDictionary
 import com.chronosbvrx.ibizadash.obd.Elm327Client
 import com.chronosbvrx.ibizadash.obd.ObdRepository
 import com.chronosbvrx.ibizadash.obd.ObdTelemetry
-import com.chronosbvrx.ibizadash.weather.WeatherClient
+import com.chronosbvrx.ibizadash.weather.WeatherRepository
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -447,7 +446,6 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
     private val DEBUG_NAV_ACTION = "com.chronosbvrx.ibizadash.DEBUG_NAV_NOTIFICATION"
     private val DEBUG_CALL_ACTION = "com.chronosbvrx.ibizadash.DEBUG_INCOMING_CALL"
-    private var weatherClient: WeatherClient? = null
     private var bluetoothClient: BluetoothStatusClient? = null
 
     private val sourceReceiver = object : BroadcastReceiver() {
@@ -581,10 +579,11 @@ class MainActivity : AppCompatActivity(), LocationListener {
         setupClock()
         requestLocationPermission()
 
-        weatherClient = WeatherClient(this) { text ->
-            runOnUiThread { renderWeather(text) }
+        // El clima lo calcula el teléfono y llega por Wi-Fi Direct (WEATHER).
+        WeatherRepository.onUpdate = { state ->
+            runOnUiThread { renderWeather(state) }
         }
-        updateWeather()
+        renderWeather(WeatherRepository.state)
         applyPrefs()
         syncMediaMode()
 
@@ -859,8 +858,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         }
     }
 
-    private fun hasPhoneLink(): Boolean =
-        NavLink.wifiActive() || BtNavBridgeServer.hasClients()
+    private fun hasPhoneLink(): Boolean = NavLink.wifiActive()
 
     private fun togglePlayback() {
         val playing = MediaRepository.current?.isPlaying == true
@@ -954,8 +952,6 @@ class MainActivity : AppCompatActivity(), LocationListener {
         }
         // Wi-Fi Direct: portadas y teselas sin el cuello de botella de RFCOMM.
         WifiNavBridgeServer.start(this)
-        // Bluetooth sigue escuchando como respaldo automático.
-        BtNavBridgeServer.start(this)
         MapTileBridge.addListener(mapTileListener)
         NavStateRelay.start()
         // Debug route injection.
@@ -2294,34 +2290,30 @@ class MainActivity : AppCompatActivity(), LocationListener {
         weatherIcon.visibility = visible
     }
 
-    private fun updateWeather() {
-        val lat = lastLocation?.latitude ?: MapHelper.MORELIA.latitude
-        val lon = lastLocation?.longitude ?: MapHelper.MORELIA.longitude
-        weatherClient?.update(lat, lon)
-    }
-
-    private fun renderWeather(text: String) {
-        if (text.startsWith("--")) {
-            weatherTop.text = "--°"
-            weatherIcon.setImageResource(R.drawable.ic_weather_cloud)
-            miniWeather.text = "--°"
-            miniWeatherIcon.setImageResource(R.drawable.ic_weather_cloud)
-            return
+    private fun renderWeather(state: WeatherRepository.State) {
+        val temp = state.tempC
+        val tempText = if (temp != null) {
+            String.format(Locale.getDefault(), "%.0f\u00B0", temp)
+        } else {
+            "--\u00B0"
         }
-        val iconRes = when {
-            text.contains("☀") -> R.drawable.ic_weather_sun
-            text.contains("⛅") || text.contains("☁") -> R.drawable.ic_weather_cloud
-            text.contains("🌫") -> R.drawable.ic_weather_fog
-            text.contains("🌧") || text.contains("🌦") -> R.drawable.ic_weather_rain
-            text.contains("❄") -> R.drawable.ic_weather_snow
-            text.contains("⛈") -> R.drawable.ic_weather_storm
-            else -> R.drawable.ic_weather_sun
+        val iconRes = when (state.code) {
+            0 -> R.drawable.ic_weather_sun
+            1, 2 -> R.drawable.ic_weather_cloud
+            3 -> R.drawable.ic_weather_cloud
+            45, 48 -> R.drawable.ic_weather_fog
+            in 51..67 -> R.drawable.ic_weather_rain
+            in 71..77, 85, 86 -> R.drawable.ic_weather_snow
+            in 80..82 -> R.drawable.ic_weather_rain
+            in 95..99 -> R.drawable.ic_weather_storm
+            else -> R.drawable.ic_weather_cloud
         }
         weatherIcon.setImageResource(iconRes)
         miniWeatherIcon.setImageResource(iconRes)
-        val temperature = text.replace(Regex("[^0-9°\\-]"), "").trim()
-        weatherTop.text = temperature.ifBlank { "--°" }
-        miniWeather.text = temperature.ifBlank { "--°" }
+        weatherTop.text = tempText
+        miniWeather.text = tempText
+        weatherTop.contentDescription = state.text.ifBlank { "Clima" }
+        miniWeather.contentDescription = state.text.ifBlank { "Clima" }
     }
 
     private fun toggleClimate(view: TextView) {
@@ -2414,7 +2406,6 @@ class MainActivity : AppCompatActivity(), LocationListener {
         if (requestCode == 100) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 enableLocation()
-                updateWeather()
             } else {
                 Toast.makeText(this, "Sin ubicación: mapa centrado en Morelia", Toast.LENGTH_SHORT)
                     .show()
@@ -2450,28 +2441,9 @@ class MainActivity : AppCompatActivity(), LocationListener {
                 }
                 map.invalidate()
             }
-            // Online refinement while moving (OSRM nearest-road).
-            if (com.chronosbvrx.ibizadash.nav.RoadSnapper.wantNetworkSnap(speedKmh, acc) &&
-                com.chronosbvrx.ibizadash.nav.RoadSnapper.hasNetwork(this)
-            ) {
-                com.chronosbvrx.ibizadash.nav.RoadSnapper.snapNetwork(
-                    this, location.latitude, location.longitude
-                ) { nlat, nlon ->
-                    if (nlat != null && nlon != null) {
-                        runOnUiThread {
-                            try {
-                                positionMarker?.position = GeoPoint(nlat, nlon)
-                                map.invalidate()
-                            } catch (_: Exception) {
-                            }
-                        }
-                    }
-                }
-            }
         } catch (_: Exception) {
         }
         }
-        updateWeather()
     }
 
     override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
@@ -2532,7 +2504,6 @@ class MainActivity : AppCompatActivity(), LocationListener {
         ) {
             enableLocation()
         }
-        updateWeather()
         syncMediaMode()
     }
 
@@ -2699,7 +2670,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             val mapSuffix =
                 if (RemoteMapBridge.active) " · mapa TEL" else ""
             wifiLinkStatus.text = WifiNavBridgeServer.statusText() + mapSuffix
-            val active = WifiNavBridgeServer.hasClients() || BtNavBridgeServer.hasClients()
+            val active = WifiNavBridgeServer.hasClients()
             wifiLinkStatus.setTextColor(
                 ContextCompat.getColor(this, if (active) R.color.green else R.color.accent_sky)
             )
@@ -2784,12 +2755,6 @@ class MainActivity : AppCompatActivity(), LocationListener {
             nightDim.visibility = if (checked) View.VISIBLE else View.GONE
         }
         swMute.setOnCheckedChangeListener { _, checked -> setMuted(checked) }
-
-        val swCovers = findViewById<Switch>(R.id.swCovers)
-        swCovers.isChecked = Prefs.onlineCovers(this)
-        swCovers.setOnCheckedChangeListener { _, checked ->
-            Prefs.setOnlineCovers(this, checked)
-        }
 
         sheetScrim.setOnClickListener { closeQuickSettings() }
         findViewById<View>(R.id.sheetClose).setOnClickListener { closeQuickSettings() }

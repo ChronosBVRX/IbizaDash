@@ -34,8 +34,8 @@ import java.util.Collections
  *     teléfono se conecte sin depender de una red compartida.
  *
  * Si el chip del estéreo no soporta Wi-Fi Direct, las capas 1 y 2 siguen
- * funcionando cuando ambos equipos comparten una red. Bluetooth queda como
- * respaldo en [BtNavBridgeServer].
+ * funcionando cuando ambos equipos comparten una red. No hay respaldo por
+ * Bluetooth: este es el único canal de datos con el teléfono.
  */
 object WifiNavBridgeServer {
     private const val TAG = "WifiNavBridge"

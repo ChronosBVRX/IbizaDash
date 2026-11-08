@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.util.Base64
 import android.util.Log
 import com.chronosbvrx.ibizadash.media.MediaRepository
+import com.chronosbvrx.ibizadash.weather.WeatherRepository
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -12,12 +13,11 @@ import java.io.File
 /**
  * Protocolo común del puente con el teléfono (IbizaCompanion).
  *
- * El mismo JSON line-delimited viaja por dos transportes:
- *  - Wi-Fi Direct / TCP (preferido: portadas y mapas sin cuello de botella).
- *  - Bluetooth RFCOMM (respaldo automático cuando no hay Wi-Fi).
+ * El mismo JSON line-delimited viaja por Wi-Fi Direct / TCP, el único canal
+ * de datos entre el teléfono y el estéreo.
  *
  * Aquí sólo vive la semántica de los mensajes; el transporte lo aporta
- * [WifiNavBridgeServer] o [BtNavBridgeServer].
+ * [WifiNavBridgeServer].
  */
 object NavBridgeProtocol {
     private const val TAG = "NavBridge"
@@ -186,6 +186,13 @@ object NavBridgeProtocol {
                 )
                 PhoneNavBridge.onState(context, state)
             }
+
+            // Clima calculado en el teléfono (el estéreo no usa Internet).
+            "WEATHER" -> WeatherRepository.update(
+                tempC = obj.optDouble("tempC", Double.NaN),
+                code = obj.optInt("code", -1),
+                text = obj.optString("text", "")
+            )
 
             "MAP_FRAME" -> RemoteMapBridge.onFrame(obj)
 

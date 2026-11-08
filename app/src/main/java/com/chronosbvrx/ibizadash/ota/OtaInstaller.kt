@@ -30,6 +30,15 @@ object OtaInstaller {
             Toast.makeText(context, "El APK de la actualización no está", Toast.LENGTH_SHORT).show()
             return
         }
+        if (!OtaReceiver.isValidApk(context, pending.file)) {
+            OtaReceiver.clearPending(context)
+            Toast.makeText(
+                context,
+                "La actualización no coincide con la firma de IbizaDash",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
         try {
             installViaSession(context, pending)
         } catch (e: SecurityException) {
@@ -107,8 +116,29 @@ class OtaInstallReceiver : BroadcastReceiver() {
         if (intent.action != OtaInstaller.ACTION_STATUS) return
         val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, -1)
         val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: ""
-        Log.i("OtaInstall", "status=$status $message")
+        Log.i(
+            "OtaInstall",
+            "status=$status msg=$message extras=${intent.extras?.keySet()?.joinToString("|")}"
+        )
         when (status) {
+            PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                val confirmIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra(Intent.EXTRA_INTENT) as? Intent
+                }
+                if (confirmIntent != null) {
+                    confirmIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(confirmIntent)
+                } else {
+                    Toast.makeText(
+                        context,
+                        "No se pudo abrir el instalador del sistema",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
             PackageInstaller.STATUS_SUCCESS -> {
                 OtaReceiver.clearPending(context)
                 Toast.makeText(

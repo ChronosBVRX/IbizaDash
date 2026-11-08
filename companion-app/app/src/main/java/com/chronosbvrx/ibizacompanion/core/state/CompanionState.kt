@@ -25,9 +25,7 @@ data class WifiPeerInfo(
 )
 
 data class CompanionUiState(
-    val btConnected: Boolean = false,
-    val btDeviceName: String? = null,
-    /** Wi-Fi Direct / TCP conectado. Tiene prioridad sobre Bluetooth. */
+    /** Wi-Fi Direct / TCP conectado; es el único canal de datos. */
     val wifiConnected: Boolean = false,
     val wifiHost: String? = null,
     val wifiDetail: String = "",
@@ -55,10 +53,14 @@ data class CompanionUiState(
     /** Versión del estéreo conectado (0 = aún no la ha reportado en WELCOME). */
     val stereoVersionCode: Int = 0,
     val stereoVersionName: String = "",
+    /** Última versión publicada en GitHub (0 = aún no se ha consultado). */
+    val otaLatestVersionCode: Int = 0,
+    val otaLatestVersionName: String = "",
     /** Estado de la OTA al estéreo. */
     val otaStatus: String = "",
     val otaProgress: Float = 0f,
-    val otaSending: Boolean = false
+    val otaSending: Boolean = false,
+    val otaChecking: Boolean = false
 )
 
 object CompanionState {

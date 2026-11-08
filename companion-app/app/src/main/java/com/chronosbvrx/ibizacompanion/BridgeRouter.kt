@@ -4,24 +4,18 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Enrutador de mensajes teléfono → estéreo.
+ * Enrutador de mensajes teléfono -> estéreo.
  *
- * Wi-Fi Direct tiene prioridad; si el socket Wi-Fi no acepta la escritura se
- * cae a Bluetooth en el mismo envío. La app mantiene ambos canales vivos para
- * que el respaldo sea inmediato.
+ * Wi-Fi Direct es el único transporte de datos. El estéreo no usa Bluetooth
+ * para rutas, portadas, mapas, clima ni OTA.
  */
-class BridgeRouter(
-    private val bt: BluetoothNavClient,
-    private val wifi: WifiBridgeClient
-) {
-    fun isConnected(): Boolean = wifi.isConnected() || bt.isConnected()
+class BridgeRouter(private val wifi: WifiBridgeClient) {
+
+    fun isConnected(): Boolean = wifi.isConnected()
 
     fun isWifiActive(): Boolean = wifi.isConnected()
 
-    fun send(obj: JSONObject): Boolean {
-        if (wifi.isConnected() && wifi.send(obj)) return true
-        return bt.send(obj)
-    }
+    fun send(obj: JSONObject): Boolean = wifi.isConnected() && wifi.send(obj)
 
     fun sendPing(): Boolean = send(pingJson())
 
@@ -67,8 +61,8 @@ class BridgeRouter(
         pngBase64: String
     ): Boolean = send(mediaArtJson(title, artist, album, isPlaying, pngBase64))
 
-    /** Portada más grande cuando sobra ancho de banda. */
-    fun mediaArtMaxSize(): Int = if (wifi.isConnected()) 512 else 256
+    /** Portada de 512 px: el Wi-Fi Direct tiene ancho de banda de sobra. */
+    fun mediaArtMaxSize(): Int = 512
 
     fun scanPeers() = wifi.scanPeers()
 
@@ -78,7 +72,6 @@ class BridgeRouter(
 
     fun close() {
         wifi.close()
-        bt.close()
     }
 
     companion object {

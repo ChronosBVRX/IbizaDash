@@ -1,3 +1,7 @@
+> **Documento histórico (2026-11-05/07).** La arquitectura vigente usa Wi-Fi Direct como
+> único canal de datos y OTA desde el teléfono. Ver `README.md` y
+> `docs/WIFI_DIRECT_TRANSPORT.md`.
+
 # IbizaDash — Resumen técnico para evaluación externa
 
 > Documento de contexto completo. Objetivo: que un experto que no conoce el proyecto pueda

@@ -15,7 +15,6 @@ import android.os.IBinder
 import android.os.SystemClock
 import android.util.Log
 import com.chronosbvrx.ibizacompanion.AlbumArtReader
-import com.chronosbvrx.ibizacompanion.BluetoothNavClient
 import com.chronosbvrx.ibizacompanion.BridgeLink
 import com.chronosbvrx.ibizacompanion.BridgeRouter
 import com.chronosbvrx.ibizacompanion.WifiBridgeClient
@@ -64,7 +63,7 @@ class MediaBridgeService : Service() {
     private val serviceJob = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + serviceJob)
     private var job: Job? = null
-    private var btClient: BluetoothNavClient? = null
+    private var weatherJob: Job? = null
     private var wifiClient: WifiBridgeClient? = null
     private var router: BridgeRouter? = null
     @Volatile private var lastTrackKey: String? = null
@@ -74,7 +73,6 @@ class MediaBridgeService : Service() {
     @Volatile private var wasWifiConnected = false
     /** Last PONG from the stereo; 0 until a PONG-capable build answers. */
     @Volatile private var lastPongMs = 0L
-    private val connecting = java.util.concurrent.atomic.AtomicBoolean(false)
 
     override fun onCreate() {
         super.onCreate()
@@ -89,18 +87,14 @@ class MediaBridgeService : Service() {
         } else {
             startForeground(NOTIF_ID, notif)
         }
-        btClient = BluetoothNavClient(this).apply {
-            onLine = { line -> handleStereoMessage(line) }
-        }
         wifiClient = WifiBridgeClient(this) { line -> handleStereoMessage(line) }.apply {
             onState = { state -> onWifiState(state) }
         }
-        router = BridgeRouter(btClient!!, wifiClient!!).also {
+        router = BridgeRouter(wifiClient!!).also {
             BridgeLink.router = it
         }
         PhoneNavController.init(this)
         wifiClient?.start()
-        connectBluetooth()
         startConnectionWatchdog()
         job = scope.launch {
             while (isActive) {
@@ -110,6 +104,17 @@ class MediaBridgeService : Service() {
                     Log.w(TAG, "pollMedia: ${e.message}")
                 }
                 delay(2000L)
+            }
+        }
+        // Clima: se calcula en el teléfono y se envía por Wi-Fi Direct.
+        weatherJob = scope.launch {
+            while (isActive) {
+                try {
+                    com.chronosbvrx.ibizacompanion.weather.WeatherSender.tick(this@MediaBridgeService)
+                } catch (e: Exception) {
+                    Log.w(TAG, "weather: ${e.message}")
+                }
+                delay(60_000L)
             }
         }
     }
@@ -164,9 +169,9 @@ class MediaBridgeService : Service() {
         val justConnected = state.connected && !wasWifiConnected
         wasWifiConnected = state.connected
         if (justConnected) {
-            // Si el track actual se envió por Bluetooth (o no había enlace),
-            // reenviar la portada ahora que hay ancho de banda.
+            // Al abrir el enlace se reenvía la portada y el último clima.
             lastTrackKey = null
+            com.chronosbvrx.ibizacompanion.weather.WeatherSender.onLinkUp(this)
             // PING inmediato: el watchdog necesita un PONG fresco para no
             // confundir un enlace nuevo con un estéreo mudo.
             lastPongMs = 0L
@@ -194,42 +199,7 @@ class MediaBridgeService : Service() {
         }
     }
 
-    private fun connectBluetooth() {
-        if (connecting.getAndSet(true)) return
-        scope.launch {
-            try {
-                val dev = btClient?.findStereo()
-                val ok = dev != null && btClient?.connect(dev!!) == true
-                com.chronosbvrx.ibizacompanion.core.state.CompanionState.update {
-                    it.copy(btConnected = ok, btDeviceName = dev?.name)
-                }
-                if (ok) {
-                    lastPongMs = 0L
-                    lastTrackKey = null
-                    try {
-                        router?.sendPing()
-                    } catch (_: Exception) {
-                    }
-                }
-                updateNotification(if (ok) "Conectado a ${dev?.name}" else "Sin vehículo (reintentando)")
-                connecting.set(false)
-                if (!ok) {
-                    delay(5000L)
-                    connectBluetooth()
-                }
-            } catch (e: SecurityException) {
-                com.chronosbvrx.ibizacompanion.core.state.CompanionState.update {
-                    it.copy(btConnected = false)
-                }
-                updateNotification("Falta permiso Bluetooth")
-                connecting.set(false)
-                delay(5000L)
-                connectBluetooth()
-            }
-        }
-    }
-
-    /** Watchdog: si el socket se cae (p. ej. el estéreo se reinició), reconecta solo. */
+    /** Watchdog: si el socket se cae, reconecta solo. */
     private fun startConnectionWatchdog() {
         scope.launch {
             while (isActive) {
@@ -240,26 +210,21 @@ class MediaBridgeService : Service() {
                         val last = lastPongMs
                         val now = SystemClock.elapsedRealtime()
                         // Socket abierto pero sin PONG: la app del estéreo murió.
-                        // Only enforce after this stereo build has answered once,
-                        // so older APKs don't trigger a reconnect loop.
+                        // Solo se aplica cuando esta build ya respondió una vez.
                         if (last > 0L && now - last > 35_000L) {
-                            Log.i(TAG, "watchdog: estéreo mudo, reconectando…")
-                            btClient?.close()
+                            Log.i(TAG, "watchdog: estéreo mudo, reconectando")
                             wifiClient?.close()
                             lastPongMs = 0L
                             com.chronosbvrx.ibizacompanion.core.state.CompanionState.update {
-                                it.copy(btConnected = false, wifiConnected = false)
+                                it.copy(wifiConnected = false)
                             }
-                            connecting.set(false)
                             wifiClient?.reconnectNow()
-                            connectBluetooth()
                         } else {
                             router?.sendPing()
                         }
                     } else {
-                        Log.i(TAG, "watchdog: enlace caído, reconectando…")
-                        connecting.set(false)
-                        connectBluetooth()
+                        Log.i(TAG, "watchdog: enlace caído, reconectando")
+                        wifiClient?.reconnectNow()
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "watchdog: ${e.message}")
@@ -268,10 +233,6 @@ class MediaBridgeService : Service() {
         }
     }
 
-    /**
-     * Mensajes entrantes del estéreo. Tanto Bluetooth como Wi-Fi entregan sus
-     * líneas aquí desde sus propios hilos lectores.
-     */
     private fun handleStereoMessage(line: String) {
         try {
             val obj = org.json.JSONObject(line)
@@ -641,17 +602,9 @@ class MediaBridgeService : Service() {
         when (intent?.action) {
             ACTION_CONNECT -> {
                 if (router?.isConnected() == true) {
-                    com.chronosbvrx.ibizacompanion.core.state.CompanionState.update {
-                        it.copy(btConnected = btClient?.isConnected() == true)
-                    }
-                    updateNotification(
-                        if (router?.isWifiActive() == true) "Wi-Fi Direct conectado"
-                        else "Ya conectado al estéreo"
-                    )
+                    updateNotification("Wi-Fi Direct conectado")
                 } else {
-                    connecting.set(false)
                     wifiClient?.reconnectNow()
-                    connectBluetooth()
                 }
             }
             ACTION_CLEAR_ROUTE -> {
@@ -677,17 +630,17 @@ class MediaBridgeService : Service() {
         mapWakeLock = null
         mapStreaming = false
         com.chronosbvrx.ibizacompanion.core.state.CompanionState.update {
-            it.copy(serviceRunning = false, btConnected = false, wifiConnected = false)
+            it.copy(serviceRunning = false, wifiConnected = false)
         }
         super.onDestroy()
         if (instance === this) instance = null
         job?.cancel()
+        weatherJob?.cancel()
         scope.cancel()
         PhoneNavController.clear()
         BridgeLink.router = null
         wifiClient?.stop()
         wifiClient = null
-        btClient?.close()
         router = null
     }
 

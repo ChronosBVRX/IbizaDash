@@ -1,6 +1,5 @@
 package com.chronosbvrx.ibizacompanion.feature.connection
 
-import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -28,23 +27,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private data class BtDevice(val name: String, val mac: String)
-
 @Composable
 fun ConnectionScreen() {
     val context = LocalContext.current
     val state by CompanionState.state.collectAsState()
-    val devices = remember { bondedDevices(context) }
-    var selectedMac by remember { mutableStateOf(StereoPrefs.mac(context)) }
-    var connected by remember { mutableStateOf(false) }
-    var connecting by remember { mutableStateOf(false) }
     var statusMsg by remember { mutableStateOf<String?>(null) }
-
     var wifiEnabled by remember { mutableStateOf(StereoPrefs.wifiEnabled(context)) }
     var wifiHost by remember { mutableStateOf(StereoPrefs.wifiHost(context) ?: "") }
     var savedHost by remember { mutableStateOf(StereoPrefs.wifiHost(context)) }
 
-    val scope = rememberCoroutineScope()
+    // Consulta GitHub en segundo plano al abrir la pantalla.
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) { OtaSender.refresh(context) }
+    }
 
     Column(
         modifier = Modifier
@@ -54,7 +49,7 @@ fun ConnectionScreen() {
     ) {
         Text("CONEXIÓN", style = MaterialTheme.typography.headlineMedium, color = IbizaColors.TextPrimary)
         Text(
-            "Wi-Fi Direct es el canal principal (portadas y mapas). Bluetooth queda como respaldo.",
+            "Wi-Fi Direct es el único canal de datos: rutas, mapas, portadas, clima y actualizaciones viajan por aquí.",
             style = MaterialTheme.typography.bodyMedium,
             color = IbizaColors.TextSecondary
         )
@@ -92,7 +87,11 @@ fun ConnectionScreen() {
                         onCheckedChange = { on ->
                             wifiEnabled = on
                             BridgeLink.setWifiEnabled(context, on)
-                            statusMsg = if (on) "Wi-Fi Direct activado" else "Wi-Fi desactivado: se usará Bluetooth"
+                            statusMsg = if (on) {
+                                "Wi-Fi Direct activado"
+                            } else {
+                                "Wi-Fi Direct desactivado: sin enlace con el estéreo"
+                            }
                         }
                     )
                 }
@@ -156,18 +155,7 @@ fun ConnectionScreen() {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
-                            try {
-                                val svc = Intent(
-                                    context,
-                                    com.chronosbvrx.ibizacompanion.service.MediaBridgeService::class.java
-                                )
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                    context.startForegroundService(svc)
-                                } else {
-                                    context.startService(svc)
-                                }
-                            } catch (_: Exception) {
-                            }
+                            startBridgeService(context)
                             BridgeLink.scanPeers()
                             statusMsg = "Buscando estéreos por Wi-Fi Direct…"
                         },
@@ -234,117 +222,12 @@ fun ConnectionScreen() {
             }
         }
 
-        Spacer(Modifier.height(16.dp))
-
-        // ---- Bluetooth (respaldo) ----
-        Surface(shape = RoundedCornerShape(16.dp), color = IbizaColors.Surface, modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.Bluetooth,
-                        contentDescription = null,
-                        tint = if (state.btConnected) IbizaColors.Success else IbizaColors.TextSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "BLUETOOTH · RESPALDO",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = IbizaColors.TextSecondary
-                        )
-                        Text(
-                            state.btDeviceName?.takeIf { it.isNotBlank() } ?: "Sin conectar",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = if (state.btConnected) IbizaColors.Success else IbizaColors.TextPrimary
-                        )
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                if (devices.isEmpty()) {
-                    Text(
-                        "No hay dispositivos emparejados. Empareja el IbizaDash en Ajustes → Bluetooth.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = IbizaColors.TextSecondary
-                    )
-                } else {
-                    devices.forEach { device ->
-                        val isSelected = device.mac == selectedMac
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (isSelected) IbizaColors.SurfaceElevated else IbizaColors.Surface,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 3.dp)
-                                .clickable {
-                                    selectedMac = device.mac
-                                    StereoPrefs.setMac(context, device.mac)
-                                }
-                        ) {
-                            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.Bluetooth,
-                                    contentDescription = null,
-                                    tint = IbizaColors.Primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(device.name, style = MaterialTheme.typography.bodyMedium, color = IbizaColors.TextPrimary)
-                                    Text(device.mac, style = MaterialTheme.typography.bodySmall, color = IbizaColors.TextSecondary)
-                                }
-                                if (isSelected) {
-                                    Icon(Icons.Default.Check, contentDescription = null, tint = IbizaColors.Primary, modifier = Modifier.size(18.dp))
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(10.dp))
-                Button(
-                    onClick = {
-                        if (selectedMac == null) {
-                            statusMsg = "Selecciona un dispositivo primero."
-                            return@Button
-                        }
-                        connecting = true
-                        statusMsg = "Conectando por Bluetooth…"
-                        scope.launch {
-                            val result = withContext(Dispatchers.IO) {
-                                val client = com.chronosbvrx.ibizacompanion.BluetoothNavClient(context)
-                                val device = client.findStereo()
-                                if (device == null) {
-                                    "No se encontró el estéreo guardado."
-                                } else {
-                                    val ok = client.connect(device)
-                                    client.close()
-                                    if (ok) "Conectado a ${device.name}" else "No se pudo conectar a ${device.name}. Verifica que IbizaDash esté abierto y el emparejamiento."
-                                }
-                            }
-                            connecting = false
-                            statusMsg = result
-                            connected = result.startsWith("Conectado")
-                        }
-                    },
-                    enabled = !connecting,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = IbizaColors.SurfaceElevated, contentColor = IbizaColors.TextPrimary),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.BluetoothConnected, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(if (connecting) "Conectando…" else "Guardar y probar Bluetooth")
-                }
-            }
-        }
-
         if (statusMsg != null) {
             Spacer(Modifier.height(10.dp))
             Text(
                 statusMsg!!,
                 style = MaterialTheme.typography.bodySmall,
-                color = if (connected || state.wifiConnected) IbizaColors.Success else IbizaColors.Warning
+                color = if (state.wifiConnected) IbizaColors.Success else IbizaColors.Warning
             )
         }
 
@@ -356,14 +239,14 @@ fun ConnectionScreen() {
                 Text(
                     when {
                         state.wifiConnected -> "Enlace Wi-Fi Direct activo"
-                        state.btConnected -> "Enlace Bluetooth (respaldo)"
-                        else -> "Sin enlace con el estéreo"
+                        state.serviceRunning -> "Buscando el estéreo…"
+                        else -> "Servicio detenido"
                     },
                     style = MaterialTheme.typography.titleMedium,
                     color = IbizaColors.TextPrimary
                 )
                 Text(
-                    "El servicio mantiene ambos canales y elige Wi-Fi cuando está disponible.",
+                    "El teléfono es la única fuente de Internet y contenido del estéreo.",
                     style = MaterialTheme.typography.bodySmall,
                     color = IbizaColors.TextSecondary
                 )
@@ -376,18 +259,20 @@ fun ConnectionScreen() {
 }
 
 /**
- * Actualización OTA del estéreo: el APK va incluido en esta app y viaja por
- * Wi-Fi Direct. Sin ADB y sin cables; el estéreo lo instala cuando el
- * usuario lo confirma en su pantalla.
+ * Actualización OTA del estéreo: la app consulta el último release de GitHub,
+ * descarga `IbizaDash.apk` y lo envía por Wi-Fi Direct. El estéreo verifica
+ * tamaño, SHA-256 y firma antes de instalar. Sin ADB y sin Internet en el coche.
  */
 @Composable
 private fun OtaSection(state: CompanionUiState) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val bundled = remember { OtaSender.bundledInfo(context) }
     val stereoVc = state.stereoVersionCode
     val stereoName = state.stereoVersionName.takeIf { it.isNotBlank() } ?: "v$stereoVc"
-    val updateAvailable = bundled != null && stereoVc > 0 && bundled.versionCode > stereoVc
+    val latestVc = state.otaLatestVersionCode
+    val latestName = state.otaLatestVersionName.takeIf { it.isNotBlank() } ?: "v$latestVc"
+    val hasLatest = latestVc > 0
+    val updateAvailable = hasLatest && (stereoVc == 0 || latestVc > stereoVc)
 
     Surface(shape = RoundedCornerShape(16.dp), color = IbizaColors.Surface, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
@@ -399,9 +284,10 @@ private fun OtaSection(state: CompanionUiState) {
             Spacer(Modifier.height(6.dp))
             Text(
                 when {
-                    bundled == null -> "Esta versión de la app no incluye el APK del estéreo."
-                    stereoVc == 0 -> "Estéreo sin conectar: la versión se lee al conectar."
-                    updateAvailable -> "Estéreo $stereoName · incluida v${bundled.versionName}"
+                    state.otaChecking -> "Buscando la última versión en GitHub…"
+                    !hasLatest -> "No se pudo consultar GitHub"
+                    stereoVc == 0 -> "Última versión: $latestName · estéreo sin conectar"
+                    updateAvailable -> "Estéreo $stereoName · disponible $latestName"
                     else -> "Estéreo al día ($stereoName)"
                 },
                 style = MaterialTheme.typography.titleMedium,
@@ -435,7 +321,7 @@ private fun OtaSection(state: CompanionUiState) {
                 onClick = {
                     scope.launch(Dispatchers.IO) { OtaSender.sendUpdate(context) }
                 },
-                enabled = updateAvailable && !state.otaSending,
+                enabled = updateAvailable && !state.otaSending && state.wifiConnected,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = IbizaColors.Primary,
@@ -447,18 +333,37 @@ private fun OtaSection(state: CompanionUiState) {
                 Spacer(Modifier.width(6.dp))
                 Text(if (state.otaSending) "Enviando…" else "Actualizar estéreo")
             }
+            if (!state.wifiConnected) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Conecta por Wi-Fi Direct para poder enviar la actualización.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = IbizaColors.Warning
+                )
+            }
+            TextButton(
+                onClick = {
+                    scope.launch(Dispatchers.IO) { OtaSender.refresh(context, force = true) }
+                },
+                enabled = !state.otaChecking && !state.otaSending
+            ) {
+                Text("Buscar actualización", color = IbizaColors.Primary)
+            }
         }
     }
 }
 
-private fun bondedDevices(context: Context): List<BtDevice> {
-    return try {
-        val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
-        manager?.adapter?.bondedDevices
-            ?.map { BtDevice(it.name ?: "Sin nombre", it.address) }
-            ?.sortedBy { it.name.lowercase() }
-            .orEmpty()
+private fun startBridgeService(context: Context) {
+    try {
+        val svc = Intent(
+            context,
+            com.chronosbvrx.ibizacompanion.service.MediaBridgeService::class.java
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(svc)
+        } else {
+            context.startService(svc)
+        }
     } catch (_: Exception) {
-        emptyList()
     }
 }

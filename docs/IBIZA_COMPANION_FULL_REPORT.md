@@ -1,3 +1,7 @@
+> **Documento histórico (2026-11-05/07).** La arquitectura vigente usa Wi-Fi Direct como
+> único canal de datos y OTA desde el teléfono. Ver `README.md` y
+> `docs/WIFI_DIRECT_TRANSPORT.md`.
+
 # IbizaCompanion + IbizaDash — Reporte técnico completo (Phone-as-Brain)
 
 > Documento para análisis externo. Cubre la app compañera del teléfono (`IbizaCompanion`) y cómo

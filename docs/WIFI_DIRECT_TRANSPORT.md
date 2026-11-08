@@ -1,21 +1,21 @@
-# Wi-Fi Direct como transporte principal (IbizaDash ↔ IbizaCompanion)
+# Wi-Fi Direct: único transporte de datos (IbizaDash ↔ IbizaCompanion)
 
-> Sustituye el RFCOMM de datos por Wi-Fi Direct/TCP para portadas, rutas y
-> teselas de mapa. Bluetooth sigue disponible como respaldo automático y para
-> lo que no se puede mover a Wi-Fi: audio A2DP, AVRCP, llamadas y ELM327/OBD.
+> Estado vigente desde **IbizaDash 0.6.5 / IbizaCompanion 0.5.1** (noviembre 2026).
+> El puente Bluetooth RFCOMM se eliminó. Bluetooth queda solo para audio A2DP/AVRCP,
+> llamadas HFP y adaptadores ELM327/OBD.
 
 ## Por qué
 
-| Dato | Tamaño típico | RFCOMM | Wi-Fi Direct |
-|---|---:|---|---|
-| Portada de álbum | 15–60 KB | 0.5–3 s, bloquea el polling | < 50 ms |
-| Ruta + maniobras | 5–40 KB | 0.2–1 s | < 30 ms |
-| Tesela Esri 256 px | 8–25 KB | 1–2 s cada una | < 20 ms |
-| Corredor de ruta (z14–z15) | 2–8 MB | inviable | 1–3 s |
+| Dato | Tamaño típico | Wi-Fi Direct |
+|---|---:|---|
+| Portada de álbum | 15–60 KB | < 50 ms |
+| Ruta + maniobras | 5–40 KB | < 30 ms |
+| Tesela Esri 256 px | 8–25 KB | < 20 ms |
+| Corredor de ruta (z14–z15) | 2–8 MB | 1–3 s |
+| APK de actualización | ~1.4 MB | 2–5 s |
 
-Bluetooth RFCOMM en este estéreo se queda en decenas de KB/s y comparte radio
-con el audio A2DP. Wi-Fi Direct da ancho de banda suficiente y permite que el
-teléfono haga lo pesado sin congelar la reproducción.
+El teléfono es la única fuente de Internet y contenido. El estéreo no descarga clima,
+carátulas ni teselas; solo pinta lo que recibe o lee de su caché.
 
 ## Arquitectura
 
@@ -23,21 +23,20 @@ teléfono haga lo pesado sin congelar la reproducción.
 
 - `nav/WifiNavBridgeServer.kt`
   - Servidor TCP en `0.0.0.0:47800`.
-  - Respondedor UDP de descubrimiento en `:47801` (`IBIZADASH_DISCOVER` →
-    `IBIZADASH:47800`).
-  - Crea el grupo Wi-Fi Direct como **Group Owner** (`createGroup`) y lo
-    mantiene; si el chip no lo soporta, siguen funcionando TCP + UDP en LAN o
-    hotspot.
+  - Respondedor UDP de descubrimiento en `:47801` (`IBIZADASH_DISCOVER` → `IBIZADASH:47800`).
+  - Crea el grupo Wi-Fi Direct como **Group Owner** (`createGroup`) y lo mantiene.
+  - Si el chip no soporta Wi-Fi Direct, TCP + UDP siguen funcionando en LAN o hotspot.
 - `nav/NavBridgeProtocol.kt`
-  - Semántica única de los mensajes (la misma que usaba RFCOMM).
-  - Guarda `TILE_BATCH` en `files/osmdroid/tiles/EsriDark/{z}/{x}/{y}.png` con
-    escritura atómica y avisa a `MapTileBridge` para refrescar el `MapView`.
+  - Semántica única de los mensajes.
+  - Guarda `TILE_BATCH` en `files/osmdroid/tiles/EsriDark/{z}/{x}/{y}.png` con escritura
+    atómica y avisa a `MapTileBridge` para refrescar el `MapView`.
 - `nav/NavLink.kt`
-  - Elige Wi-Fi si hay un cliente conectado; si la escritura falla, cae a
-    Bluetooth en el mismo envío.
-- `nav/BtNavBridgeServer.kt`
-  - Sigue escuchando RFCOMM con el UUID de siempre. Ya no parsea mensajes:
-    delega en `NavBridgeProtocol`.
+  - Salida estéreo → teléfono. Solo Wi-Fi; no hay fallback Bluetooth.
+- `weather/WeatherRepository.kt`
+  - Recibe `WEATHER` del teléfono. La UI pinta temperatura e icono; no hay cliente HTTP.
+- `ota/OtaReceiver.kt` + `ota/OtaInstaller.kt`
+  - Reciben el APK por el mismo TCP, verifican tamaño/SHA-256/paquete/firma y abren el
+    instalador del sistema.
 
 ### Teléfono (`IbizaCompanion`)
 
@@ -45,115 +44,96 @@ teléfono haga lo pesado sin congelar la reproducción.
   1. IP manual de LAN/hotspot (`StereoPrefs.wifiHost`).
   2. Grupo Wi-Fi Direct ya formado (el GO es el estéreo).
   3. Descubrimiento UDP en la red Wi-Fi actual.
-  4. Descubrimiento/conexión Wi-Fi Direct (auto-conecta si hay un solo peer o
-     si el nombre contiene "Ibiza"/"Dash"; si hay varios, la pantalla
-     **Conexión** permite elegir).
+  4. Descubrimiento/conexión Wi-Fi Direct (auto-conecta si hay un solo peer o si el nombre
+     contiene "Ibiza"/"Dash"; si hay varios, la pantalla **Conexión** permite elegir).
 - `BridgeRouter.kt` / `BridgeLink.kt`
-  - Wi-Fi primero, Bluetooth después. El servicio mantiene ambos canales.
-  - La UI (`NavigationScreen`) usa `BridgeLink` para enviar rutas y teselas.
+  - Wi-Fi Direct únicamente.
+- `weather/WeatherSender.kt`
+  - Consulta Open-Meteo con la ubicación del teléfono y envía `WEATHER` cada ~10 min o
+    cuando el coche se mueve más de 2 km.
+- `ota/OtaSender.kt`
+  - Descarga `IbizaDash.apk` del último release de GitHub
+    (`releases/latest/download/IbizaDash.apk`), lee su `versionCode` y lo envía por chunks
+    de 32 KB con ACK. Caché local de 6 h con validación condicional.
 - `data/TileSender.kt`
-  - Toma el corredor de la polilínea, lee teselas del pack offline del teléfono
-    o las descarga de Esri y las envía como `TILE_BATCH` (z14 y z15, máx. 420
-    teselas / 12 MB por ruta).
-  - Se lanza automáticamente al enviar una ruta si el enlace es Wi-Fi; también
-    hay un botón manual en la hoja de ruta.
+  - Toma el corredor de la polilínea, lee teselas del pack offline del teléfono o las
+    descarga de Esri y las envía como `TILE_BATCH` (z14 y z15, máx. 420 teselas / 12 MB
+    por ruta).
 
 ## Protocolo
 
-JSON por línea (`\n`) sobre TCP o RFCOMM.
+JSON por línea (`\n`) sobre TCP.
 
-### Handshake TCP
+### Handshake
 
 ```json
 {"type":"HELLO","proto":2,"token":"chronosbvrx-ibiza-6j","client":"IbizaCompanion","transport":"wifi"}
-{"type":"WELCOME","proto":2,"transport":"wifi"}
+{"type":"WELCOME","proto":2,"transport":"wifi","stereoVersionCode":11,"stereoVersionName":"0.6.5"}
 ```
 
-El estéreo rechaza cualquier socket TCP que no envíe `HELLO` con el token
-antes del primer mensaje. Después envía un `NAV_STATE` completo (con polilínea)
-al cliente nuevo.
+El estéreo rechaza cualquier socket TCP que no envíe `HELLO` con el token antes del primer
+mensaje. Después envía un `NAV_STATE` completo (con polilínea) al cliente nuevo.
 
-### Mensajes (sin cambios de forma)
+### Mensajes
 
-- `ROUTE_SET` — destino, distancia, duración, polilínea y pasos.
+- `ROUTE_SET`: destino, distancia, duración, polilínea y pasos.
 - `NAV_STEP_UPDATE` / `ROUTE_CLEAR`.
-- `MEDIA_ART` — portada en base64 (512 px por Wi-Fi, 256 px por Bluetooth).
-- `TILE_BATCH` — `zoom`, `x`, `y`, `pngBase64`.
-- `PING`/`PONG` — heartbeat cada 15 s.
-- `TILE_STATS` — solo diagnóstico (cuántas teselas llegaron).
+- `MEDIA_ART`: portada en base64 (512 px).
+- `TILE_BATCH`: `zoom`, `x`, `y`, `pngBase64`.
+- `WEATHER`: `tempC`, `code` (WMO), `text`.
+- `PHONE_NAV_STATE`: snapshot de navegación calculado en el teléfono.
+- `MAP_FRAME` / `MAP_FRAME_STOP`: mapa remoto dibujado en el teléfono.
+- `NOTIFY`: avisos del teléfono.
+- `PING` / `PONG`: heartbeat cada 15 s.
+- `TILE_STATS`: diagnóstico.
+- OTA: `APK_META` → `APK_META_ACK`; `APK_CHUNK` → `APK_CHUNK_ACK` / `APK_CHUNK_NACK`;
+  `APK_END` → `APK_END_OK` / `OTA_ERROR`. `OTA_ALREADY_NEWER` evita reinstalar.
 
 ## Permisos
 
 Estéreo:
 
 ```xml
-ACCESS_WIFI_STATE, CHANGE_WIFI_STATE, ACCESS_FINE_LOCATION,
-NEARBY_WIFI_DEVICES (API 33+), INTERNET
+INTERNET, ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION,
+ACCESS_WIFI_STATE, CHANGE_WIFI_STATE, NEARBY_WIFI_DEVICES (API 33+),
+BLUETOOTH/BLUETOOTH_ADMIN (≤ API 30) y BLUETOOTH_CONNECT para el estado del teléfono,
+REQUEST_INSTALL_PACKAGES para la OTA
 ```
 
 Teléfono:
 
 ```xml
-ACCESS_WIFI_STATE, CHANGE_WIFI_STATE, ACCESS_NETWORK_STATE,
-ACCESS_FINE_LOCATION, NEARBY_WIFI_DEVICES (API 33+), INTERNET
+INTERNET, ACCESS_NETWORK_STATE, ACCESS_WIFI_STATE, CHANGE_WIFI_STATE,
+ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION,
+NEARBY_WIFI_DEVICES (API 33+), POST_NOTIFICATIONS
 ```
+
+No se piden permisos Bluetooth en la compañera: no usa Bluetooth para datos.
 
 ## Cómo probar
 
-1. Instalar ambos APK (el estéreo debe tener Wi-Fi encendido; la app lo pide
-   una vez si está apagado).
-2. Abrir IbizaCompanion → el servicio arranca y busca el estéreo.
-3. En **Conexión** debe aparecer `Wi-Fi Direct · 192.168.49.1` (o la IP del
-   hotspot/LAN). El estado también se ve en Ajustes rápidos del estéreo, fila
-   **WiFi y punto de acceso**.
-4. En el estéreo, reproducir música desde el teléfono: la portada debe llegar
-   al instante. En el teléfono, enviar una ruta: se dibuja y, si hay Wi-Fi,
-   empieza el lote de teselas (progreso en la hoja).
-5. Logs:
+1. Instala ambos APK (el estéreo debe tener Wi-Fi encendido; la app lo pide una vez si está
+   apagado).
+2. Abre IbizaCompanion → el servicio arranca y busca el estéreo.
+3. En **Conexión** debe aparecer `Wi-Fi Direct · 192.168.49.1` (o la IP del hotspot/LAN).
+   El estado también se ve en Ajustes rápidos del estéreo, fila **WiFi y punto de acceso**.
+4. Reproduce música desde el teléfono: la portada debe llegar al instante. Envía una ruta:
+   se dibuja y empieza el lote de teselas.
+5. OTA: abre **Conexión**, pulsa **Buscar actualización** y luego **Actualizar estéreo**.
+   En el estéreo, Ajustes rápidos → Actualización del sistema → toca para instalar.
+6. Logs:
 
 ```powershell
-adb logcat -s WifiNavBridge WifiBridge NavBridge TileSender BtNavBridge
+adb logcat -s WifiNavBridge WifiBridge NavBridge TileSender OtaSender OtaReceiver WeatherSender
 ```
 
-## Validación en emulador (7 nov 2026)
+## Diagnóstico rápido
 
-- AVD Android 36 (1280×720); estéreo con APK **release** y teléfono con APK debug.
-- `HELLO`/`WELCOME`, `PING`/`PONG`, `ROUTE_SET` (Palo Alto, 10.7 km, 16 pasos)
-  y `TILE_STATS` confirmados en los logs de ambos lados.
-- 67 mensajes `TILE_BATCH` → **55 teselas únicas** (~983 KB) escritas en
-  `files/osmdroid/tiles/EsriDark/{14,15}/…` del estéreo.
-- `MEDIA_ART` de 64×64 decodificada y aplicada al reproductor.
-- Capturas: `screenshots/wifi_connection.png`, `screenshots/wifi_quick.png`,
-  `screenshots/wifi_stereo_route.png`, `screenshots/wifi_dashboard.png`.
-- **No se pudo probar el P2P real en el emulador** (no expone Wi-Fi Direct); el
-  emulador sólo valida TCP/UDP, handshake y protocolo. Falta confirmar
-  `createGroup`/`connect` en el estéreo sp7731e y el POCO. Si el chip no soporta
-  P2P, el modo hotspot/LAN con IP manual es el respaldo.
-
-## Diagnóstico
-
-| Síntoma | Causa probable / solución |
-|---|---|
-| "Wi-Fi Direct no disponible" en el estéreo | El chip/ROM no expone P2P. Usar hotspot/LAN: conectar ambos a la misma red y poner la IP del estéreo en **Conexión**. |
-| "Wi-Fi apagado" | Encender Wi-Fi en el estéreo; la app intenta hacerlo una vez. |
-| El teléfono se queda en "buscando estéreo" | El estéreo aún no creó el grupo (esperar 15–30 s) o hay varios peers; elegir el estéreo en la lista. |
-| Conecta y se cae al segundo | El estéreo perdió el grupo P2P; revisar que la app siga abierta y Wi-Fi encendido. |
-| Audio A2DP entrecortado | Wi-Fi 2.4 GHz y Bluetooth comparten radio. Usar hotspot 5 GHz o desactivar Wi-Fi Direct y quedarse en Bluetooth. |
-| No llegan teselas | El enlace es Bluetooth (solo se envían por Wi-Fi) o el teléfono no tiene internet ni pack offline. |
-| El estéreo muestra "sin pack" | Es normal: el estado de Ajustes rápidos cuenta `.mbtiles`; las teselas nuevas son PNG sueltos en la caché de osmdroid. |
-
-## Límites conocidos
-
-- **Group Owner**: el diseño espera que el estéreo sea GO. Si el teléfono acaba
-  como GO (negociación del ROM), no hay servidor TCP en el teléfono y se usa
-  LAN como respaldo. Se puede forzar el orden reinstalando/creando el grupo
-  desde el estéreo.
-- **Mapa completo regional**: el envío automático cubre el corredor de la ruta
-  (z14–z15). Los paquetes `.mbtiles` completos siguen yendo por ADB
-  (`scripts/deploy_offline.ps1`); moverlos por Wi-Fi requeriría un protocolo de
-  archivo grande aparte.
-- **Seguridad**: el token del handshake evita inyecciones accidentales, pero no
-  es criptografía de extremo a extremo. La privacidad real la da el grupo
-  Wi-Fi Direct (WPA2) o el hotspot.
-- **Coexistencia**: en chips 2.4 GHz baratos, P2P + A2DP pueden interferir.
-  Es la principal razón para mantener Bluetooth como fallback.
+- **"Wi-Fi Direct conectado" pero sin datos**: revisa que el estéreo tenga la app abierta y
+  el puerto 47800 libre; el watchdog reconecta cada 15 s.
+- **La OTA dice "firma distinta"**: el APK de GitHub no está firmado con la keystore fija.
+  Revisa `local.properties` y vuelve a compilar.
+- **La OTA dice "paquete ajeno"**: el release apunta a otro APK; el asset debe llamarse
+  `IbizaDash.apk`.
+- **Sin clima**: el teléfono necesita permiso de ubicación y conexión a Internet; el estéreo
+  solo muestra el último `WEATHER` recibido.

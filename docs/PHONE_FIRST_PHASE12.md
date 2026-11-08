@@ -1,3 +1,7 @@
+> **Documento histórico (2026-11-05/07).** La arquitectura vigente usa Wi-Fi Direct como
+> único canal de datos y OTA desde el teléfono. Ver `README.md` y
+> `docs/WIFI_DIRECT_TRANSPORT.md`.
+
 # Fase 1 + Fase 2 — el teléfono como cerebro
 
 > Objetivo: el teléfono calcula navegación, medios y notificaciones, y renderiza
@@ -26,7 +30,7 @@
 ### Media
 
 - Los botones del estéreo envían `MEDIA_CMD` (`play`, `pause`, `next`, `prev`)
-  por Wi-Fi (o Bluetooth de respaldo) en un hilo de red.
+  por Wi-Fi Direct (único canal de datos) en un hilo de red.
 - `MediaBridgeService` ejecuta el comando sobre la `MediaSession` activa del
   teléfono; funciona con Spotify, YouTube Music, etc.
 - `MEDIA_ART` ahora incluye `title`, `artist`, `album` e `isPlaying`, y el

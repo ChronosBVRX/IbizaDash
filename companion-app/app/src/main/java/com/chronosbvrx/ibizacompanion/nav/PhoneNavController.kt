@@ -223,7 +223,6 @@ object PhoneNavController {
                     return@Thread
                 }
                 val sent = BridgeLink.sendRouteSet(
-                    context,
                     built.destinationName,
                     built.distanceMeters,
                     built.durationSeconds,

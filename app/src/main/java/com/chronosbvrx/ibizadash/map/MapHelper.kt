@@ -41,6 +41,9 @@ object MapHelper {
 
     fun configure(context: Context, map: MapView) {
         map.setTileSource(EsriDarkTileSource())
+        // El estéreo no descarga mapas: usa la caché y las teselas que el
+        // teléfono envía por Wi-Fi Direct (TILE_BATCH).
+        map.setUseDataConnection(false)
         map.setMultiTouchControls(true)
         map.setBuiltInZoomControls(false)
         map.setTilesScaledToDpi(true)

@@ -232,35 +232,12 @@ class BluetoothMediaReceiver : BroadcastReceiver() {
     }
 
     private fun loadCover(track: NowPlaying) {
-        val ctx = context ?: return
         if (track.artwork != null) return
-
-        if (OfflineMusicCatalog.isReady) {
-            val match = OfflineMusicCatalog.lookup(track.artist, track.title)
-            if (match != null) {
-                OfflineMusicCatalog.loadCover(match) { art ->
-                    if (art == null) {
-                        AlbumArtClient.load(ctx, track) { online ->
-                            if (online == null) return@load
-                            val current = MediaRepository.current ?: return@load
-                            if (current.title == track.title && current.artist == track.artist) {
-                                MediaRepository.updateBluetooth(current.copy(artwork = online))
-                            }
-                        }
-                        return@loadCover
-                    }
-                    val current = MediaRepository.current ?: return@loadCover
-                    if (current.title == track.title && current.artist == track.artist) {
-                        MediaRepository.updateBluetooth(current.copy(artwork = art))
-                    }
-                }
-                return
-            }
-        }
-
-        AlbumArtClient.load(ctx, track) { art ->
-            if (art == null) return@load
-            val current = MediaRepository.current ?: return@load
+        if (!OfflineMusicCatalog.isReady) return
+        val match = OfflineMusicCatalog.lookup(track.artist, track.title) ?: return
+        OfflineMusicCatalog.loadCover(match) { art ->
+            if (art == null) return@loadCover
+            val current = MediaRepository.current ?: return@loadCover
             if (current.title == track.title && current.artist == track.artist) {
                 MediaRepository.updateBluetooth(current.copy(artwork = art))
             }

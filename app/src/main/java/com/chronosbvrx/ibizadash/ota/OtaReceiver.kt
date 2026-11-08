@@ -206,6 +206,30 @@ object OtaReceiver {
             clearPending(context)
             return JSONObject().put("type", "OTA_ERROR").put("reason", "sha256 distinto")
         }
+        val archive = try {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageArchiveInfo(
+                part.absolutePath,
+                PackageManager.GET_SIGNATURES
+            )
+        } catch (_: Exception) {
+            null
+        }
+        if (archive == null || archive.packageName != context.packageName) {
+            Log.w(TAG, "APK_END: paquete ajeno")
+            clearPending(context)
+            return JSONObject().put("type", "OTA_ERROR").put("reason", "paquete ajeno")
+        }
+        if (archive.versionCode != metaObj.optInt("versionCode", 0)) {
+            Log.w(TAG, "APK_END: versionCode no coincide")
+            clearPending(context)
+            return JSONObject().put("type", "OTA_ERROR").put("reason", "versión distinta")
+        }
+        if (!sameSignature(context, archive)) {
+            Log.w(TAG, "APK_END: firma distinta; OTA rechazada")
+            clearPending(context)
+            return JSONObject().put("type", "OTA_ERROR").put("reason", "firma distinta")
+        }
         val apk = apkFile(context)
         if (apk.exists()) apk.delete()
         if (!part.renameTo(apk)) {
@@ -228,6 +252,41 @@ object OtaReceiver {
             .put("type", "APK_END_OK")
             .put("versionCode", pending.versionCode)
             .put("versionName", pending.versionName)
+    }
+
+    /** Comprueba paquete y firma antes de abrir la sesión de instalación. */
+    fun isValidApk(context: Context, file: File): Boolean {
+        return try {
+            @Suppress("DEPRECATION")
+            val info = context.packageManager.getPackageArchiveInfo(
+                file.absolutePath,
+                PackageManager.GET_SIGNATURES
+            ) ?: return false
+            info.packageName == context.packageName && sameSignature(context, info)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** Evita instalar un APK firmado con otra llave (Android lo rechazaría). */
+    private fun sameSignature(
+        context: Context,
+        archive: android.content.pm.PackageInfo
+    ): Boolean {
+        return try {
+            @Suppress("DEPRECATION")
+            val current = context.packageManager.getPackageInfo(
+                context.packageName,
+                PackageManager.GET_SIGNATURES
+            )
+            val incoming = archive.signatures ?: return false
+            val installed = current.signatures ?: return false
+            incoming.size == installed.size && incoming.indices.all {
+                incoming[it].toByteArray().contentEquals(installed[it].toByteArray())
+            }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun sha256Hex(file: File): String {
