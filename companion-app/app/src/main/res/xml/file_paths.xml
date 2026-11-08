@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ruta del APK de autoactualización para FileProvider (fallback de instalación). -->
+<paths>
+    <cache-path name="self_update" path="." />
+</paths>

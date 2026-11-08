@@ -51,6 +51,8 @@ class MainActivity : ComponentActivity() {
         val serviceIntent = Intent(this, MediaBridgeService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(serviceIntent) else startService(serviceIntent)
 
+        maybeInstallSelfUpdate(intent)
+
         setContent {
             IbizaTheme {
                 val navController = rememberNavController()
@@ -135,6 +137,30 @@ class MainActivity : ComponentActivity() {
                         or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                         or android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                 )
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        maybeInstallSelfUpdate(intent)
+    }
+
+    /**
+     * La notificación de "instalar actualización" abre la app con este extra.
+     * Android exige confirmar en el diálogo del sistema; si falta el permiso
+     * de orígenes desconocidos, se abre primero el ajuste correspondiente.
+     */
+    private fun maybeInstallSelfUpdate(intent: Intent?) {
+        if (intent?.getBooleanExtra(MediaBridgeService.EXTRA_INSTALL_SELF_UPDATE, false) != true) return
+        intent.removeExtra(MediaBridgeService.EXTRA_INSTALL_SELF_UPDATE)
+        window.decorView.post {
+            if (!com.chronosbvrx.ibizacompanion.update.CompanionUpdater.canInstall(this)) {
+                com.chronosbvrx.ibizacompanion.update.CompanionUpdater
+                    .openInstallPermissionSettings(this)
+            } else {
+                com.chronosbvrx.ibizacompanion.update.CompanionUpdater.install(this)
             }
         }
     }

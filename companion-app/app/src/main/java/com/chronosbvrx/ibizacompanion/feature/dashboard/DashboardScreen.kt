@@ -244,6 +244,48 @@ fun DashboardScreen(
 
         Spacer(Modifier.height(12.dp))
 
+        // Actualización de la propia app: se descarga sola y aquí se instala.
+        if (state.selfUpdateAvailable) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = IbizaColors.Surface,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.SystemUpdate,
+                        contentDescription = null,
+                        tint = IbizaColors.Primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Actualización de IbizaCompanion",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = IbizaColors.TextPrimary
+                        )
+                        Text(
+                            "v${state.selfUpdateVersionName} descargada · toca instalar",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = IbizaColors.TextSecondary
+                        )
+                    }
+                    TextButton(onClick = {
+                        val updater = com.chronosbvrx.ibizacompanion.update.CompanionUpdater
+                        if (!updater.canInstall(context)) {
+                            updater.openInstallPermissionSettings(context)
+                        } else {
+                            updater.install(context)
+                        }
+                    }) {
+                        Text("Instalar", color = IbizaColors.Primary)
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
         // Quick actions
         Text("ACCIONES RÁPIDAS", style = MaterialTheme.typography.labelSmall, color = IbizaColors.TextSecondary)
         Spacer(Modifier.height(8.dp))

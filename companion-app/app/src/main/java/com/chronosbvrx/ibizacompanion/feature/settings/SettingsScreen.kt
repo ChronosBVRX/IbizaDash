@@ -10,6 +10,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.chronosbvrx.ibizacompanion.core.design.theme.IbizaColors
+import com.chronosbvrx.ibizacompanion.core.state.CompanionState
+import com.chronosbvrx.ibizacompanion.update.CompanionUpdater
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 private data class SettingItem(val title: String, val subtitle: String, val detail: String)
 
@@ -82,6 +86,8 @@ fun SettingsScreen() {
     ) {
         Text("AJUSTES", style = MaterialTheme.typography.headlineMedium, color = IbizaColors.TextPrimary)
         Spacer(Modifier.height(16.dp))
+        SelfUpdateCard()
+        Spacer(Modifier.height(8.dp))
         // Spotify App Remote (reproducción en segundo plano, sin cambiar de app).
         Surface(
             shape = RoundedCornerShape(12.dp),
@@ -177,5 +183,77 @@ fun SettingsScreen() {
             },
             containerColor = IbizaColors.Surface
         )
+    }
+}
+
+/**
+ * Actualización de la propia app del teléfono. Se descarga sola de GitHub y
+ * solo hace falta confirmar la instalación en el diálogo del sistema.
+ */
+@Composable
+private fun SelfUpdateCard() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val state by CompanionState.state.collectAsState()
+    val scope = rememberCoroutineScope()
+    val installed = remember { CompanionUpdater.installedVersionName(context) }
+    val version = state.selfUpdateVersionName.ifBlank { "nueva" }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = IbizaColors.Surface,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                "ACTUALIZACIÓN DE IBIZACOMPANION",
+                style = MaterialTheme.typography.labelSmall,
+                color = IbizaColors.TextSecondary
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                if (state.selfUpdateAvailable) "Versión $version lista para instalar"
+                else "Instalada v$installed",
+                style = MaterialTheme.typography.titleMedium,
+                color = IbizaColors.TextPrimary
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                state.selfUpdateStatus.ifBlank {
+                    "Se revisa al abrir la app y cada 6 horas. Android pide confirmar la instalación."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = IbizaColors.TextSecondary
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = {
+                        if (!CompanionUpdater.canInstall(context)) {
+                            CompanionUpdater.openInstallPermissionSettings(context)
+                        } else {
+                            CompanionUpdater.install(context)
+                        }
+                    },
+                    enabled = state.selfUpdateAvailable && !state.selfUpdating,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = IbizaColors.Primary,
+                        contentColor = IbizaColors.Background
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(if (state.selfUpdating) "Instalando…" else "Instalar actualización")
+                }
+                OutlinedButton(
+                    onClick = {
+                        scope.launch(Dispatchers.IO) {
+                            CompanionUpdater.checkForUpdate(context, force = true)
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Buscar ahora", color = IbizaColors.TextSecondary)
+                }
+            }
+        }
     }
 }

@@ -60,7 +60,13 @@ data class CompanionUiState(
     val otaStatus: String = "",
     val otaProgress: Float = 0f,
     val otaSending: Boolean = false,
-    val otaChecking: Boolean = false
+    val otaChecking: Boolean = false,
+    /** Actualización de la propia app del teléfono (descargada de GitHub). */
+    val selfUpdateAvailable: Boolean = false,
+    val selfUpdateVersionCode: Int = 0,
+    val selfUpdateVersionName: String = "",
+    val selfUpdateStatus: String = "",
+    val selfUpdating: Boolean = false
 )
 
 object CompanionState {

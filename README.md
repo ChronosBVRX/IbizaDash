@@ -10,7 +10,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
   (`IbizaDash.apk` para el estéreo, `IbizaCompanion.apk` para el teléfono).
 - **Paquete del estéreo:** `com.chronosbvrx.ibizadash`
 - **Paquete del teléfono:** `com.chronosbvrx.ibizacompanion`
-- **Versiones actuales:** IbizaDash **0.6.5** (versionCode 11) · IbizaCompanion **0.5.1** (versionCode 6)
+- **Versiones actuales:** IbizaDash **1.0.0** (versionCode 12) · IbizaCompanion **1.0.0** (versionCode 7)
 - **minSdk 23 / targetSdk 33 / compileSdk 36** (estéreo)
 - Hecho con **Views** (sin Compose) en el estéreo para que sea liviano en el Cortex-A7.
 
@@ -170,6 +170,20 @@ volver a aceptar el diálogo RSA al arrancar.
 El estéreo verifica que el APK sea `com.chronosbvrx.ibizadash`, que la versión coincida,
 que el SHA-256 sea correcto y que esté firmado con la misma keystore. Si algo falla, rechaza
 la actualización y conserva la versión instalada.
+
+### Actualizar la propia app del teléfono (automático)
+
+IbizaCompanion también se actualiza desde el mismo release de GitHub:
+
+1. El servicio en primer plano consulta `releases/latest/download/IbizaCompanion.apk` al
+   arrancar y cada 6 horas.
+2. Si hay una versión más nueva, la descarga y verifica (paquete y SHA-256).
+3. Aparece un aviso en Inicio, en Ajustes y en la notificación del puente.
+4. Un toque abre el instalador del sistema; Android pide confirmar (no se puede instalar
+   en silencio sin ser app de sistema).
+
+La primera vez hay que permitir **Instalar apps desconocidas** para IbizaCompanion; si falta,
+la app abre directamente ese ajuste.
 
 ---
 

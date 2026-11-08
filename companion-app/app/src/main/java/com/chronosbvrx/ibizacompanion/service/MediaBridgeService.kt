@@ -35,6 +35,7 @@ class MediaBridgeService : Service() {
         const val NOTIF_ID = 1
         const val ACTION_CONNECT = "com.chronosbvrx.ibizacompanion.CONNECT"
         const val ACTION_CLEAR_ROUTE = "com.chronosbvrx.ibizacompanion.CLEAR_ROUTE"
+        const val EXTRA_INSTALL_SELF_UPDATE = "install_self_update"
         private const val TAG = "MediaBridge"
 
         @Volatile
@@ -64,6 +65,7 @@ class MediaBridgeService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + serviceJob)
     private var job: Job? = null
     private var weatherJob: Job? = null
+    private var selfUpdateJob: Job? = null
     private var wifiClient: WifiBridgeClient? = null
     private var router: BridgeRouter? = null
     @Volatile private var lastTrackKey: String? = null
@@ -115,6 +117,23 @@ class MediaBridgeService : Service() {
                     Log.w(TAG, "weather: ${e.message}")
                 }
                 delay(60_000L)
+            }
+        }
+        // Autoactualización de la app del teléfono: revisa al arrancar y cada 6 h.
+        // La instalación siempre la confirma el usuario en el diálogo del sistema.
+        com.chronosbvrx.ibizacompanion.update.CompanionUpdater.onReady = { version ->
+            updateNotification("Actualización $version lista · toca para instalar")
+        }
+        selfUpdateJob = scope.launch {
+            delay(15_000L)
+            while (isActive) {
+                try {
+                    com.chronosbvrx.ibizacompanion.update.CompanionUpdater
+                        .checkForUpdate(this@MediaBridgeService)
+                } catch (e: Exception) {
+                    Log.w(TAG, "self-update: ${e.message}")
+                }
+                delay(6 * 60 * 60 * 1000L)
             }
         }
     }
@@ -581,7 +600,8 @@ class MediaBridgeService : Service() {
             },
             android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
         )
-        return builder
+        val ready = com.chronosbvrx.ibizacompanion.core.state.CompanionState.state.value
+        val built = builder
             .setContentTitle("IbizaCompanion")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_media_play)
@@ -590,7 +610,33 @@ class MediaBridgeService : Service() {
             .setPriority(Notification.PRIORITY_DEFAULT)
             .setContentIntent(openApp)
             .addAction(android.R.drawable.ic_menu_view, "Volver a IbizaCompanion", openApp)
-            .build()
+
+        // Si hay una actualización de la propia app descargada, se ofrece
+        // instalarla desde aquí (un toque + confirmación del sistema).
+        if (ready.selfUpdateAvailable) {
+            val installIntent = Intent(
+                this,
+                com.chronosbvrx.ibizacompanion.MainActivity::class.java
+            ).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                putExtra(EXTRA_INSTALL_SELF_UPDATE, true)
+            }
+            val installPending = android.app.PendingIntent.getActivity(
+                this,
+                1,
+                installIntent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or
+                    android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+            built.addAction(
+                android.R.drawable.stat_sys_download_done,
+                "Instalar v${ready.selfUpdateVersionName}",
+                installPending
+            )
+        }
+        return built.build()
     }
 
     private fun updateNotification(text: String) {
@@ -636,6 +682,8 @@ class MediaBridgeService : Service() {
         if (instance === this) instance = null
         job?.cancel()
         weatherJob?.cancel()
+        selfUpdateJob?.cancel()
+        com.chronosbvrx.ibizacompanion.update.CompanionUpdater.onReady = null
         scope.cancel()
         PhoneNavController.clear()
         BridgeLink.router = null
