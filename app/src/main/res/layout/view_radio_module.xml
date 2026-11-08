@@ -57,25 +57,25 @@
             <TextView
                 android:id="@+id/radioSrcBt"
                 android:layout_width="104dp"
-                android:layout_height="34dp"
+                android:layout_height="38dp"
                 android:background="@drawable/bg_pill"
                 android:fontFamily="sans-serif-medium"
                 android:gravity="center"
                 android:text="BLUETOOTH"
                 android:textColor="@color/text_secondary"
-                android:textSize="10sp" />
+                android:textSize="12sp" />
 
             <TextView
                 android:id="@+id/radioSrcRadio"
                 android:layout_width="104dp"
-                android:layout_height="34dp"
+                android:layout_height="38dp"
                 android:layout_marginStart="2dp"
                 android:background="@drawable/bg_dock_active"
                 android:fontFamily="sans-serif-medium"
                 android:gravity="center"
                 android:text="RADIO FM"
                 android:textColor="@color/accent_sky"
-                android:textSize="10sp" />
+                android:textSize="12sp" />
         </LinearLayout>
     </LinearLayout>
 
@@ -232,7 +232,7 @@
                 android:layout_marginTop="6dp"
                 android:text="Mantén pulsado un preset para guardar la frecuencia actual"
                 android:textColor="@color/text_faint"
-                android:textSize="9sp" />
+                android:textSize="11sp" />
 
             <TextView
                 android:id="@+id/radioNative"
@@ -247,7 +247,7 @@
                 android:paddingEnd="18dp"
                 android:text="ABRIR RADIO DEL VEHÍCULO"
                 android:textColor="@color/accent_sky"
-                android:textSize="10sp" />
+                android:textSize="12sp" />
         </LinearLayout>
     </LinearLayout>
 
@@ -270,9 +270,9 @@
             android:drawablePadding="6dp"
             android:fontFamily="sans-serif-medium"
             android:gravity="center"
-            android:text="SCAN −"
+            android:text="BUSCAR −"
             android:textColor="@color/text_secondary"
-            android:textSize="10sp" />
+            android:textSize="12sp" />
 
         <Space
             android:layout_width="8dp"
@@ -288,7 +288,7 @@
             android:gravity="center"
             android:text="− 0.1"
             android:textColor="@color/text_secondary"
-            android:textSize="10sp" />
+            android:textSize="12sp" />
 
         <Space
             android:layout_width="8dp"
@@ -307,7 +307,7 @@
             android:gravity="center"
             android:text="BANDA"
             android:textColor="@color/accent_sky"
-            android:textSize="10sp" />
+            android:textSize="12sp" />
 
         <Space
             android:layout_width="8dp"
@@ -323,7 +323,7 @@
             android:gravity="center"
             android:text="+ 0.1"
             android:textColor="@color/text_secondary"
-            android:textSize="10sp" />
+            android:textSize="12sp" />
 
         <Space
             android:layout_width="8dp"
@@ -340,8 +340,8 @@
             android:drawablePadding="6dp"
             android:fontFamily="sans-serif-medium"
             android:gravity="center"
-            android:text="SCAN +"
+            android:text="BUSCAR +"
             android:textColor="@color/text_secondary"
-            android:textSize="10sp" />
+            android:textSize="12sp" />
     </LinearLayout>
 </LinearLayout>

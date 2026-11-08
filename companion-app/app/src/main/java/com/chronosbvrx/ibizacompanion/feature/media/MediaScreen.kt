@@ -125,7 +125,7 @@ fun MediaScreen() {
     ) {
         // Header
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("MULTIMEDIA", style = MaterialTheme.typography.headlineMedium, color = IbizaColors.TextPrimary)
+            Text("MÚSICA", style = MaterialTheme.typography.headlineMedium, color = IbizaColors.TextPrimary)
             Spacer(Modifier.weight(1f))
             if (ctrl != null) {
                 IconButton(onClick = { showQueue = !showQueue }, modifier = Modifier.size(40.dp)) {

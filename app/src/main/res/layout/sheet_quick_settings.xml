@@ -70,7 +70,7 @@
                     style="@style/Label"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="PANTALLA · MEDIA · CONEXIÓN" />
+                    android:text="PANTALLA · MÚSICA · CONEXIÓN" />
             </LinearLayout>
 
             <ImageButton
@@ -142,7 +142,7 @@
                     android:layout_weight="1"
                     android:text="Brillo de pantalla"
                     android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
+                    android:textSize="13sp" />
 
                 <TextView
                     android:id="@+id/brightnessValue"
@@ -217,14 +217,14 @@
                         android:layout_height="wrap_content"
                         android:text="Modo noche"
                         android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
+                        android:textSize="13sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Atenúa la interfaz al conducir de noche"
                         android:textColor="@color/text_faint"
-                        android:textSize="9sp" />
+                        android:textSize="11sp" />
                 </LinearLayout>
 
                 <Switch
@@ -275,14 +275,14 @@
                         android:layout_height="wrap_content"
                         android:text="Silenciar audio"
                         android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
+                        android:textSize="13sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Corta la salida de medios del vehículo"
                         android:textColor="@color/text_faint"
-                        android:textSize="9sp" />
+                        android:textSize="11sp" />
                 </LinearLayout>
 
                 <Switch
@@ -344,14 +344,14 @@
                         android:layout_height="wrap_content"
                         android:text="Voz de navegación"
                         android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
+                        android:textSize="13sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Avisa maniobras y distancia; baja la música al hablar"
                         android:textColor="@color/text_faint"
-                        android:textSize="9sp" />
+                        android:textSize="11sp" />
                 </LinearLayout>
 
                 <Switch
@@ -398,7 +398,7 @@
                     android:paddingEnd="14dp"
                     android:text="LIBERAR"
                     android:textColor="@color/text_secondary"
-                    android:textSize="10sp" />
+                    android:textSize="11sp" />
             </LinearLayout>
 
             <View
@@ -439,7 +439,7 @@
                     android:layout_weight="1"
                     android:text="Módulos del estéreo"
                     android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
+                    android:textSize="13sp" />
 
                 <TextView
                     android:id="@+id/modulesStatus"
@@ -460,7 +460,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
-            android:text="MEDIA Y CONECTIVIDAD" />
+            android:text="MÚSICA Y CONEXIÓN" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -508,9 +508,9 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="9dp"
                     android:layout_weight="1"
-                    android:text="EQ / DSP"
+                    android:text="Ajuste de sonido"
                     android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
+                    android:textSize="13sp" />
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -518,7 +518,7 @@
                     android:fontFamily="sans-serif-medium"
                     android:text="ABRIR"
                     android:textColor="@color/accent_sky"
-                    android:textSize="9sp" />
+                    android:textSize="11sp" />
             </LinearLayout>
 
             <View
@@ -559,7 +559,7 @@
                     android:layout_weight="1"
                     android:text="WiFi y punto de acceso"
                     android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
+                    android:textSize="13sp" />
 
                 <TextView
                     android:id="@+id/wifiLinkStatus"
@@ -571,7 +571,7 @@
                     android:maxLines="2"
                     android:text="—"
                     android:textColor="@color/accent_sky"
-                    android:textSize="9sp" />
+                    android:textSize="11sp" />
             </LinearLayout>
 
             <View
@@ -608,9 +608,9 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="9dp"
                     android:layout_weight="1"
-                    android:text="Bus CAN"
+                    android:text="Datos del auto"
                     android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
+                    android:textSize="13sp" />
 
                 <TextView
                     android:id="@+id/canStatus"
@@ -658,7 +658,7 @@
                     android:layout_weight="1"
                     android:text="Mapas offline"
                     android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
+                    android:textSize="13sp" />
 
                 <TextView
                     android:id="@+id/mapsStatus"
@@ -707,7 +707,7 @@
                     android:layout_weight="1"
                     android:text="Launcher por defecto"
                     android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
+                    android:textSize="13sp" />
 
                 <TextView
                     android:id="@+id/homeStatus"
@@ -757,7 +757,7 @@
                     android:layout_weight="1"
                     android:text="Actualización del sistema"
                     android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
+                    android:textSize="13sp" />
 
                 <TextView
                     android:id="@+id/otaStatus"
@@ -785,6 +785,6 @@
             android:letterSpacing="0.08"
             android:text="TODOS LOS AJUSTES"
             android:textColor="#06121F"
-            android:textSize="10sp" />
+            android:textSize="11sp" />
     </LinearLayout>
 </FrameLayout>

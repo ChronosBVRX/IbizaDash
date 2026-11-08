@@ -207,6 +207,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private lateinit var vHumanElectricalSub: TextView
     private lateinit var vHumanFuel: TextView
     private lateinit var vHumanFuelSub: TextView
+    private lateinit var vHumanFuelLevel: android.widget.ProgressBar
     private lateinit var vHumanMaintenance: TextView
     private lateinit var vHumanMaintenanceSub: TextView
     private lateinit var vHumanThermalBar: View
@@ -443,7 +444,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         try {
             if (!::mapSourceChip.isInitialized) return
             val remote = RemoteMapBridge.active
-            mapSourceChip.text = if (remote) "TELÉFONO" else "LOCAL"
+            mapSourceChip.text = if (remote) "MAPA DEL TELÉFONO" else "MAPA LOCAL"
             mapSourceChip.setTextColor(
                 ContextCompat.getColor(
                     this,
@@ -780,6 +781,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         vHumanElectricalSub = findViewById(R.id.vHumanElectricalSub)
         vHumanFuel = findViewById(R.id.vHumanFuel)
         vHumanFuelSub = findViewById(R.id.vHumanFuelSub)
+        vHumanFuelLevel = findViewById(R.id.vHumanFuelLevel)
         vHumanMaintenance = findViewById(R.id.vHumanMaintenance)
         vHumanMaintenanceSub = findViewById(R.id.vHumanMaintenanceSub)
         vHumanThermalBar = findViewById(R.id.vHumanThermalBar)
@@ -1748,22 +1750,26 @@ class MainActivity : AppCompatActivity(), LocationListener {
         } else {
             null
         }
+        val fuelColor = ContextCompat.getColor(
+            this,
+            if ((fuelPct ?: 100f) <= 12f) R.color.danger else R.color.accent_cyan
+        )
         if (fuelPct != null) {
             hudPillFuel.visibility = View.VISIBLE
             cockpitFuel.visibility = View.VISIBLE
             hudPillFuel.text = "F ${fuelPct.roundToInt()}%"
             cockpitFuel.text = "F ${fuelPct.roundToInt()}%"
-            val fuelColor = ContextCompat.getColor(
-                this,
-                if (fuelPct <= 12f) R.color.danger else R.color.accent_cyan
-            )
             hudPillFuel.setTextColor(fuelColor)
             cockpitFuel.setTextColor(fuelColor)
+            vHumanFuelLevel.visibility = View.VISIBLE
+            vHumanFuelLevel.progress = fuelPct.roundToInt().coerceIn(0, 100)
+            vHumanFuelLevel.progressTintList = ColorStateList.valueOf(fuelColor)
         } else {
             // Sin lectura de combustible no se muestra el chip: un "F --"
             // permanente se lee como algo roto.
             hudPillFuel.visibility = View.GONE
             cockpitFuel.visibility = View.GONE
+            vHumanFuelLevel.visibility = View.GONE
         }
 
         val heroColor = severityColor(human.headlineSeverity)
@@ -1968,17 +1974,17 @@ class MainActivity : AppCompatActivity(), LocationListener {
     }
 
     private fun setupDock() {
-        addDockItem(R.drawable.ic_home, "COCKPIT") {
+        addDockItem(R.drawable.ic_home, "INICIO") {
             applyFocus(Focus.COCKPIT)
         }
         addDockItem(R.drawable.ic_map, "MAPA") {
             applyFocus(Focus.NAV)
         }
-        addDockItem(R.drawable.ic_media, "MEDIA") {
+        addDockItem(R.drawable.ic_media, "MÚSICA") {
             applyFocus(Focus.MEDIA)
         }
         addDockItem(R.drawable.ic_radio, "RADIO") {
-            // La radio integrada vive en el módulo Media; abrir la app nativa
+            // La radio integrada vive en el módulo de música; abrir la app nativa
             // sacaba del launcher y dejaba el dock sin control real.
             radioSource = true
             applyFocus(Focus.MEDIA)
@@ -1986,7 +1992,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             updateSourceToggle()
             setActiveDock(3)
         }
-        addDockItem(R.drawable.ic_car, "VEHÍCULO") {
+        addDockItem(R.drawable.ic_car, "AUTO") {
             applyFocus(Focus.VEHICLE)
         }
         addDockItem(R.drawable.ic_apps, "APPS") {
@@ -2010,13 +2016,13 @@ class MainActivity : AppCompatActivity(), LocationListener {
         val icon = ImageView(this).apply {
             setImageResource(iconRes)
             imageTintList = ContextCompat.getColorStateList(this@MainActivity, R.color.text_muted)
-            layoutParams = LinearLayout.LayoutParams(dp(24), dp(24))
+            layoutParams = LinearLayout.LayoutParams(dp(26), dp(26))
         }
         val text = TextView(this).apply {
             this.text = label
             setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_muted))
-            textSize = 9f
-            letterSpacing = 0.12f
+            textSize = 11f
+            letterSpacing = 0.06f
             gravity = Gravity.CENTER
             fontFeatureSettings = "tnum"
             layoutParams = LinearLayout.LayoutParams(
@@ -2316,7 +2322,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         mmTitle.text = title
         mmArtist.text = nowPlaying.artist.ifBlank { "Reproducción activa" }
         mmAlbum.text = nowPlaying.album
-        mmSource.text = if (nowPlaying.isBluetooth) "BT · A2DP" else "MEDIA"
+        mmSource.text = if (nowPlaying.isBluetooth) "BLUETOOTH" else "APP"
 
         val playRes = if (nowPlaying.isPlaying) R.drawable.ic_pause else R.drawable.ic_play
         btnPlay.setImageResource(playRes)
@@ -2399,8 +2405,9 @@ class MainActivity : AppCompatActivity(), LocationListener {
         vGear.text = gear
         vGearText.text = when (gear) {
             "R" -> "Reversa"
-            "D" -> "Drive"
-            else -> "Park"
+            "D" -> "Avance"
+            "N" -> "Neutro"
+            else -> "Estacionado"
         }
         vSource.text = signals.source
         vBusChip.text = signals.source
@@ -2481,7 +2488,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         }
         val status = lastBluetooth
         if (status == null) {
-            btStatus.text = "Sin conectar"
+            btStatus.text = "Teléfono sin conectar"
             btStatus.setTextColor(ContextCompat.getColor(this, R.color.text_muted))
             btBatteryGroup.visibility = View.GONE
             return

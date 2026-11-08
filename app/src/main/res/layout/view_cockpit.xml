@@ -52,7 +52,7 @@
                 android:ellipsize="end"
                 android:fontFamily="sans-serif-medium"
                 android:maxLines="1"
-                android:text="Sin conectar"
+                android:text="Teléfono sin conectar"
                 android:textColor="@color/text_secondary"
                 android:textSize="11sp" />
 
@@ -98,7 +98,7 @@
                     android:fontFeatureSettings="tnum"
                     android:text="87%"
                     android:textColor="@color/green"
-                    android:textSize="10sp" />
+                    android:textSize="11sp" />
             </LinearLayout>
         </LinearLayout>
 
@@ -336,7 +336,7 @@
             android:layout_marginTop="2dp"
             android:fontFeatureSettings="tnum"
             android:textColor="@color/text_faint"
-            android:textSize="9sp" />
+            android:textSize="11sp" />
     </LinearLayout>
 
     <!-- Thermal/electrical health (replaces the fake A/C/FAN/REC controls).
@@ -377,7 +377,7 @@
             android:maxLines="2"
             android:text="Salud: esperando datos OBD…"
             android:textColor="@color/text_secondary"
-            android:textSize="10sp" />
+            android:textSize="11sp" />
 
         <TextView
             android:id="@+id/headlightState"
@@ -386,6 +386,6 @@
             android:fontFeatureSettings="tnum"
             android:text="Luces —"
             android:textColor="@color/text_muted"
-            android:textSize="9sp" />
+            android:textSize="11sp" />
     </LinearLayout>
 </LinearLayout>

@@ -18,6 +18,6 @@
 
     <dimen name="hud_speed">96sp</dimen>
     <dimen name="time_size">36sp</dimen>
-    <dimen name="label_size">10sp</dimen>
+    <dimen name="label_size">11sp</dimen>
     <dimen name="value_size">12sp</dimen>
 </resources>

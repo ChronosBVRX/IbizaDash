@@ -56,7 +56,7 @@
                     android:layout_height="wrap_content"
                     android:fontFamily="sans-serif-medium"
                     android:letterSpacing="0.02"
-                    android:text="VEHÍCULO"
+                    android:text="MI AUTO"
                     android:textColor="@color/text_primary"
                     android:textSize="20sp" />
 
@@ -170,7 +170,7 @@
                 android:paddingEnd="10dp"
                 android:text="ÓPTIMO"
                 android:textColor="@color/green"
-                android:textSize="10sp" />
+                android:textSize="11sp" />
         </LinearLayout>
 
         <!-- Health insight cards -->
@@ -426,6 +426,18 @@
                             android:text="Sin lectura"
                             android:textColor="@color/text_muted"
                             android:textSize="11sp" />
+
+                        <ProgressBar
+                            android:id="@+id/vHumanFuelLevel"
+                            style="?android:attr/progressBarStyleHorizontal"
+                            android:layout_width="match_parent"
+                            android:layout_height="6dp"
+                            android:layout_marginTop="6dp"
+                            android:max="100"
+                            android:progress="0"
+                            android:progressBackgroundTint="#22FFFFFF"
+                            android:progressTint="@color/green"
+                            android:visibility="gone" />
                     </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
@@ -534,7 +546,7 @@
                 android:layout_height="wrap_content"
                 android:text="Toca para actualizar"
                 android:textColor="@color/text_faint"
-                android:textSize="10sp" />
+                android:textSize="11sp" />
         </LinearLayout>
 
         <LinearLayout
@@ -694,7 +706,7 @@
                             android:id="@+id/vGearText"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Park"
+                            android:text="Estacionado"
                             android:textColor="@color/text_secondary"
                             android:textSize="13sp" />
                     </LinearLayout>
@@ -861,6 +873,14 @@
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 
+                            <ImageView
+                                android:layout_width="15dp"
+                                android:layout_height="15dp"
+                                android:layout_marginEnd="6dp"
+                                android:contentDescription="@null"
+                                android:src="@drawable/ic_gauge"
+                                android:tint="@color/text_muted" />
+
                             <TextView
                                 style="@style/Label"
                                 android:layout_width="0dp"
@@ -876,7 +896,7 @@
                                 android:maxLines="1"
                                 android:text="Sin dato"
                                 android:textColor="@color/text_muted"
-                                android:textSize="10sp" />
+                                android:textSize="11sp" />
                         </LinearLayout>
 
                         <TextView
@@ -917,6 +937,14 @@
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 
+                            <ImageView
+                                android:layout_width="15dp"
+                                android:layout_height="15dp"
+                                android:layout_marginEnd="6dp"
+                                android:contentDescription="@null"
+                                android:src="@drawable/ic_engine"
+                                android:tint="@color/text_muted" />
+
                             <TextView
                                 style="@style/Label"
                                 android:layout_width="0dp"
@@ -932,7 +960,7 @@
                                 android:maxLines="1"
                                 android:text="Sin dato"
                                 android:textColor="@color/text_muted"
-                                android:textSize="10sp" />
+                                android:textSize="11sp" />
                         </LinearLayout>
 
                         <TextView
@@ -981,6 +1009,14 @@
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 
+                            <ImageView
+                                android:layout_width="15dp"
+                                android:layout_height="15dp"
+                                android:layout_marginEnd="6dp"
+                                android:contentDescription="@null"
+                                android:src="@drawable/ic_pedal"
+                                android:tint="@color/text_muted" />
+
                             <TextView
                                 style="@style/Label"
                                 android:layout_width="0dp"
@@ -996,7 +1032,7 @@
                                 android:maxLines="1"
                                 android:text="Sin dato"
                                 android:textColor="@color/text_muted"
-                                android:textSize="10sp" />
+                                android:textSize="11sp" />
                         </LinearLayout>
 
                         <TextView
@@ -1037,6 +1073,14 @@
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 
+                            <ImageView
+                                android:layout_width="15dp"
+                                android:layout_height="15dp"
+                                android:layout_marginEnd="6dp"
+                                android:contentDescription="@null"
+                                android:src="@drawable/ic_thermometer"
+                                android:tint="@color/text_muted" />
+
                             <TextView
                                 style="@style/Label"
                                 android:layout_width="0dp"
@@ -1052,7 +1096,7 @@
                                 android:maxLines="1"
                                 android:text="Sin dato"
                                 android:textColor="@color/text_muted"
-                                android:textSize="10sp" />
+                                android:textSize="11sp" />
                         </LinearLayout>
 
                         <TextView
@@ -1101,6 +1145,14 @@
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 
+                            <ImageView
+                                android:layout_width="15dp"
+                                android:layout_height="15dp"
+                                android:layout_marginEnd="6dp"
+                                android:contentDescription="@null"
+                                android:src="@drawable/ic_air"
+                                android:tint="@color/text_muted" />
+
                             <TextView
                                 style="@style/Label"
                                 android:layout_width="0dp"
@@ -1116,7 +1168,7 @@
                                 android:maxLines="1"
                                 android:text="Sin dato"
                                 android:textColor="@color/text_muted"
-                                android:textSize="10sp" />
+                                android:textSize="11sp" />
                         </LinearLayout>
 
                         <TextView
@@ -1157,6 +1209,14 @@
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 
+                            <ImageView
+                                android:layout_width="15dp"
+                                android:layout_height="15dp"
+                                android:layout_marginEnd="6dp"
+                                android:contentDescription="@null"
+                                android:src="@drawable/ic_timing"
+                                android:tint="@color/text_muted" />
+
                             <TextView
                                 style="@style/Label"
                                 android:layout_width="0dp"
@@ -1172,7 +1232,7 @@
                                 android:maxLines="1"
                                 android:text="Sin dato"
                                 android:textColor="@color/text_muted"
-                                android:textSize="10sp" />
+                                android:textSize="11sp" />
                         </LinearLayout>
 
                         <TextView
@@ -1221,6 +1281,14 @@
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 
+                            <ImageView
+                                android:layout_width="15dp"
+                                android:layout_height="15dp"
+                                android:layout_marginEnd="6dp"
+                                android:contentDescription="@null"
+                                android:src="@drawable/ic_mixture"
+                                android:tint="@color/text_muted" />
+
                             <TextView
                                 style="@style/Label"
                                 android:layout_width="0dp"
@@ -1236,7 +1304,7 @@
                                 android:maxLines="1"
                                 android:text="Sin dato"
                                 android:textColor="@color/text_muted"
-                                android:textSize="10sp" />
+                                android:textSize="11sp" />
                         </LinearLayout>
 
                         <TextView
@@ -1353,6 +1421,21 @@
                             android:textColor="@color/text_muted"
                             android:textSize="11sp" />
                     </LinearLayout>
+
+                    <FrameLayout
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:layout_marginStart="12dp"
+                        android:background="@drawable/bg_icon_badge">
+
+                        <ImageView
+                            android:layout_width="28dp"
+                            android:layout_height="28dp"
+                            android:layout_gravity="center"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_battery"
+                            android:tint="@color/accent_sky" />
+                    </FrameLayout>
                 </LinearLayout>
 
                 <TextView
@@ -1381,11 +1464,26 @@
                     android:orientation="vertical"
                     android:padding="14dp">
 
-                    <TextView
-                        style="@style/Label"
+                    <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="CHECK ENGINE / DTC" />
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <ImageView
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:layout_marginEnd="6dp"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_warning"
+                            android:tint="@color/amber" />
+
+                        <TextView
+                            style="@style/Label"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="FALLAS DEL MOTOR" />
+                    </LinearLayout>
 
                     <TextView
                         android:id="@+id/vDtc"
@@ -1473,12 +1571,27 @@
                 android:orientation="vertical"
                 android:visibility="gone">
 
-                <TextView
-                    style="@style/Label"
+                <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="CONSOLA · &gt; ENVÍAS / &lt; RECIBES" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:layout_marginEnd="6dp"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_can"
+                        android:tint="@color/text_muted" />
+
+                    <TextView
+                        style="@style/Label"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="CONSOLA · &gt; ENVÍAS / &lt; RECIBES" />
+                </LinearLayout>
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -1544,7 +1657,7 @@
                         android:padding="10dp"
                         android:text="Sin tráfico todavía."
                         android:textColor="@color/text_secondary"
-                        android:textSize="10sp" />
+                        android:textSize="11sp" />
                 </ScrollView>
 
                 <LinearLayout

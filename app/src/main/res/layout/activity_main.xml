@@ -72,9 +72,9 @@
                 android:letterSpacing="0.08"
                 android:paddingStart="10dp"
                 android:paddingEnd="10dp"
-                android:text="LOCAL"
+                android:text="MAPA LOCAL"
                 android:textColor="@color/text_muted"
-                android:textSize="9sp" />
+                android:textSize="11sp" />
 
             <View
                 android:layout_width="match_parent"
@@ -210,7 +210,7 @@
                         android:id="@+id/navPillSub"
                     android:text="Toca para ver el mapa"
                         android:textColor="@color/text_muted"
-                        android:textSize="9sp" />
+                        android:textSize="11sp" />
                 </LinearLayout>
             </LinearLayout>
 

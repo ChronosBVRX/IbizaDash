@@ -37,7 +37,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
             android:layout_weight="1"
-            android:text="EN RUTA"
+            android:text="GUÍA"
             android:textSize="11sp" />
 
         <ImageButton
@@ -105,7 +105,7 @@
                 android:maxLines="2"
                 android:text="Sin ruta"
                 android:textColor="@color/text_muted"
-                android:textSize="9sp" />
+                android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
 
@@ -205,7 +205,7 @@
             android:maxLines="2"
             android:text="Sin reproducción"
             android:textColor="@color/text_primary"
-            android:textSize="11sp" />
+            android:textSize="12sp" />
 
         <ImageButton
             android:id="@+id/miniPlay"
@@ -320,7 +320,7 @@
             android:maxLines="2"
             android:text="Toca el mapa para abrir la navegación"
             android:textColor="@color/text_muted"
-            android:textSize="9sp" />
+            android:textSize="11sp" />
     </LinearLayout>
 
     <Space
@@ -336,7 +336,7 @@
         android:fontFamily="sans-serif-medium"
         android:gravity="center"
         android:letterSpacing="0.1"
-        android:text="COCKPIT COMPLETO"
+        android:text="VER PANEL COMPLETO"
         android:textColor="#06121F"
-        android:textSize="10sp" />
+        android:textSize="11sp" />
 </LinearLayout>
