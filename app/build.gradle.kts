@@ -1,4 +1,4 @@
-import java.util.Properties
+﻿import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -21,8 +21,8 @@ android {
         applicationId = "com.chronosbvrx.ibizadash"
         minSdk = 23
         targetSdk = 33
-        versionCode = 13
-        versionName = "1.0.1"
+        versionCode = 14
+        versionName = "1.1.0"
         ndk {
             abiFilters += listOf("armeabi-v7a")
         }

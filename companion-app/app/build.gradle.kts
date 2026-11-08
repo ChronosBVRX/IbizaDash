@@ -1,4 +1,4 @@
-import java.util.Properties
+﻿import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -19,8 +19,8 @@ android {
         applicationId = "com.chronosbvrx.ibizacompanion"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.0.1"
+        versionCode = 9
+        versionName = "1.1.0"
         manifestPlaceholders["redirectSchemeName"] = "spotify-sdk"
         manifestPlaceholders["redirectHostName"] = "auth"
 

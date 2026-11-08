@@ -304,10 +304,11 @@ object RouteNavigator {
         val progress = if (totalM > 0) (traveled / totalM).toFloat().coerceIn(0f, 1f) else 0f
 
         if (nextIdx < 0) {
-            // Between maneuvers: cruise state toward destination.
+            // Sin maniobra próxima: el número grande es lo que queda de ruta
+            // (en Waze es la distancia restante, no la línea recta al destino).
             val st = NavState(
                 icon = ManeuverIcon.STRAIGHT,
-                distText = fmtDist(distToEnd.toInt()),
+                distText = fmtDist(remaining.toInt()),
                 actionText = route.destinationName,
                 thenText = null,
                 remainingText = fmtRemaining(remaining.toInt(), etaMin),
@@ -322,7 +323,7 @@ object RouteNavigator {
                 speedKmh = speedKmh
             )
             NavStateRepository.publish(st)
-            keepLegacyPill(route, null, distToEnd.toInt(), remaining.toInt(), etaMin)
+            keepLegacyPill(route, null, remaining.toInt(), remaining.toInt(), etaMin)
             return
         }
 

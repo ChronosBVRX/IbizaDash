@@ -40,6 +40,24 @@ object MapFrameSender {
     @Volatile
     private var running = false
 
+    /**
+     * El estéreo puede pedir que se detenga la proyección: en modo navegación
+     * dibuja su propio mapa a 60 fps y el vídeo por Wi-Fi solo gasta ancho de
+     * banda.
+     */
+    @Volatile
+    private var suppressed = false
+
+    fun setSuppressed(value: Boolean) {
+        if (suppressed == value) return
+        suppressed = value
+        if (value) {
+            stop()
+        } else {
+            Log.i(TAG, "proyección habilitada por el estéreo")
+        }
+    }
+
     /** Velocidad actual del coche (la alimenta PhoneNavController). */
     @Volatile
     private var speedKmh = 0f
@@ -57,6 +75,10 @@ object MapFrameSender {
         if (speedKmh > FAST_SPEED_KMH) INTERVAL_FAST_MS else INTERVAL_SLOW_MS
 
     fun start(view: WebView) {
+        if (suppressed) {
+            Log.i(TAG, "proyección suprimida por el estéreo (modo navegación)")
+            return
+        }
         if (running && webView === view) return
         webView = view
         running = true

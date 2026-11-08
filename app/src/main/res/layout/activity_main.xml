@@ -88,6 +88,7 @@
                 android:background="@drawable/bg_scrim_bottom" />
 
             <LinearLayout
+                android:id="@+id/clockBlock"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="top|start"
@@ -273,6 +274,9 @@
                     android:textColor="@color/accent_cyan"
                     android:textSize="12sp" />
             </LinearLayout>
+
+            <!-- Vista de navegación a pantalla completa (foco NAV) -->
+            <include layout="@layout/view_nav_overlay" />
         </FrameLayout>
 
         <!-- RIGHT: cockpit, mini HUD or focused module -->

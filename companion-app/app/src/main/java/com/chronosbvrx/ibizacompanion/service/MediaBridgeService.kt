@@ -282,6 +282,11 @@ class MediaBridgeService : Service() {
                 "NAV_STATE" -> handleNavState(obj)
                 "REROUTE_REQUEST" -> handleReroute(obj)
                 "MEDIA_CMD" -> handleMediaCommand(obj.optString("cmd", ""))
+                "MAP_STREAM" -> {
+                    // El estéreo pide detener o retomar el vídeo del mapa.
+                    com.chronosbvrx.ibizacompanion.map.MapFrameSender
+                        .setSuppressed(!obj.optBoolean("on", true))
+                }
             }
         } catch (e: Exception) {
             Log.w(TAG, "inbox parse: ${e.message}")

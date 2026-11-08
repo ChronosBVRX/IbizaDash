@@ -146,6 +146,22 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private lateinit var alertCapsule: View
     private lateinit var alertText: TextView
     private lateinit var nightDim: View
+
+    // Vista de navegación
+    private lateinit var navOverlay: View
+    private lateinit var navCard: View
+    private lateinit var navCardIcon: ImageView
+    private lateinit var navCardDist: TextView
+    private lateinit var navCardAction: TextView
+    private lateinit var navCardThen: TextView
+    private lateinit var navCardEta: TextView
+    private lateinit var navCardRemaining: TextView
+    private lateinit var navCardDest: TextView
+    private lateinit var navCardProgress: ProgressBar
+    private lateinit var navFinish: View
+    private lateinit var navExit: View
+    private lateinit var btnRecenter: View
+    private lateinit var clockBlock: View
     private lateinit var callBanner: View
     private lateinit var callText: TextView
     private lateinit var btnAnswer: TextView
@@ -338,15 +354,22 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
     private var lastMapBearing = 0f
 
-    /** Waze-style maneuver banner + mini strip + map follow/heading. */
+    // Estado de seguimiento del mapa
+    private var mapMode = MapMode.FOLLOWING
+    private var lastUserMapTouchMs = 0L
+    private var lastFollowCenterMs = 0L
+    private var currentBearingDeg = 0f
+    private var bearingAnimator: android.animation.ValueAnimator? = null
+    private var lastNavState: NavState? = null
+
+    /** Waze-style maneuver banner + mini strip + tarjeta de navegación. */
     private fun renderNavState(state: NavState?) {
+        lastNavState = state
         if (state == null) {
             miniMavStrip.visibility = View.GONE
             lastMapBearing = 0f
-            try {
-                map.mapOrientation = 0f
-            } catch (_: Exception) {
-            }
+            resetMapBearing()
+            renderNavOverlay()
             return
         }
         navPillIcon.setImageResource(state.icon.resId)
@@ -361,28 +384,16 @@ class MainActivity : AppCompatActivity(), LocationListener {
         miniMavIcon.setImageResource(state.icon.resId)
         miniMavDist.text = state.distText
         miniMavAction.text = state.actionText
-        // Map follow + heading-up on the snapped road point
-        // (only while navigating, cheap 2 Hz updates).
+        // Marcador sobre la carretera (el centrado lo hace onLocationChanged).
         if (!RemoteMapBridge.active) {
             try {
                 positionMarker?.position = GeoPoint(state.snappedLat, state.snappedLon)
                 if (state.bearing > 0) positionMarker?.rotation = state.bearing
-                if (focus == Focus.NAV) {
-                    map.controller.animateTo(GeoPoint(state.snappedLat, state.snappedLon))
-                    if (state.speedKmh > 10 && state.bearing > 0) {
-                        val delta = kotlin.math.abs(state.bearing - lastMapBearing)
-                        if (delta > 12f) {
-                            lastMapBearing = state.bearing
-                            map.mapOrientation = -state.bearing
-                        }
-                    }
-                } else if (lastMapBearing != 0f) {
-                    lastMapBearing = 0f
-                    map.mapOrientation = 0f
-                }
+                map.invalidate()
             } catch (_: Exception) {
             }
         }
+        renderNavOverlay()
     }
 
     /** Muestra un frame del mapa renderizado por el teléfono (Fase 2). */
@@ -510,10 +521,13 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
     private enum class Focus(val fraction: Float, val dockIndex: Int) {
         COCKPIT(0.55f, 0),
-        NAV(0.80f, 1),
+        NAV(1.00f, 1),
         MEDIA(0.25f, 2),
         VEHICLE(0.25f, 4)
     }
+
+    /** Seguimiento del mapa: el coche manda salvo que el usuario lo mueva. */
+    private enum class MapMode { FOLLOWING, FREE }
 
     private var focus = Focus.COCKPIT
     private var splitFraction = 0.55f
@@ -683,6 +697,42 @@ class MainActivity : AppCompatActivity(), LocationListener {
         alertCapsule = findViewById(R.id.alertCapsule)
         alertText = findViewById(R.id.alertText)
         nightDim = findViewById(R.id.nightDim)
+
+        navOverlay = findViewById(R.id.navOverlay)
+        navCard = findViewById(R.id.navCard)
+        navCardIcon = findViewById(R.id.navCardIcon)
+        navCardDist = findViewById(R.id.navCardDist)
+        navCardAction = findViewById(R.id.navCardAction)
+        navCardThen = findViewById(R.id.navCardThen)
+        navCardEta = findViewById(R.id.navCardEta)
+        navCardRemaining = findViewById(R.id.navCardRemaining)
+        navCardDest = findViewById(R.id.navCardDest)
+        navCardProgress = findViewById(R.id.navCardProgress)
+        navFinish = findViewById(R.id.navFinish)
+        navExit = findViewById(R.id.navExit)
+        btnRecenter = findViewById(R.id.btnRecenter)
+        clockBlock = findViewById(R.id.clockBlock)
+
+        navExit.setOnClickListener { applyFocus(Focus.COCKPIT) }
+        navFinish.setOnClickListener {
+            // Termina la ruta en el estéreo y avisa al teléfono.
+            NavRouteRepository.clear()
+            applyFocus(Focus.COCKPIT)
+        }
+        btnRecenter.setOnClickListener {
+            mapMode = MapMode.FOLLOWING
+            lastUserMapTouchMs = 0L
+            updateRecenterVisibility()
+            val target = positionMarker?.position ?: lastLocation?.let {
+                GeoPoint(it.latitude, it.longitude)
+            }
+            if (target != null) {
+                try {
+                    map.controller.animateTo(target, map.zoomLevelDouble, 450L)
+                } catch (_: Exception) {
+                }
+            }
+        }
 
         miniSpeed = findViewById(R.id.miniSpeed)
         miniGear = findViewById(R.id.miniGear)
@@ -946,6 +996,14 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private fun setupMap() {
         MapHelper.configure(this, map)
         map.controller.setCenter(MapHelper.MORELIA)
+        // Si el usuario arrastra el mapa, se deja de seguir hasta que pulse
+        // "Centrar" o pasen 10 s sin tocarlo.
+        map.setOnTouchListener { _, event ->
+            if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
+                markMapFree()
+            }
+            false
+        }
         map.overlays.add(
             MapEventsOverlay(object : MapEventsReceiver {
                 override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
@@ -993,18 +1051,24 @@ class MainActivity : AppCompatActivity(), LocationListener {
             clearNavRoute()
             RouteNavigator.stop()
             PhoneNavBridge.reset()
-            RemoteMapBridge.stop()
             NavStateRepository.clear()
             NavStateRelay.onRouteCleared()
+            lastNavState = null
             lastMapBearing = 0f
-            try {
-                map.mapOrientation = 0f
-            } catch (_: Exception) {
-            }
+            resetMapBearing()
+            // Sin ruta se permite de nuevo la proyección del teléfono.
+            requestMapStream(true)
+            RemoteMapBridge.stop()
+            renderNavOverlay()
+            if (focus == Focus.NAV) applyFocus(Focus.COCKPIT)
         } else {
             drawNavRoute(route)
             NavStateRelay.onRouteSet(route)
             RouteNavigator.start(this)
+            // Con ruta, el estéreo dibuja su propio mapa (60 fps) y el teléfono
+            // deja de mandar vídeo: menos red y mejor sensación.
+            requestMapStream(false)
+            if (RemoteMapBridge.active) RemoteMapBridge.stop()
         }
     }
 
@@ -2579,30 +2643,30 @@ class MainActivity : AppCompatActivity(), LocationListener {
         if (location.hasSpeed()) {
             carSignals?.setGpsSpeed(speedKmh)
         }
-        // Road-snapped position marker + map follow (replaces raw GPS dot).
-        // Con mapa remoto (Fase 2) el MapView está oculto y no hace falta.
+        // Marcador sobre la carretera + seguimiento del vehículo.
+        // Con mapa remoto el MapView está oculto y no hace falta.
         if (!RemoteMapBridge.active) {
-        try {
-            val acc = if (location.hasAccuracy()) location.accuracy else 999f
-            val (slat, slon, _) = com.chronosbvrx.ibizadash.nav.RoadSnapper.snapLocal(
-                location.latitude, location.longitude, speedKmh, acc
-            )
-            positionMarker?.position = GeoPoint(slat, slon)
-            if (location.hasBearing() && speedKmh > 3f) {
-                positionMarker?.rotation = location.bearing
-            }
-            val now = android.os.SystemClock.elapsedRealtime()
-            if (now - lastSnapCenterMs > 1500L) {
-                lastSnapCenterMs = now
-                // In NAV focus the guidance renderer centers with heading;
-                // everywhere else, follow the snapped dot quietly.
-                if (focus != Focus.NAV) {
-                    map.controller.setCenter(GeoPoint(slat, slon))
+            try {
+                val acc = if (location.hasAccuracy()) location.accuracy else 999f
+                val (slat, slon, _) = com.chronosbvrx.ibizadash.nav.RoadSnapper.snapLocal(
+                    location.latitude, location.longitude, speedKmh, acc
+                )
+                positionMarker?.position = GeoPoint(slat, slon)
+                if (location.hasBearing() && speedKmh > 3f) {
+                    positionMarker?.rotation = location.bearing
+                }
+                val now = android.os.SystemClock.elapsedRealtime()
+                // Si el usuario movió el mapa, vuelve a seguir solo.
+                if (mapMode == MapMode.FREE && now - lastUserMapTouchMs > 10_000L) {
+                    mapMode = MapMode.FOLLOWING
+                    updateRecenterVisibility()
+                }
+                if (mapMode == MapMode.FOLLOWING) {
+                    centerOnPosition(slat, slon, speedKmh, location, now)
                 }
                 map.invalidate()
+            } catch (_: Exception) {
             }
-        } catch (_: Exception) {
-        }
         }
     }
 
@@ -2735,7 +2799,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private fun applyFocus(target: Focus, animate: Boolean = true) {
         val shown = when (target) {
             Focus.COCKPIT -> cockpitPanel
-            Focus.NAV -> miniHud
+            Focus.NAV -> navOverlay
             Focus.MEDIA -> mediaModule
             Focus.VEHICLE -> vehicleModule
         }
@@ -2743,25 +2807,50 @@ class MainActivity : AppCompatActivity(), LocationListener {
         focus = target
 
         cockpitPanel.visibility = if (shown === cockpitPanel) View.VISIBLE else View.GONE
-        miniHud.visibility = if (shown === miniHud) View.VISIBLE else View.GONE
+        // En NAV el mapa ocupa todo el ancho: no hay panel lateral.
+        miniHud.visibility = View.GONE
         mediaModule.visibility = if (shown === mediaModule && !radioSource) View.VISIBLE else View.GONE
         radioModule.visibility = if (shown === mediaModule && radioSource) View.VISIBLE else View.GONE
         vehicleModule.visibility = if (shown === vehicleModule) View.VISIBLE else View.GONE
+        navOverlay.visibility = if (target == Focus.NAV) View.VISIBLE else View.GONE
 
-        navPill.visibility = if (target == Focus.COCKPIT) View.GONE else View.VISIBLE
-        hudPill.visibility =
+        // La tarjeta de maniobra ocupa la esquina superior; el reloj se oculta.
+        clockBlock.visibility = if (target == Focus.NAV) View.GONE else View.VISIBLE
+
+        navPill.visibility =
             if (target == Focus.MEDIA || target == Focus.VEHICLE) View.VISIBLE else View.GONE
+        hudPill.visibility =
+            if (target != Focus.COCKPIT) View.VISIBLE else View.GONE
 
         setActiveDock(target.dockIndex)
 
-        for (view in arrayOf(cockpitPanel, miniHud, mediaModule, vehicleModule)) {
+        for (view in arrayOf(cockpitPanel, miniHud, mediaModule, vehicleModule, navOverlay)) {
             view.animate().cancel()
             view.alpha = 1f
         }
         // Single measure/layout pass: no per-frame LayoutParams mutation.
         setSplit(target.fraction)
 
-        if (changed && animate) {
+        if (target == Focus.NAV) {
+            // Navegación: se vuelve a seguir al coche y se deja de recibir el
+            // vídeo del teléfono (el mapa local se ve mejor y gasta menos).
+            mapMode = MapMode.FOLLOWING
+            lastUserMapTouchMs = 0L
+            if (RemoteMapBridge.active) RemoteMapBridge.stop()
+            renderNavOverlay()
+            lastLocation?.let {
+                val spd = if (it.hasSpeed()) it.speed * 3.6f else 0f
+                try {
+                    centerOnPosition(it.latitude, it.longitude, spd, it, SystemClock.elapsedRealtime())
+                } catch (_: Exception) {
+                }
+            }
+        } else {
+            resetMapBearing()
+        }
+        updateRecenterVisibility()
+
+        if (changed && animate && target != Focus.NAV) {
             shown.alpha = 0f
             shown.animate().alpha(1f).setDuration(180L).start()
         } else {
@@ -2770,7 +2859,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
     }
 
     private fun setSplit(fraction: Float) {
-        splitFraction = fraction.coerceIn(0.2f, 0.85f)
+        splitFraction = fraction.coerceIn(0.2f, 1f)
         val leftParams = leftPane.layoutParams as LinearLayout.LayoutParams
         leftParams.weight = splitFraction
         leftPane.layoutParams = leftParams
@@ -2778,6 +2867,153 @@ class MainActivity : AppCompatActivity(), LocationListener {
         val rightParams = rightPane.layoutParams as LinearLayout.LayoutParams
         rightParams.weight = 1f - splitFraction
         rightPane.layoutParams = rightParams
+    }
+
+    // ---------------------------------------------------------------------
+    // Navegación: seguimiento del vehículo y tarjeta de maniobra
+    // ---------------------------------------------------------------------
+
+    /** El usuario tocó el mapa: deja de seguir hasta que recentre o pasen 10 s. */
+    private fun markMapFree() {
+        lastUserMapTouchMs = SystemClock.elapsedRealtime()
+        if (mapMode != MapMode.FREE) {
+            mapMode = MapMode.FREE
+            updateRecenterVisibility()
+        }
+    }
+
+    private fun updateRecenterVisibility() {
+        if (!::btnRecenter.isInitialized) return
+        val show = mapMode == MapMode.FREE && !RemoteMapBridge.active
+        btnRecenter.visibility = if (show) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * Centra el mapa en el coche. En navegación se orienta hacia el rumbo
+     * (heading-up) con una animación corta; en el resto, norte arriba y a un
+     * ritmo más relajado para no gastar CPU.
+     */
+    private fun centerOnPosition(
+        lat: Double,
+        lon: Double,
+        speedKmh: Float,
+        location: Location,
+        now: Long
+    ) {
+        val target = GeoPoint(lat, lon)
+        if (focus == Focus.NAV) {
+            val bearing = if (speedKmh > 12f && location.hasBearing()) location.bearing else 0f
+            animateMapBearing(bearing)
+            // Un solo redibujado por fix: animar el paneo en cada GPS (1 Hz)
+            // mantiene el mapa redibujándose casi sin pausa y en el Cortex-A7
+            // eso se nota. Con setCenter el movimiento sigue al coche igual.
+            try {
+                map.controller.setCenter(target)
+            } catch (_: Exception) {
+            }
+        } else {
+            resetMapBearing()
+            if (now - lastFollowCenterMs > 1500L) {
+                lastFollowCenterMs = now
+                try {
+                    map.controller.setCenter(target)
+                } catch (_: Exception) {
+                }
+            }
+        }
+    }
+
+    /** Gira el mapa suavemente hacia el rumbo, por el camino más corto. */
+    private fun animateMapBearing(targetBearing: Float) {
+        val from = currentBearingDeg
+        var delta = ((targetBearing - from + 540f) % 360f) - 180f
+        // Umbral alto: corregir 3° cada segundo obliga a redibujar el mapa
+        // entero. Solo se gira cuando el rumbo cambia de verdad.
+        if (Math.abs(delta) < 10f) return
+        bearingAnimator?.cancel()
+        val to = from + delta
+        currentBearingDeg = to
+        bearingAnimator = android.animation.ValueAnimator.ofFloat(from, to).apply {
+            duration = 700L
+            interpolator = android.view.animation.DecelerateInterpolator()
+            addUpdateListener {
+                try {
+                    map.mapOrientation = -((it.animatedValue as Float))
+                } catch (_: Exception) {
+                }
+            }
+            start()
+        }
+    }
+
+    private fun resetMapBearing() {
+        if (currentBearingDeg == 0f && map.mapOrientation == 0f) return
+        bearingAnimator?.cancel()
+        bearingAnimator = null
+        currentBearingDeg = 0f
+        try {
+            map.mapOrientation = 0f
+        } catch (_: Exception) {
+        }
+    }
+
+    /** Pinta la tarjeta flotante de navegación con el estado actual. */
+    private fun renderNavOverlay() {
+        if (!::navCard.isInitialized) return
+        val st = lastNavState
+        val hasRoute = st != null
+
+        navCardProgress.visibility = if (hasRoute) View.VISIBLE else View.GONE
+        navFinish.visibility = if (hasRoute) View.VISIBLE else View.GONE
+
+        if (!hasRoute) {
+            navCardIcon.setImageResource(R.drawable.ic_mav_straight)
+            navCardDist.text = "—"
+            navCardAction.text = "Sin destino activo"
+            navCardThen.text = "Planifica una ruta desde IbizaCompanion"
+            navCardEta.visibility = View.GONE
+            navCardRemaining.text = ""
+            navCardDest.text = ""
+            navCardProgress.progress = 0
+            return
+        }
+
+        val s = st!!
+        navCardIcon.setImageResource(s.icon.resId)
+        navCardDist.text = s.distText.ifBlank { "—" }
+        navCardAction.text = when {
+            s.arrived -> "Has llegado a tu destino"
+            s.offRoute -> "Fuera de ruta · recalculando"
+            s.actionText.isBlank() -> "Continúa en la ruta"
+            else -> s.actionText
+        }
+        val then = s.thenText?.takeIf { it.isNotBlank() }
+        navCardThen.text = then.orEmpty()
+        navCardThen.visibility = if (then == null) View.GONE else View.VISIBLE
+        navCardEta.text = s.etaText
+        navCardEta.visibility = if (s.etaText.isNotBlank()) View.VISIBLE else View.GONE
+        val remaining = remainingDistanceOnly(s.remainingText)
+        navCardRemaining.text = remaining
+        // Sin maniobra próxima el número grande ya es el restante: no repetirlo.
+        navCardRemaining.visibility =
+            if (remaining.isBlank() || remaining == s.distText) View.GONE else View.VISIBLE
+        navCardDest.text = s.destName
+        navCardProgress.progress = (s.progress.coerceIn(0f, 1f) * 1000f).toInt()
+    }
+
+    /** "quedan 1.2 km · 8 min" → "1.2 km" (la ETA ya se muestra aparte). */
+    private fun remainingDistanceOnly(text: String): String {
+        val clean = text.removePrefix("quedan ").trim()
+        val head = clean.substringBefore(" · ").trim()
+        return head.ifBlank { clean }
+    }
+
+    /** Pide al teléfono que deje o retome la proyección del mapa. */
+    private fun requestMapStream(on: Boolean) {
+        try {
+            NavLink.sendAsync(org.json.JSONObject().put("type", "MAP_STREAM").put("on", on))
+        } catch (_: Exception) {
+        }
     }
 
     // ---------------------------------------------------------------------
