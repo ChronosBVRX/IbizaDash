@@ -1,5 +1,6 @@
 package com.chronosbvrx.ibizacompanion.data
 
+import android.content.Context
 import android.util.LruCache
 import java.util.Locale
 
@@ -21,7 +22,7 @@ object PlaceSearch {
 
     private val cache = object : LruCache<String, Entry>(32) {}
 
-    fun search(query: String, lat: Double, lon: Double): List<PlaceResult> {
+    fun search(context: Context, query: String, lat: Double, lon: Double): List<PlaceResult> {
         val raw = query.trim()
         if (raw.length < 2) return emptyList()
         val key = "${SearchIntent.normalize(raw)}|" +
@@ -32,19 +33,41 @@ object PlaceSearch {
         }
 
         val expanded = SearchIntent.expand(raw)
-        var out = PhotonClient.search(expanded, lat, lon, MAX_RESULTS, radiusDeg = 0.35)
+        val category = SearchIntent.isCategory(raw)
+        var out: List<PlaceResult> = if (category) {
+            PhotonClient.search(expanded, lat, lon, MAX_RESULTS, radiusDeg = 0.35)
+        } else {
+            // Para direcciones y nombres, el geocodificador del teléfono suele
+            // tener más cobertura; se combina con OSM.
+            AndroidGeocoderClient.search(context, expanded, lat, lon, MAX_RESULTS, 0.35)
+        }
 
-        if (out.size < 4) {
-            val wide = PhotonClient.search(expanded, lat, lon, MAX_RESULTS, radiusDeg = 0.9)
-            out = merge(out, wide)
+        if (category || out.size < 4) {
+            out = merge(
+                out,
+                PhotonClient.search(expanded, lat, lon, MAX_RESULTS, radiusDeg = 0.35)
+            )
+        }
+        if (category && out.size < 4) {
+            out = merge(
+                out,
+                AndroidGeocoderClient.search(context, expanded, lat, lon, MAX_RESULTS, 0.35)
+            )
         }
         if (out.size < 4) {
-            val near = NominatimClient.searchNear(expanded, lat, lon, 8, radiusDeg = 0.5)
-            out = merge(out, near)
+            out = merge(
+                out,
+                PhotonClient.search(expanded, lat, lon, MAX_RESULTS, radiusDeg = 0.9)
+            )
+        }
+        if (out.size < 4) {
+            out = merge(
+                out,
+                NominatimClient.searchNear(expanded, lat, lon, 8, radiusDeg = 0.5)
+            )
         }
         if (out.isEmpty()) {
-            val mexico = NominatimClient.searchMexico(expanded, 8)
-            out = merge(out, mexico)
+            out = merge(out, NominatimClient.searchMexico(expanded, 8))
         }
 
         val ordered = out

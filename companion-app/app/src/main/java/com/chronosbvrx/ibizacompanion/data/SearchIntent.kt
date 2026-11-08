@@ -123,6 +123,8 @@ object SearchIntent {
         return map[normalize(raw)] ?: raw
     }
 
+    fun isCategory(query: String): Boolean = map.containsKey(normalize(query))
+
     /** Minúsculas, sin acentos y con espacios colapsados. */
     fun normalize(text: String): String {
         val base = Normalizer.normalize(text.lowercase(Locale("es", "MX")), Normalizer.Form.NFD)

@@ -466,7 +466,7 @@ fun NavigationScreen() {
                             delay(700L)
                             searching = true
                             val res = withContext(Dispatchers.IO) {
-                                PlaceSearch.search(q, currentLat, currentLon)
+                                PlaceSearch.search(context, q, currentLat, currentLon)
                             }
                             results = res
                             searching = false
