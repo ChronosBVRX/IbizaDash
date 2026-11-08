@@ -91,6 +91,8 @@ object VoiceSynthesizer {
                     }
                 }
                 sendClip(key, wav)
+                // El enlace comparte antena con el audio A2DP: no enviar en ráfaga.
+                pace(wav.length())
             }
             Log.i(TAG, "voz enviada: ${items.size} clips")
         } catch (e: Exception) {
@@ -155,6 +157,16 @@ object VoiceSynthesizer {
             Log.i(TAG, "clip ${file.name} ${bytes.size}B enviado=$sent")
         } catch (e: Exception) {
             Log.w(TAG, "sendClip: ${e.message}")
+        }
+    }
+
+    /** Duerme lo justo para no saturar el enlace compartido con el Bluetooth. */
+    private fun pace(bytes: Long) {
+        val ms = (bytes * 1000L / 400_000L).coerceIn(0L, 300L)
+        if (ms <= 0L) return
+        try {
+            Thread.sleep(ms)
+        } catch (_: InterruptedException) {
         }
     }
 

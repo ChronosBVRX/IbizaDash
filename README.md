@@ -10,7 +10,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
   (`IbizaDash.apk` para el estéreo, `IbizaCompanion.apk` para el teléfono).
 - **Paquete del estéreo:** `com.chronosbvrx.ibizadash`
 - **Paquete del teléfono:** `com.chronosbvrx.ibizacompanion`
-- **Versiones actuales:** IbizaDash **1.4.0** (versionCode 17) · IbizaCompanion **1.4.0** (versionCode 12)
+- **Versiones actuales:** IbizaDash **1.4.1** (versionCode 18) · IbizaCompanion **1.4.1** (versionCode 13)
 - **minSdk 23 / targetSdk 33 / compileSdk 36** (estéreo)
 - Hecho con **Views** (sin Compose) en el estéreo para que sea liviano en el Cortex-A7.
 
@@ -228,6 +228,9 @@ Tipos soportados: `tiles` (PNG en `{z}/{x}/{y}.png` que van a la caché de osmdr
 `voice` (WAV por clave de frase). En **Ajustes rápidos → Módulos del estéreo** se ven los
 instalados, su tamaño y se puede quitar el registro.
 
+Primer módulo publicado: **`tiles-morelia` v1** — 13,7 MB, 2464 teselas z13–z16 alrededor de
+Morelia.
+
 Si el release no incluye `modules.json`, la app simplemente indica que no hay módulos.
 Para pruebas locales se puede apuntar el catálogo a un servidor de la PC (solo `10.0.2.2`,
 `localhost` y `127.0.0.1` permiten HTTP en claro; el resto exige HTTPS).
@@ -253,6 +256,30 @@ SHA-256 ya calculados. En **Ajustes → Módulos** aparece y se instala con un t
 - El teléfono puede generar/instalar un pack de teselas con `scripts/build_offline_pack.py`.
 - Los `.mbtiles` (~1.2 GB) y los APK **no** se versionan en Git: se regeneran o se descargan
   de **Releases**.
+
+---
+
+## Cortes de música por Wi-Fi + Bluetooth
+
+El estéreo (`sp7731e`, SC7731E) usa un chip combo **solo de 2,4 GHz**: Wi-Fi Direct y el
+audio A2DP comparten antena, así que un pico de datos ahoga el Bluetooth. Lo que ya hace
+la app para reducirlo:
+
+- **Mapa remoto** (`MAP_FRAME`): WebP q65 en vez de JPEG q80, 1,7–2,5 fps, sin repetir
+  frames idénticos (se reenvía uno cada 2 s para que el estéreo no pierda la proyección) y
+  *throttle* adaptativo si el TCP empieza a llenarse.
+- **Teselas** (`TILE_BATCH`): tope de 8 MB (antes 12 MB) y ritmo máximo ~400 KB/s al
+  iniciar una ruta, para no saturar el enlace durante la descarga.
+- **Portadas**: 384 px (antes 512 px).
+- **Grupo Wi-Fi Direct en 5 GHz**: `WifiP2pConfig.Builder.setGroupOperatingBand` (API 29+),
+  con caída automática a 2,4 GHz si el chip no es dual-band. En **Ajustes** aparece como
+  *Wi-Fi Direct en 5 GHz*; en el `sp7731e` actual sale deshabilitado porque ni la API ni
+  el chip lo permiten.
+
+Si todavía se corta, en el teléfono: **Opciones de desarrollador → códec de audio
+Bluetooth → SBC** y desactivar la sincronización de contactos/historial del perfil.
+**No** desactives "Audio multimedia": la música viaja del teléfono al estéreo por A2DP,
+no por Wi-Fi Direct.
 
 ---
 
