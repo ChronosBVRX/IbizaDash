@@ -1,6 +1,16 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+}
+
+// Firma release real: la llave vive fuera del repo y se referencia desde
+// local.properties (no versionado). Sin esas claves, el release se firma con
+// debug como antes.
+val releaseProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
 }
 
 android {
@@ -11,10 +21,22 @@ android {
         applicationId = "com.chronosbvrx.ibizadash"
         minSdk = 23
         targetSdk = 33
-        versionCode = 5
-        versionName = "0.5.0"
+        versionCode = 6
+        versionName = "0.6.0"
         ndk {
             abiFilters += listOf("armeabi-v7a")
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            val storeFilePath = releaseProps.getProperty("release.storeFile")
+            if (!storeFilePath.isNullOrBlank()) {
+                storeFile = file(storeFilePath)
+                storePassword = releaseProps.getProperty("release.storePassword")
+                keyAlias = releaseProps.getProperty("release.keyAlias", "ibizadash")
+                keyPassword = releaseProps.getProperty("release.keyPassword")
+            }
         }
     }
 
@@ -26,7 +48,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig =
+                if (releaseProps.getProperty("release.storeFile").isNullOrBlank()) {
+                    signingConfigs.getByName("debug")
+                } else {
+                    signingConfigs.getByName("release")
+                }
         }
     }
 

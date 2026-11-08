@@ -22,7 +22,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 object MapFrameSender {
     private const val TAG = "MapFrame"
-    private const val INTERVAL_MS = 500L
+    private const val INTERVAL_SLOW_MS = 500L // 2 fps aparcado / despacio
+    private const val INTERVAL_FAST_MS = 333L // 3 fps por encima de 30 km/h
+    private const val FAST_SPEED_KMH = 30f
     private const val TARGET_W = 1024
     private const val TARGET_H = 720
 
@@ -38,9 +40,21 @@ object MapFrameSender {
     @Volatile
     private var running = false
 
+    /** Velocidad actual del coche (la alimenta PhoneNavController). */
+    @Volatile
+    private var speedKmh = 0f
+
     private var seq = 0
 
     private val capture = Runnable { captureFrame() }
+
+    /** FPS adaptativo: 2 fps parado/despacio, 3 fps en marcha. */
+    fun setSpeed(speed: Float) {
+        speedKmh = speed
+    }
+
+    private fun currentIntervalMs(): Long =
+        if (speedKmh > FAST_SPEED_KMH) INTERVAL_FAST_MS else INTERVAL_SLOW_MS
 
     fun start(view: WebView) {
         if (running && webView === view) return
@@ -49,6 +63,9 @@ object MapFrameSender {
         busy.set(false)
         mainHandler.removeCallbacks(capture)
         mainHandler.post(capture)
+        // La proyección vive bajo el servicio en primer plano: wake lock
+        // parcial + notificación visible mientras se transmite el mapa.
+        com.chronosbvrx.ibizacompanion.service.MediaBridgeService.setMapStreaming(true)
         Log.i(TAG, "proyección de mapa iniciada")
     }
 
@@ -57,6 +74,7 @@ object MapFrameSender {
         running = false
         webView = null
         mainHandler.removeCallbacks(capture)
+        com.chronosbvrx.ibizacompanion.service.MediaBridgeService.setMapStreaming(false)
         // El envío va al hilo de red: stop() se llama desde la UI.
         io.execute {
             try {
@@ -138,6 +156,6 @@ object MapFrameSender {
 
     private fun schedule() {
         mainHandler.removeCallbacks(capture)
-        if (running) mainHandler.postDelayed(capture, INTERVAL_MS)
+        if (running) mainHandler.postDelayed(capture, currentIntervalMs())
     }
 }

@@ -5,6 +5,12 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Propiedades locales (no versionadas): API key de YouTube y firma release.
+val localProps = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
 android {
     namespace = "com.chronosbvrx.ibizacompanion"
     compileSdk = 34
@@ -13,17 +19,13 @@ android {
         applicationId = "com.chronosbvrx.ibizacompanion"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "0.4.0"
+        versionCode = 5
+        versionName = "0.5.0"
         manifestPlaceholders["redirectSchemeName"] = "spotify-sdk"
         manifestPlaceholders["redirectHostName"] = "auth"
 
         // La API key de YouTube NO se versiona. Se puede definir en
         // local.properties (YOUTUBE_API_KEY=...) o con -PYOUTUBE_API_KEY=...
-        val localProps = Properties().apply {
-            val file = rootProject.file("local.properties")
-            if (file.exists()) file.inputStream().use { load(it) }
-        }
         val youtubeKey = (project.findProperty("YOUTUBE_API_KEY") as? String)
             ?: localProps.getProperty("YOUTUBE_API_KEY", "")
         buildConfigField(
@@ -33,9 +35,30 @@ android {
         )
     }
 
+    // Firma release real: la llave vive fuera del repo y se referencia desde
+    // local.properties (no versionado). Sin esas claves, el release se firma
+    // con debug como antes.
+    signingConfigs {
+        create("release") {
+            val storeFilePath = localProps.getProperty("release.storeFile")
+            if (!storeFilePath.isNullOrBlank()) {
+                storeFile = file(storeFilePath)
+                storePassword = localProps.getProperty("release.storePassword")
+                keyAlias = localProps.getProperty("release.keyAlias", "ibizadash")
+                keyPassword = localProps.getProperty("release.keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig =
+                if (localProps.getProperty("release.storeFile").isNullOrBlank()) {
+                    signingConfigs.getByName("debug")
+                } else {
+                    signingConfigs.getByName("release")
+                }
         }
     }
 

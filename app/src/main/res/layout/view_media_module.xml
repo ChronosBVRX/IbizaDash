@@ -53,7 +53,7 @@
                     style="@style/Label"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="BLUETOOTH · USB · STREAMING" />
+                    android:text="BLUETOOTH · RADIO FM" />
             </LinearLayout>
 
             <LinearLayout
@@ -156,7 +156,7 @@
                     android:layout_marginTop="2dp"
                     android:ellipsize="end"
                     android:maxLines="1"
-                    android:text="Bluetooth · USB · Streaming"
+                    android:text="Bluetooth · Radio FM"
                     android:textColor="@color/text_secondary"
                     android:textSize="15sp" />
 

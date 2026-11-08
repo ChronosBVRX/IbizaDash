@@ -1,6 +1,7 @@
 package com.chronosbvrx.ibizacompanion.feature.navigation
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
@@ -8,6 +9,7 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
 import android.util.Log
+import android.view.WindowManager
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -416,6 +418,21 @@ fun NavigationScreen() {
                 MapFrameSender.start(view)
             } else {
                 MapFrameSender.stop()
+            }
+        }
+
+        // La Fase 2 captura la WebView visible: si la pantalla se apaga, la
+        // WebView deja de dibujar y el estéreo cae al mapa nativo. Mientras
+        // haya ruta activa y enlace Wi-Fi, la pantalla no se apaga.
+        DisposableEffect(appState.routeActive, appState.wifiConnected) {
+            val window = (context as? Activity)?.window
+            if (appState.routeActive && appState.wifiConnected) {
+                window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            } else {
+                window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+            onDispose {
+                window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
         }
 

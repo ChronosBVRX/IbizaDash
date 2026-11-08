@@ -104,8 +104,8 @@
 
         <ImageButton
             android:id="@+id/btnSettings"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_marginStart="4dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Ajustes rápidos"
@@ -339,8 +339,10 @@
             android:textSize="9sp" />
     </LinearLayout>
 
-    <!-- Thermal/electrical health (replaces the fake A/C/FAN/REC controls) -->
+    <!-- Thermal/electrical health (replaces the fake A/C/FAN/REC controls).
+         Se oculta hasta que haya datos OBD o de luces: sin dato, no se muestra. -->
     <LinearLayout
+        android:id="@+id/healthRow"
         android:layout_width="match_parent"
         android:layout_height="46dp"
         android:layout_marginTop="6dp"
@@ -373,7 +375,7 @@
             android:layout_weight="1"
             android:fontFeatureSettings="tnum"
             android:maxLines="2"
-            android:text="Salud: — °C · — V · — %"
+            android:text="Salud: esperando datos OBD…"
             android:textColor="@color/text_secondary"
             android:textSize="10sp" />
 

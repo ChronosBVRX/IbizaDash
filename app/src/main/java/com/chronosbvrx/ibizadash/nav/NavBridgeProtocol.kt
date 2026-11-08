@@ -59,7 +59,23 @@ object NavBridgeProtocol {
                         .put("type", "WELCOME")
                         .put("proto", PROTOCOL_VERSION)
                         .put("transport", obj.optString("transport", "?"))
+                        .put(
+                            "stereoVersionCode",
+                            com.chronosbvrx.ibizadash.ota.OtaReceiver
+                                .installedVersionCode(context)
+                        )
+                        .put(
+                            "stereoVersionName",
+                            com.chronosbvrx.ibizadash.ota.OtaReceiver
+                                .installedVersionName(context)
+                        )
                 )
+            }
+
+            // OTA: el teléfono envía el APK nuevo por este mismo canal.
+            "APK_META", "APK_CHUNK", "APK_END" -> {
+                val answer = com.chronosbvrx.ibizadash.ota.OtaReceiver.handle(context, obj)
+                if (answer != null) reply(answer)
             }
 
             "ROUTE_SET" -> {

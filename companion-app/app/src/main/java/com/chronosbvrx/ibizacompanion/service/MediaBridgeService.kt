@@ -49,6 +49,16 @@ class MediaBridgeService : Service() {
         fun promoteLocationForeground() {
             instance?.promoteLocation()
         }
+
+        /**
+         * La proyección del mapa (Fase 2) vive bajo este servicio en primer
+         * plano: wake lock parcial + notificación visible mientras se
+         * transmite. La WebView del teléfono solo dibuja con la pantalla
+         * encendida; esto evita que Android mate el proceso en marcha.
+         */
+        fun setMapStreaming(active: Boolean) {
+            instance?.setMapStreamingInternal(active)
+        }
     }
 
     private val serviceJob = SupervisorJob()
@@ -101,6 +111,35 @@ class MediaBridgeService : Service() {
                 }
                 delay(2000L)
             }
+        }
+    }
+
+    private var mapWakeLock: android.os.PowerManager.WakeLock? = null
+    @Volatile private var mapStreaming = false
+
+    private fun setMapStreamingInternal(active: Boolean) {
+        if (active == mapStreaming) return
+        mapStreaming = active
+        try {
+            if (active) {
+                val pm = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+                val lock = pm?.newWakeLock(
+                    android.os.PowerManager.PARTIAL_WAKE_LOCK,
+                    "IbizaCompanion:MapStream"
+                )
+                lock?.acquire()
+                mapWakeLock = lock
+                updateNotification("Transmitiendo mapa al estéreo")
+            } else {
+                try {
+                    mapWakeLock?.release()
+                } catch (_: Exception) {
+                }
+                mapWakeLock = null
+                updateNotification(lastLinkNotification ?: "IbizaCompanion")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "mapStreaming: ${e.message}")
         }
     }
 
@@ -240,6 +279,21 @@ class MediaBridgeService : Service() {
                 it.copy(lastStereoMs = SystemClock.elapsedRealtime())
             }
             when (obj.optString("type")) {
+                "WELCOME" -> {
+                    val vc = obj.optInt("stereoVersionCode", 0)
+                    if (vc > 0) {
+                        com.chronosbvrx.ibizacompanion.core.state.CompanionState.update {
+                            it.copy(
+                                stereoVersionCode = vc,
+                                stereoVersionName = obj.optString("stereoVersionName", "")
+                            )
+                        }
+                    }
+                }
+                "APK_META_ACK", "APK_CHUNK_ACK", "APK_CHUNK_NACK",
+                "APK_END_OK", "OTA_ERROR", "OTA_ALREADY_NEWER" -> {
+                    com.chronosbvrx.ibizacompanion.ota.OtaSender.onReply(obj)
+                }
                 "PONG" -> lastPongMs = SystemClock.elapsedRealtime()
                 "NAV_STATE" -> handleNavState(obj)
                 "REROUTE_REQUEST" -> handleReroute(obj)
@@ -616,6 +670,12 @@ class MediaBridgeService : Service() {
     }
 
     override fun onDestroy() {
+        try {
+            mapWakeLock?.release()
+        } catch (_: Exception) {
+        }
+        mapWakeLock = null
+        mapStreaming = false
         com.chronosbvrx.ibizacompanion.core.state.CompanionState.update {
             it.copy(serviceRunning = false, btConnected = false, wifiConnected = false)
         }

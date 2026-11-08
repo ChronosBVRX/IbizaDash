@@ -21,7 +21,9 @@ import androidx.compose.ui.unit.dp
 import com.chronosbvrx.ibizacompanion.BridgeLink
 import com.chronosbvrx.ibizacompanion.core.design.theme.IbizaColors
 import com.chronosbvrx.ibizacompanion.core.state.CompanionState
+import com.chronosbvrx.ibizacompanion.core.state.CompanionUiState
 import com.chronosbvrx.ibizacompanion.data.StereoPrefs
+import com.chronosbvrx.ibizacompanion.ota.OtaSender
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -365,6 +367,85 @@ fun ConnectionScreen() {
                     style = MaterialTheme.typography.bodySmall,
                     color = IbizaColors.TextSecondary
                 )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        OtaSection(state)
+    }
+}
+
+/**
+ * Actualización OTA del estéreo: el APK va incluido en esta app y viaja por
+ * Wi-Fi Direct. Sin ADB y sin cables; el estéreo lo instala cuando el
+ * usuario lo confirma en su pantalla.
+ */
+@Composable
+private fun OtaSection(state: CompanionUiState) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val bundled = remember { OtaSender.bundledInfo(context) }
+    val stereoVc = state.stereoVersionCode
+    val stereoName = state.stereoVersionName.takeIf { it.isNotBlank() } ?: "v$stereoVc"
+    val updateAvailable = bundled != null && stereoVc > 0 && bundled.versionCode > stereoVc
+
+    Surface(shape = RoundedCornerShape(16.dp), color = IbizaColors.Surface, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                "ACTUALIZACIÓN DEL ESTÉREO",
+                style = MaterialTheme.typography.labelSmall,
+                color = IbizaColors.TextSecondary
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                when {
+                    bundled == null -> "Esta versión de la app no incluye el APK del estéreo."
+                    stereoVc == 0 -> "Estéreo sin conectar: la versión se lee al conectar."
+                    updateAvailable -> "Estéreo $stereoName · incluida v${bundled.versionName}"
+                    else -> "Estéreo al día ($stereoName)"
+                },
+                style = MaterialTheme.typography.titleMedium,
+                color = IbizaColors.TextPrimary
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "La actualización viaja por Wi-Fi Direct y se instala desde el estéreo. Sin ADB.",
+                style = MaterialTheme.typography.bodySmall,
+                color = IbizaColors.TextSecondary
+            )
+            if (state.otaStatus.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    state.otaStatus,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (state.otaProgress >= 1f) IbizaColors.Success else IbizaColors.TextSecondary
+                )
+            }
+            if (state.otaSending) {
+                Spacer(Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { state.otaProgress.coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = IbizaColors.Primary,
+                    trackColor = IbizaColors.SurfaceElevated
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = {
+                    scope.launch(Dispatchers.IO) { OtaSender.sendUpdate(context) }
+                },
+                enabled = updateAvailable && !state.otaSending,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = IbizaColors.Primary,
+                    contentColor = IbizaColors.Background
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (state.otaSending) "Enviando…" else "Actualizar estéreo")
             }
         }
     }
