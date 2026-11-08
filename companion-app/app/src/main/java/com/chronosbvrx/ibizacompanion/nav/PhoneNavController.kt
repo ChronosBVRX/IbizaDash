@@ -212,6 +212,7 @@ object PhoneNavController {
         Thread {
             try {
                 val built = RouteBuilder.build(
+                    context,
                     from.lat,
                     from.lon,
                     route.destLat,
@@ -227,7 +228,9 @@ object PhoneNavController {
                     built.distanceMeters,
                     built.durationSeconds,
                     built.encodedPolyline,
-                    built.steps
+                    built.steps,
+                    built.trafficDelaySeconds,
+                    built.trafficSections
                 )
                 Log.i(TAG, "reroute enviada=$sent")
                 if (sent) {

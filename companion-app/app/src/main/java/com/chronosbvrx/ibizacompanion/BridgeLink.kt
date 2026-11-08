@@ -26,7 +26,9 @@ object BridgeLink {
         totalDistanceMeters: Int,
         totalDurationSeconds: Int,
         encodedPolyline: String,
-        steps: List<JSONObject>
+        steps: List<JSONObject>,
+        trafficDelaySeconds: Int = 0,
+        trafficSections: List<com.chronosbvrx.ibizacompanion.data.TomTomRouting.TrafficSection> = emptyList()
     ): Boolean {
         val r = router ?: return false
         return r.isConnected() && r.sendRouteSet(
@@ -34,7 +36,9 @@ object BridgeLink {
             totalDistanceMeters,
             totalDurationSeconds,
             encodedPolyline,
-            steps
+            steps,
+            trafficDelaySeconds,
+            trafficSections
         )
     }
 

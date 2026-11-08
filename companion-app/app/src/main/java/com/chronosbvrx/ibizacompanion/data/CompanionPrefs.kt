@@ -6,6 +6,7 @@ import android.content.Context
 object CompanionPrefs {
     private const val FILE = "companion_prefs"
     private const val KEY_AUTO_UPDATE = "auto_update"
+    private const val KEY_TRAFFIC = "traffic_key"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -20,5 +21,20 @@ object CompanionPrefs {
 
     fun setAutoUpdate(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_AUTO_UPDATE, enabled).apply()
+    }
+
+    /**
+     * Clave del proveedor de tráfico (TomTom).
+     *
+     * Vive en las preferencias del teléfono, no en el APK: el APK se publica en
+     * GitHub y una clave compilada quedaría expuesta a cualquiera.
+     */
+    fun trafficKey(context: Context): String =
+        prefs(context).getString(KEY_TRAFFIC, "").orEmpty().trim()
+
+    fun setTrafficKey(context: Context, key: String) {
+        prefs(context).edit()
+            .putString(KEY_TRAFFIC, key.trim())
+            .apply()
     }
 }

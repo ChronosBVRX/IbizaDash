@@ -410,7 +410,7 @@ class MediaBridgeService : Service() {
             val oLat = fix?.latitude ?: fromLat
             val oLon = fix?.longitude ?: fromLon
             val built = com.chronosbvrx.ibizacompanion.data.RouteBuilder.build(
-                oLat, oLon, destLat, destLon, destName
+                this@MediaBridgeService, oLat, oLon, destLat, destLon, destName
             )
             if (built == null) {
                 Log.w(TAG, "reroute: OSRM sin respuesta")

@@ -157,6 +157,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private lateinit var navCardEta: TextView
     private lateinit var navCardRemaining: TextView
     private lateinit var navCardDest: TextView
+    private lateinit var navCardTraffic: TextView
     private lateinit var navCardProgress: ProgressBar
     private lateinit var navFinish: View
     private lateinit var navExit: View
@@ -714,6 +715,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         navCardEta = findViewById(R.id.navCardEta)
         navCardRemaining = findViewById(R.id.navCardRemaining)
         navCardDest = findViewById(R.id.navCardDest)
+        navCardTraffic = findViewById(R.id.navCardTraffic)
         navCardProgress = findViewById(R.id.navCardProgress)
         navFinish = findViewById(R.id.navFinish)
         navExit = findViewById(R.id.navExit)
@@ -1094,6 +1096,25 @@ class MainActivity : AppCompatActivity(), LocationListener {
         polyline.isGeodesic = false
         map.overlays.add(polyline)
         routeOverlays.add(polyline)
+
+        // Tramos con tráfico: se pintan encima y más gruesos, como en Waze.
+        if (route.trafficSections.isNotEmpty() && points.size > 2) {
+            for (span in route.trafficSections) {
+                val fromIdx = (span.from * (points.size - 1)).toInt()
+                    .coerceIn(0, points.size - 2)
+                val toIdx = (span.to * (points.size - 1)).toInt()
+                    .coerceIn(fromIdx + 1, points.size - 1)
+                val sub = points.subList(fromIdx, toIdx + 1)
+                if (sub.size < 2) continue
+                val overlay = Polyline(map)
+                overlay.setPoints(ArrayList(sub))
+                overlay.outlinePaint.color = trafficColor(span.speedKmh)
+                overlay.outlinePaint.strokeWidth = 13f
+                overlay.isGeodesic = false
+                map.overlays.add(overlay)
+                routeOverlays.add(overlay)
+            }
+        }
         val end = points.last()
         val marker = Marker(map)
         marker.position = end
@@ -1113,8 +1134,14 @@ class MainActivity : AppCompatActivity(), LocationListener {
         NavRepository.publish(route.destinationName, "A ${route.totalDistanceMeters / 1000} km · ${route.totalDurationSeconds / 60} min", null)
     }
 
-    private fun clearNavRoute() {
-        if (routeOverlays.isNotEmpty()) {
+    /** Color del tramo según la velocidad efectiva que reporta el proveedor. */
+    private fun trafficColor(kmh: Int): Int = when {
+        kmh in 1..20 -> Color.parseColor("#EF4444")
+        kmh in 21..40 -> Color.parseColor("#F59E0B")
+        else -> Color.parseColor("#EAB308")
+    }
+
+    private fun clearNavRoute() {        if (routeOverlays.isNotEmpty()) {
             routeOverlays.forEach { map.overlays.remove(it) }
             routeOverlays.clear()
         }
@@ -1137,12 +1164,28 @@ class MainActivity : AppCompatActivity(), LocationListener {
             } else {
                 try {
                     val obj = org.json.JSONObject(json)
+                    val spans = ArrayList<com.chronosbvrx.ibizadash.nav.TrafficSpan>()
+                    obj.optJSONArray("trafficSections")?.let { arr ->
+                        for (i in 0 until arr.length()) {
+                            val s = arr.optJSONObject(i) ?: continue
+                            spans.add(
+                                com.chronosbvrx.ibizadash.nav.TrafficSpan(
+                                    from = s.optDouble("from", 0.0).toFloat(),
+                                    to = s.optDouble("to", 0.0).toFloat(),
+                                    delaySeconds = s.optInt("delayS", 0),
+                                    speedKmh = s.optInt("kmh", 0)
+                                )
+                            )
+                        }
+                    }
                     val route = NavRoute(
                         destinationName = obj.optString("destinationName", "Destino"),
                         totalDistanceMeters = obj.optInt("totalDistanceMeters", 0),
                         totalDurationSeconds = obj.optInt("totalDurationSeconds", 0),
                         encodedPolyline = obj.optString("encodedPolyline", ""),
-                        steps = emptyList()
+                        steps = emptyList(),
+                        trafficDelaySeconds = obj.optInt("trafficDelayS", 0),
+                        trafficSections = spans
                     )
                     NavRouteRepository.set(route)
                 } catch (_: Exception) {
@@ -2972,10 +3015,20 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private fun renderNavOverlay() {
         if (!::navCard.isInitialized) return
         val st = lastNavState
+        val route = NavRouteRepository.current
         val hasRoute = st != null
 
         navCardProgress.visibility = if (hasRoute) View.VISIBLE else View.GONE
         navFinish.visibility = if (hasRoute) View.VISIBLE else View.GONE
+
+        // Aviso de tráfico: solo si aporta (más de un minuto de retraso).
+        val delayS = route?.trafficDelaySeconds ?: 0
+        if (hasRoute && delayS >= 60) {
+            navCardTraffic.text = "TRÁFICO +${delayS / 60} MIN"
+            navCardTraffic.visibility = View.VISIBLE
+        } else {
+            navCardTraffic.visibility = View.GONE
+        }
 
         if (!hasRoute) {
             navCardIcon.setImageResource(R.drawable.ic_mav_straight)

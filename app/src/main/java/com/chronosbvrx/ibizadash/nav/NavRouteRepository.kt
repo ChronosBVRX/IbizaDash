@@ -11,12 +11,23 @@ data class NavStep(
     val distanceMeters: Int = 0
 )
 
+/** Tramo con retraso, en fracción 0..1 del recorrido total. */
+data class TrafficSpan(
+    val from: Float,
+    val to: Float,
+    val delaySeconds: Int,
+    val speedKmh: Int
+)
+
 data class NavRoute(
     val destinationName: String,
     val totalDistanceMeters: Int,
     val totalDurationSeconds: Int,
     val encodedPolyline: String,
-    val steps: List<NavStep> = emptyList()
+    val steps: List<NavStep> = emptyList(),
+    /** Retraso por tráfico en segundos (0 = sin dato). */
+    val trafficDelaySeconds: Int = 0,
+    val trafficSections: List<TrafficSpan> = emptyList()
 )
 
 object NavRouteRepository {

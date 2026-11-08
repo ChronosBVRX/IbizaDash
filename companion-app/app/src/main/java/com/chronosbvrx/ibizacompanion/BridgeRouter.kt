@@ -24,14 +24,18 @@ class BridgeRouter(private val wifi: WifiBridgeClient) {
         totalDistanceMeters: Int,
         totalDurationSeconds: Int,
         encodedPolyline: String,
-        steps: List<JSONObject>
+        steps: List<JSONObject>,
+        trafficDelaySeconds: Int = 0,
+        trafficSections: List<com.chronosbvrx.ibizacompanion.data.TomTomRouting.TrafficSection> = emptyList()
     ): Boolean = send(
         routeJson(
             destinationName,
             totalDistanceMeters,
             totalDurationSeconds,
             encodedPolyline,
-            steps
+            steps,
+            trafficDelaySeconds,
+            trafficSections
         )
     )
 
@@ -80,7 +84,9 @@ class BridgeRouter(private val wifi: WifiBridgeClient) {
             totalDistanceMeters: Int,
             totalDurationSeconds: Int,
             encodedPolyline: String,
-            steps: List<JSONObject>
+            steps: List<JSONObject>,
+            trafficDelaySeconds: Int = 0,
+            trafficSections: List<com.chronosbvrx.ibizacompanion.data.TomTomRouting.TrafficSection> = emptyList()
         ): JSONObject {
             val arr = JSONArray()
             steps.forEach { arr.put(it) }
@@ -91,6 +97,11 @@ class BridgeRouter(private val wifi: WifiBridgeClient) {
                 .put("totalDurationSeconds", totalDurationSeconds)
                 .put("encodedPolyline", encodedPolyline)
                 .put("steps", arr)
+                .put("trafficDelayS", trafficDelaySeconds)
+                .put(
+                    "trafficSections",
+                    com.chronosbvrx.ibizacompanion.data.TomTomRouting.sectionsJson(trafficSections)
+                )
         }
 
         fun stepJson(

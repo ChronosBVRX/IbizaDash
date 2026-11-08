@@ -9,17 +9,54 @@ data class BuiltRoute(
     val distanceMeters: Int,
     val durationSeconds: Int,
     val encodedPolyline: String,
-    val steps: List<JSONObject>
+    val steps: List<JSONObject>,
+    /** Retraso total por tráfico en segundos (0 si no hay dato). */
+    val trafficDelaySeconds: Int = 0,
+    /** Tramos lentos para colorear la ruta en el estéreo. */
+    val trafficSections: List<TomTomRouting.TrafficSection> = emptyList()
 )
 
 /**
- * Builds a stereo-ready route (polyline + maneuver steps) from OSRM.
- * Shared by the Navigation screen and the background reroute handler so both
- * produce the same JSON shape, including street names and turn modifiers
- * (the stereo needs them for "sentidos" and maneuver icons).
+ * Builds a stereo-ready route (polyline + maneuver steps).
+ *
+ * Si hay clave de TomTom, la ruta se calcula con **tráfico real** (ETA y tramos
+ * lentos). Si el proveedor falla, cae a OSRM para no dejar al conductor sin
+ * ruta nunca.
  */
 object RouteBuilder {
     fun build(
+        context: android.content.Context,
+        fromLat: Double,
+        fromLon: Double,
+        toLat: Double,
+        toLon: Double,
+        destinationName: String
+    ): BuiltRoute? {
+        val trafficKey = TomTomRouting.keyFor(context)
+        if (trafficKey.isNotBlank()) {
+            val traffic = try {
+                TomTomRouting.route(trafficKey, fromLat, fromLon, toLat, toLon)
+            } catch (e: Exception) {
+                Log.w("RouteBuilder", "tomtom: ${e.message}")
+                null
+            }
+            if (traffic != null && traffic.encodedPolyline.isNotBlank()) {
+                return BuiltRoute(
+                    destinationName = destinationName,
+                    distanceMeters = traffic.distanceMeters,
+                    durationSeconds = traffic.durationSeconds,
+                    encodedPolyline = traffic.encodedPolyline,
+                    steps = traffic.steps,
+                    trafficDelaySeconds = traffic.trafficDelaySeconds,
+                    trafficSections = traffic.trafficSections
+                )
+            }
+            Log.w("RouteBuilder", "TomTom sin ruta; se usa OSRM")
+        }
+        return buildOsrm(fromLat, fromLon, toLat, toLon, destinationName)
+    }
+
+    private fun buildOsrm(
         fromLat: Double,
         fromLon: Double,
         toLat: Double,

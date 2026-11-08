@@ -54,7 +54,9 @@ private data class RoutePreview(
     val distanceMeters: Int,
     val durationSeconds: Int,
     val encodedPolyline: String,
-    val steps: List<JSONObject>
+    val steps: List<JSONObject>,
+    val trafficDelaySeconds: Int = 0,
+    val trafficSections: List<com.chronosbvrx.ibizacompanion.data.TomTomRouting.TrafficSection> = emptyList()
 )
 
 private const val MAP_HTML = """
@@ -220,7 +222,7 @@ fun NavigationScreen() {
             status = "Calculando ruta…"
             val built = withContext(Dispatchers.IO) {
                 com.chronosbvrx.ibizacompanion.data.RouteBuilder.build(
-                    fromLat, fromLon, dest.lat, dest.lon, dest.displayName
+                    context, fromLat, fromLon, dest.lat, dest.lon, dest.displayName
                 )
             }
             if (built == null) {
@@ -229,7 +231,8 @@ fun NavigationScreen() {
             }
             val preview = RoutePreview(
                 dest, built.distanceMeters, built.durationSeconds,
-                built.encodedPolyline, built.steps
+                built.encodedPolyline, built.steps,
+                built.trafficDelaySeconds, built.trafficSections
             )
             route = preview
             status = null
@@ -295,7 +298,9 @@ fun NavigationScreen() {
                     preview.distanceMeters,
                     preview.durationSeconds,
                     preview.encodedPolyline,
-                    preview.steps
+                    preview.steps,
+                    preview.trafficDelaySeconds,
+                    preview.trafficSections
                 )
             }
             if (ok) {

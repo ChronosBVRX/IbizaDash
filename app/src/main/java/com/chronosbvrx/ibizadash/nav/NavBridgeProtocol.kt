@@ -105,7 +105,9 @@ object NavBridgeProtocol {
                         totalDistanceMeters = obj.optInt("totalDistanceMeters", 0),
                         totalDurationSeconds = obj.optInt("totalDurationSeconds", 0),
                         encodedPolyline = obj.optString("encodedPolyline", ""),
-                        steps = steps
+                        steps = steps,
+                        trafficDelaySeconds = obj.optInt("trafficDelayS", 0),
+                        trafficSections = parseTrafficSections(obj)
                     )
                 )
             }
@@ -224,9 +226,29 @@ object NavBridgeProtocol {
         }
     }
 
+    /** Tramos lentos que manda el teléfono (fracción 0..1 del recorrido). */
+    private fun parseTrafficSections(obj: JSONObject): List<TrafficSpan> {
+        val arr = obj.optJSONArray("trafficSections") ?: return emptyList()
+        val out = ArrayList<TrafficSpan>(arr.length())
+        for (i in 0 until arr.length()) {
+            val s = arr.optJSONObject(i) ?: continue
+            val from = s.optDouble("from", -1.0).toFloat()
+            val to = s.optDouble("to", -1.0).toFloat()
+            if (from < 0f || to <= from) continue
+            out.add(
+                TrafficSpan(
+                    from = from.coerceIn(0f, 1f),
+                    to = to.coerceIn(0f, 1f),
+                    delaySeconds = s.optInt("delayS", 0),
+                    speedKmh = s.optInt("kmh", 0)
+                )
+            )
+        }
+        return out
+    }
+
     /**
-     * Guarda una tesela en la caché de osmdroid:
-     * files/osmdroid/tiles/EsriDark/{z}/{x}/{y}.png
+     * Guarda una tesela en la caché de osmdroid:     * files/osmdroid/tiles/EsriDark/{z}/{x}/{y}.png
      */
     private fun saveTile(context: Context, obj: JSONObject) {
         try {

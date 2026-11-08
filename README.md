@@ -10,7 +10,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
   (`IbizaDash.apk` para el estéreo, `IbizaCompanion.apk` para el teléfono).
 - **Paquete del estéreo:** `com.chronosbvrx.ibizadash`
 - **Paquete del teléfono:** `com.chronosbvrx.ibizacompanion`
-- **Versiones actuales:** IbizaDash **1.2.0** (versionCode 15) · IbizaCompanion **1.2.0** (versionCode 10)
+- **Versiones actuales:** IbizaDash **1.3.0** (versionCode 16) · IbizaCompanion **1.3.0** (versionCode 11)
 - **minSdk 23 / targetSdk 33 / compileSdk 36** (estéreo)
 - Hecho con **Views** (sin Compose) en el estéreo para que sea liviano en el Cortex-A7.
 
@@ -199,16 +199,20 @@ del sistema y la envía por Wi-Fi Direct como un WAV corto:
 Se activa o desactiva en **Ajustes rápidos → Navegación → Voz de navegación**, donde también
 se ve el peso de la caché y se puede liberar. Las frases se piden una sola vez.
 
-### Tráfico (Fase C, pendiente de clave)
+### Tráfico en tiempo real (TomTom)
 
-La ruta y la ETA con tráfico usan un proveedor externo. La clave se pone en
-`companion-app/local.properties` (no versionado):
+La ruta se calcula con **tráfico real**: ETA, tramos lentos coloreados y aviso de retraso.
 
-```properties
-TOMTOM_API_KEY=tu_clave
-```
+La clave se pega **una vez en el teléfono**: `Ajustes → TRÁFICO EN TIEMPO REAL → Añadir clave`.
+Se guarda en las preferencias del teléfono y **no viaja dentro del APK**, porque el release es
+público en GitHub. Si no hay clave, la app calcula la ruta igual (OSRM) sin datos de tráfico.
 
-Sin clave, la app sigue funcionando igual: ruta por OSRM y sin datos de tráfico.
+El estéreo pinta los tramos con retraso en rojo/ámbar sobre la ruta y muestra
+`TRÁFICO +X MIN` cuando el retraso supera un minuto. Esa información viaja en `ROUTE_SET`
+(`trafficDelayS` y `trafficSections`), así que no necesita Internet en el coche.
+
+Si el proveedor falla o agota la cuota, `RouteBuilder` cae automáticamente a OSRM: nunca se
+queda sin ruta.
 
 ---
 

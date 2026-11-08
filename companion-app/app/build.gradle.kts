@@ -1,4 +1,4 @@
-﻿import java.util.Properties
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -19,8 +19,8 @@ android {
         applicationId = "com.chronosbvrx.ibizacompanion"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10
-        versionName = "1.2.0"
+        versionCode = 11
+        versionName = "1.3.0"
         manifestPlaceholders["redirectSchemeName"] = "spotify-sdk"
         manifestPlaceholders["redirectHostName"] = "auth"
 
@@ -34,7 +34,7 @@ android {
             "\"${youtubeKey.replace("\\", "\\\\").replace("\"", "\\\"")}\""
         )
 
-        // Clave de tráfico (Fase C). Igual que la de YouTube, nunca se versiona.
+        // Clave de tr?fico (Fase C). Igual que la de YouTube, nunca se versiona.
         // Se define en local.properties: TOMTOM_API_KEY=...
         val tomtomKey = localProps.getProperty("TOMTOM_API_KEY", "")
         buildConfigField(

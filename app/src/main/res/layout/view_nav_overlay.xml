@@ -159,6 +159,23 @@
                 android:textSize="11sp" />
 
             <TextView
+                android:id="@+id/navCardTraffic"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/bg_status_pill"
+                android:backgroundTint="#22F59E0B"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="center"
+                android:letterSpacing="0.06"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:text="TRÁFICO +6 MIN"
+                android:textColor="@color/amber"
+                android:textSize="10sp"
+                android:visibility="gone" />
+
+            <TextView
                 android:id="@+id/navFinish"
                 android:layout_width="wrap_content"
                 android:layout_height="40dp"

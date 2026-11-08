@@ -59,6 +59,8 @@ fun SettingsScreen() {
 
         SelfUpdateCard()
         Spacer(Modifier.height(8.dp))
+        TrafficKeyCard()
+        Spacer(Modifier.height(8.dp))
         if (spotifyInstalled) {
             SpotifyCard()
             Spacer(Modifier.height(8.dp))
@@ -316,6 +318,118 @@ private fun SelfUpdateCard() {
                 }
             }
         }
+    }
+}
+
+/**
+ * Clave del proveedor de tráfico. Se guarda en el teléfono y nunca va dentro
+ * del APK publicado: así el release de GitHub no expone la clave.
+ */
+@Composable
+private fun TrafficKeyCard() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var saved by remember { mutableStateOf(CompanionPrefs.trafficKey(context)) }
+    var editing by remember { mutableStateOf(false) }
+    var draft by remember { mutableStateOf("") }
+    var status by remember { mutableStateOf<String?>(null) }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = IbizaColors.Surface,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                "TRÁFICO EN TIEMPO REAL",
+                style = MaterialTheme.typography.labelSmall,
+                color = IbizaColors.TextSecondary
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                if (saved.isBlank()) "Sin clave · ruta sin datos de tráfico"
+                else "Clave configurada · ruta con tráfico y ETA real",
+                style = MaterialTheme.typography.titleMedium,
+                color = IbizaColors.TextPrimary
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                status ?: "Se guarda solo en este teléfono. El APK publicado no incluye claves.",
+                style = MaterialTheme.typography.bodySmall,
+                color = IbizaColors.TextSecondary
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = {
+                        draft = saved
+                        editing = true
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = IbizaColors.Primary,
+                        contentColor = IbizaColors.Background
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text(if (saved.isBlank()) "Añadir clave" else "Cambiar clave") }
+                if (saved.isNotBlank()) {
+                    OutlinedButton(
+                        onClick = {
+                            CompanionPrefs.setTrafficKey(context, "")
+                            saved = ""
+                            status = "Clave borrada"
+                        },
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("Borrar", color = IbizaColors.TextSecondary) }
+                }
+            }
+        }
+    }
+
+    if (editing) {
+        AlertDialog(
+            onDismissRequest = { editing = false },
+            title = { Text("Clave de tráfico", color = IbizaColors.TextPrimary) },
+            text = {
+                Column {
+                    Text(
+                        "Pega la clave de TomTom (Routing/Traffic). Se guarda solo en este teléfono.",
+                        color = IbizaColors.TextSecondary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = { draft = it.trim() },
+                        singleLine = true,
+                        visualTransformation =
+                            androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = IbizaColors.Primary,
+                            unfocusedBorderColor = IbizaColors.Border,
+                            focusedTextColor = IbizaColors.TextPrimary,
+                            unfocusedTextColor = IbizaColors.TextPrimary,
+                            cursorColor = IbizaColors.Primary
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val clean = draft.trim()
+                    CompanionPrefs.setTrafficKey(context, clean)
+                    saved = clean
+                    editing = false
+                    status = if (clean.isBlank()) "Clave borrada" else "Clave guardada"
+                }) { Text("Guardar", color = IbizaColors.Primary) }
+            },
+            dismissButton = {
+                TextButton(onClick = { editing = false }) {
+                    Text("Cancelar", color = IbizaColors.TextSecondary)
+                }
+            },
+            containerColor = IbizaColors.Surface
+        )
     }
 }
 
