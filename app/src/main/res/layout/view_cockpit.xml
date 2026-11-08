@@ -214,7 +214,7 @@
             android:layout_height="match_parent"
             android:contentDescription="SEAT Ibiza 2010"
             android:scaleType="fitCenter"
-            android:src="@drawable/ibiza_render" />
+            android:src="@drawable/ibiza_off" />
 
         <View
             android:id="@+id/headlightGlow"

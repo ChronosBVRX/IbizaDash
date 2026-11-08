@@ -120,6 +120,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private lateinit var healthRow: View
     private lateinit var headlightState: TextView
     private lateinit var headlightGlow: View
+    private lateinit var carRender: ImageView
+    private var carLightsOn = false
     private lateinit var dock: LinearLayout
 
     // Continuous canvas
@@ -370,6 +372,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private var lastUserMapTouchMs = 0L
     private var lastFollowCenterMs = 0L
     private var currentBearingDeg = 0f
+    private var mapSpriteKey = ""
+    private var lastDisplayBearing = 0f
     private var bearingAnimator: android.animation.ValueAnimator? = null
     private var lastNavState: NavState? = null
 
@@ -399,7 +403,11 @@ class MainActivity : AppCompatActivity(), LocationListener {
         if (!RemoteMapBridge.active) {
             try {
                 positionMarker?.position = GeoPoint(state.snappedLat, state.snappedLon)
-                if (state.bearing > 0) positionMarker?.rotation = state.bearing
+                if (state.bearing > 0) {
+                    updateMapMarkerSprite(state.bearing, carLightsOn)
+                } else {
+                    updateMapMarkerSprite(lastDisplayBearing, carLightsOn)
+                }
                 map.invalidate()
             } catch (_: Exception) {
             }
@@ -586,6 +594,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             hasLightData = true
             refreshHealthRow()
             headlightGlow.visibility = if (value > 0) View.VISIBLE else View.GONE
+            setCarLights(value > 0)
             headlightState.text = if (value > 0) "Luces ON" else "Luces off"
             headlightState.setTextColor(
                 ContextCompat.getColor(
@@ -630,7 +639,12 @@ class MainActivity : AppCompatActivity(), LocationListener {
         setupObd()
         setupNavBridge()
         try {
-            registerReceiver(lightReceiver, IntentFilter("light_recieve"))
+            ContextCompat.registerReceiver(
+                this,
+                lightReceiver,
+                IntentFilter("light_recieve"),
+                ContextCompat.RECEIVER_EXPORTED
+            )
         } catch (_: Exception) {
         }
         try {
@@ -702,6 +716,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         healthRow = findViewById(R.id.healthRow)
         healthRow.visibility = View.GONE // Sin dato, no se muestra (ver refreshHealthRow).
         headlightGlow = findViewById(R.id.headlightGlow)
+        carRender = findViewById(R.id.carRender)
         callBanner = findViewById(R.id.callBanner)
         callText = findViewById(R.id.callText)
         btnAnswer = findViewById(R.id.btnAnswer)
@@ -1488,6 +1503,53 @@ class MainActivity : AppCompatActivity(), LocationListener {
             bar.animateTo(trim)
         }
         metricBars[R.id.vVoltage]?.animateTo(s.batteryV)
+    }
+
+    private fun setCarLights(on: Boolean) {
+        carLightsOn = on
+        if (::carRender.isInitialized) {
+            carRender.setImageResource(if (on) R.drawable.ibiza_on else R.drawable.ibiza_off)
+        }
+        updateMapMarkerSprite(lastDisplayBearing, on)
+    }
+
+    /** El coche del minimapa cambia de ángulo según el rumbo. */
+    private fun updateMapMarkerSprite(bearing: Float, lightsOn: Boolean) {
+        lastDisplayBearing = bearing
+        val marker = positionMarker ?: return
+        val sector = if (map.mapOrientation != 0f) {
+            // Mapa girado: el sprite debe apuntar siempre hacia arriba.
+            "n"
+        } else {
+            val normalized = ((bearing % 360f) + 360f) % 360f
+            val idx = (((normalized + 22.5f) / 45f).toInt()) % 8
+            arrayOf("n", "ne", "e", "se", "s", "sw", "w", "nw")[idx]
+        }
+        val key = "${sector}_${if (lightsOn) "on" else "off"}"
+        if (key == mapSpriteKey) return
+        val res = mapCarRes(sector, lightsOn)
+        if (res == 0) return
+        val bitmap = android.graphics.BitmapFactory.decodeResource(resources, res) ?: return
+        val width = dp(26)
+        val height = (width * bitmap.height / bitmap.width.toFloat())
+            .toInt().coerceIn(dp(12), dp(30))
+        val scaled = android.graphics.Bitmap.createScaledBitmap(bitmap, width, height, true)
+        marker.icon = android.graphics.drawable.BitmapDrawable(resources, scaled)
+        marker.rotation = 0f
+        mapSpriteKey = key
+        map.invalidate()
+    }
+
+    private fun mapCarRes(sector: String, lightsOn: Boolean): Int = when (sector) {
+        "n" -> if (lightsOn) R.drawable.map_car_n_on else R.drawable.map_car_n_off
+        "ne" -> if (lightsOn) R.drawable.map_car_ne_on else R.drawable.map_car_ne_off
+        "e" -> if (lightsOn) R.drawable.map_car_e_on else R.drawable.map_car_e_off
+        "se" -> if (lightsOn) R.drawable.map_car_se_on else R.drawable.map_car_se_off
+        "s" -> if (lightsOn) R.drawable.map_car_s_on else R.drawable.map_car_s_off
+        "sw" -> if (lightsOn) R.drawable.map_car_sw_on else R.drawable.map_car_sw_off
+        "w" -> if (lightsOn) R.drawable.map_car_w_on else R.drawable.map_car_w_off
+        "nw" -> if (lightsOn) R.drawable.map_car_nw_on else R.drawable.map_car_nw_off
+        else -> 0
     }
 
     private fun renderObd(state: ObdTelemetry) {
@@ -2892,6 +2954,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
                 m.title = ""
                 map.overlays.add(m)
                 positionMarker = m
+                updateMapMarkerSprite(lastDisplayBearing, carLightsOn)
             } catch (_: Exception) {
             }
         }
@@ -2941,7 +3004,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
                 )
                 positionMarker?.position = GeoPoint(slat, slon)
                 if (location.hasBearing() && speedKmh > 3f) {
-                    positionMarker?.rotation = location.bearing
+                    updateMapMarkerSprite(location.bearing, carLightsOn)
                 }
                 val now = android.os.SystemClock.elapsedRealtime()
                 // Si el usuario movió el mapa, vuelve a seguir solo.
@@ -3244,6 +3307,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             map.mapOrientation = 0f
         } catch (_: Exception) {
         }
+        updateMapMarkerSprite(lastDisplayBearing, carLightsOn)
     }
 
     /** Pinta la tarjeta flotante de navegación con el estado actual. */

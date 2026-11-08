@@ -1,4 +1,4 @@
-# Galería de pantallas · IbizaDash 1.6.3 + IbizaCompanion 1.6.3
+# Galería de pantallas · IbizaDash 1.7.0 + IbizaCompanion 1.7.0
 
 Capturas reales del emulador a 1280×720, con datos OBD de demostración y el
 paquete offline de Morelia. Haz clic en cualquier imagen para verla completa.
@@ -16,6 +16,12 @@ paquete offline de Morelia. Haz clic en cualquier imagen para verla completa.
 [![Inicio](stereo/01-inicio.png)](stereo/01-inicio.png)
 
 Mapa, velocidad, estado del coche, reproductor y salud del motor en una sola vista.
+
+### Luces encendidas
+
+[![Luces encendidas](stereo/17-luces-encendidas.png)](stereo/17-luces-encendidas.png)
+
+El render cambia a faros encendidos cuando el coche enciende las luces.
 
 ### Mapa
 
