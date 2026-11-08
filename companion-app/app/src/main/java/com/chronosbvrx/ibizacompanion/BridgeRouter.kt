@@ -65,8 +65,8 @@ class BridgeRouter(private val wifi: WifiBridgeClient) {
         pngBase64: String
     ): Boolean = send(mediaArtJson(title, artist, album, isPlaying, pngBase64))
 
-    /** Portada de 512 px: el Wi-Fi Direct tiene ancho de banda de sobra. */
-    fun mediaArtMaxSize(): Int = 512
+    /** Portada de 384 px: suficiente para el panel y menos peso en el enlace. */
+    fun mediaArtMaxSize(): Int = 384
 
     fun scanPeers() = wifi.scanPeers()
 

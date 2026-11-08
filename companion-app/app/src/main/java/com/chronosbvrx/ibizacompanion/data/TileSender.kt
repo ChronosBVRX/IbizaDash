@@ -29,7 +29,9 @@ import kotlin.math.tan
 object TileSender {
     private const val TAG = "TileSender"
     private const val MAX_TILES = 420
-    private const val MAX_BYTES = 12L * 1024L * 1024L
+    private const val MAX_BYTES = 8L * 1024L * 1024L
+    // El enlace se comparte con el audio A2DP: se envía a un ritmo suave.
+    private const val TARGET_BYTES_PER_SEC = 400_000L
 
     private val http = OkHttpClient.Builder()
         .connectTimeout(8, TimeUnit.SECONDS)
@@ -95,14 +97,8 @@ object TileSender {
                 Log.i(TAG, "tope de bytes alcanzado ($bytes)")
                 break
             }
-            // Pausa breve para que los NAV_STATE no queden detrás del lote.
-            if (index % 24 == 23) {
-                try {
-                    Thread.sleep(15L)
-                } catch (_: InterruptedException) {
-                    break
-                }
-            }
+            // Ritmo suave: deja aire al audio Bluetooth aunque el enlace sea 2,4 GHz.
+            pace(png.size)
         }
 
         try {
@@ -116,6 +112,16 @@ object TileSender {
         }
         Log.i(TAG, "teselas enviadas=$sent/$total fallidas=$failed bytes=$bytes")
         return Result(sent, total, failed, bytes)
+    }
+
+    /** Duerme lo justo para no pasar de [TARGET_BYTES_PER_SEC] (máx. 150 ms). */
+    private fun pace(bytes: Int) {
+        val ms = (bytes * 1000L / TARGET_BYTES_PER_SEC).coerceIn(0L, 150L)
+        if (ms <= 0L) return
+        try {
+            Thread.sleep(ms)
+        } catch (_: InterruptedException) {
+        }
     }
 
     // ------------------------------------------------------------------

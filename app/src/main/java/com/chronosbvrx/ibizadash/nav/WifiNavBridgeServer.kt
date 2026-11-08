@@ -6,12 +6,16 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.wifi.WifiManager
+import android.net.wifi.p2p.WifiP2pConfig
+import android.net.wifi.p2p.WifiP2pGroup
 import android.net.wifi.p2p.WifiP2pManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.chronosbvrx.ibizadash.Prefs
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -60,6 +64,22 @@ object WifiNavBridgeServer {
     private var lastP2pCheckMs = 0L
     private var wifiAutoEnableTried = false
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    /** Frecuencia del grupo P2P en MHz (0 = todavía desconocida). */
+    @Volatile
+    var groupFrequencyMhz: Int = 0
+        private set
+
+    /** El chip rechazó 5 GHz: no se reintenta hasta reiniciar o cambiar el ajuste. */
+    @Volatile
+    private var bandLocked2Ghz = false
+
+    /** Se acaba de recrear el grupo para cambiar de banda; falta leer el resultado. */
+    @Volatile
+    private var awaitingBandResult = false
+
+    private var lastBandAttemptMs = 0L
+    private val bandCooldownMs = 10 * 60_000L
 
     /** Texto de estado para la UI de ajustes rápidos. */
     @Volatile
@@ -460,12 +480,30 @@ object WifiNavBridgeServer {
                             null
                         }
                         if (info?.groupFormed == true) {
-                            p2pState = if (info.isGroupOwner) "grupo activo" else "cliente P2P"
+                            p2pState = if (info.isGroupOwner) {
+                                if (groupFrequencyMhz >= 5000) "grupo 5 GHz" else "grupo activo"
+                            } else {
+                                "cliente P2P"
+                            }
                             Log.i(
                                 TAG,
                                 "P2P formado GO=${info.isGroupOwner} " +
                                     "ip=${info.groupOwnerAddress?.hostAddress}"
                             )
+                            if (info.isGroupOwner) {
+                                // Confirmar la banda real del grupo (5 GHz o 2,4 GHz).
+                                try {
+                                    p2pChannel?.let { ch ->
+                                        p2pManager?.requestGroupInfo(ch) { g ->
+                                            if (g != null) {
+                                                groupFrequencyMhz = groupFrequency(g)
+                                                p2pState = groupStateText(g)
+                                            }
+                                        }
+                                    }
+                                } catch (_: Exception) {
+                                }
+                            }
                         } else {
                             if (p2pState.startsWith("grupo") || p2pState.contains("cliente")) {
                                 p2pState = "grupo cerrado"
@@ -521,32 +559,155 @@ object WifiNavBridgeServer {
             manager.requestGroupInfo(channel) { group ->
                 if (group != null) {
                     groupName = group.networkName
-                    p2pState = "grupo listo"
+                    val freq = groupFrequency(group)
+                    groupFrequencyMhz = freq
+                    if (awaitingBandResult) {
+                        awaitingBandResult = false
+                        if (freq in 1..4999) {
+                            bandLocked2Ghz = true
+                            Log.i(
+                                TAG,
+                                "el chip no abrió el grupo en 5 GHz; se queda en " +
+                                    "$freq MHz"
+                            )
+                        } else {
+                            Log.i(TAG, "grupo Wi-Fi Direct en 5 GHz ($freq MHz)")
+                        }
+                    }
+                    if (shouldUpgradeBand(group)) {
+                        Log.i(
+                            TAG,
+                            "grupo en $freq MHz sin clientes; se recrea en 5 GHz"
+                        )
+                        awaitingBandResult = true
+                        lastBandAttemptMs = System.currentTimeMillis()
+                        p2pState = "pasando a 5 GHz"
+                        manager.removeGroup(channel, object : WifiP2pManager.ActionListener {
+                            override fun onSuccess() {
+                                createGroupPreferred(manager, channel, prefer5 = true)
+                            }
+
+                            override fun onFailure(reason: Int) {
+                                Log.w(TAG, "removeGroup: ${reasonName(reason)}")
+                                createGroupPreferred(manager, channel, prefer5 = true)
+                            }
+                        })
+                        return@requestGroupInfo
+                    }
+                    p2pState = groupStateText(group)
                     return@requestGroupInfo
                 }
                 if (!running) return@requestGroupInfo
-                try {
-                    manager.createGroup(channel, object : WifiP2pManager.ActionListener {
-                        override fun onSuccess() {
-                            p2pState = "grupo creado"
-                            Log.i(TAG, "grupo Wi-Fi Direct creado")
-                            manager.requestGroupInfo(channel) { g ->
-                                groupName = g?.networkName
-                            }
-                        }
-
-                        override fun onFailure(reason: Int) {
-                            p2pState = "P2P: ${reasonName(reason)}"
-                            Log.w(TAG, "createGroup: ${reasonName(reason)}")
-                        }
-                    })
-                } catch (e: Exception) {
-                    Log.w(TAG, "createGroup: ${e.message}")
-                }
+                createGroupPreferred(manager, channel, prefer5 = prefer5Ghz())
             }
         } catch (e: Exception) {
             Log.w(TAG, "requestGroupInfo: ${e.message}")
         }
+    }
+
+    private fun prefer5Ghz(): Boolean {
+        // La banda del grupo se elige con API 29+; antes no hay forma pública.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+        return try {
+            appContext?.let { Prefs.p2pPrefer5Ghz(it) } ?: true
+        } catch (_: Exception) {
+            true
+        }
+    }
+
+    /**
+     * Frecuencia del grupo. `WifiP2pGroup.getFrequency()` es API 29+, así que en
+     * el estéreo Android 8.1 (API 27) hay que devolver 0 sin llamarlo.
+     */
+    private fun groupFrequency(group: WifiP2pGroup?): Int {
+        if (group == null) return 0
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return 0
+        return try {
+            group.frequency
+        } catch (_: Throwable) {
+            0
+        }
+    }
+
+    /**
+     * ¿Conviene recrear el grupo en 5 GHz? Solo si el usuario lo prefiere, el
+     * chip no lo rechazó antes, el grupo actual es de 2,4 GHz y no hay ningún
+     * teléfono conectado (recrear el grupo corta el enlace unos segundos).
+     */
+    private fun shouldUpgradeBand(group: WifiP2pGroup): Boolean {
+        if (!running) return false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+        if (!prefer5Ghz() || bandLocked2Ghz) return false
+        if (groupFrequency(group) >= 5000) return false
+        if (clientCount > 0 || hasClients()) return false
+        val now = System.currentTimeMillis()
+        return lastBandAttemptMs == 0L || now - lastBandAttemptMs > bandCooldownMs
+    }
+
+    private fun groupStateText(group: WifiP2pGroup?): String {
+        val freq = groupFrequency(group).takeIf { it > 0 } ?: groupFrequencyMhz
+        return if (freq >= 5000) "grupo 5 GHz" else "grupo listo"
+    }
+
+    /**
+     * Crea el grupo Wi-Fi Direct pidiendo 5 GHz cuando se puede. Si el chip no
+     * es dual-band, cae automáticamente a la banda automática (2,4 GHz) para
+     * no dejar al teléfono sin enlace.
+     */
+    private fun createGroupPreferred(
+        manager: WifiP2pManager,
+        channel: WifiP2pManager.Channel,
+        prefer5: Boolean
+    ) {
+        val listener = object : WifiP2pManager.ActionListener {
+            override fun onSuccess() {
+                Log.i(TAG, "grupo Wi-Fi Direct creado (prefer5=$prefer5)")
+                manager.requestGroupInfo(channel) { g ->
+                    groupName = g?.networkName
+                    groupFrequencyMhz = groupFrequency(g)
+                    p2pState = groupStateText(g)
+                }
+            }
+
+            override fun onFailure(reason: Int) {
+                Log.w(TAG, "createGroup(prefer5=$prefer5): ${reasonName(reason)}")
+                if (prefer5) {
+                    // El chip no acepta 5 GHz: se queda en 2,4 GHz hasta reiniciar.
+                    bandLocked2Ghz = true
+                    awaitingBandResult = false
+                    createGroupPreferred(manager, channel, prefer5 = false)
+                } else {
+                    p2pState = "P2P: ${reasonName(reason)}"
+                }
+            }
+        }
+        try {
+            if (prefer5 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                P2pBand.create5Ghz(manager, channel, listener)
+            } else {
+                manager.createGroup(channel, listener)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "createGroup: ${e.message}")
+            if (prefer5) {
+                bandLocked2Ghz = true
+                awaitingBandResult = false
+                createGroupPreferred(manager, channel, prefer5 = false)
+            } else {
+                p2pState = "P2P: ${e.message}"
+            }
+        }
+    }
+
+    /**
+     * Reaplica la preferencia de banda después de cambiarla en Ajustes.
+     * Si hay un teléfono conectado, el cambio espera a que se desconecte.
+     */
+    fun refreshBandPreference() {
+        bandLocked2Ghz = false
+        awaitingBandResult = false
+        lastBandAttemptMs = 0L
+        if (running) mainHandler.post { ensureGroup() }
     }
 
     private fun reasonName(reason: Int): String = when (reason) {
@@ -560,14 +721,45 @@ object WifiNavBridgeServer {
     fun statusText(): String {
         val clients = clientCount
         val ip = localIpv4()
+        val group = p2pState == "grupo listo" ||
+            p2pState == "grupo creado" ||
+            p2pState == "grupo 5 GHz" ||
+            p2pState == "grupo activo"
         return when {
             clients > 0 && hasClients() -> "Wi-Fi · $clients"
             clients > 0 -> "Wi-Fi · sin respuesta"
-            p2pState == "grupo listo" || p2pState == "grupo creado" -> "Wi-Fi Direct"
+            group && groupFrequencyMhz >= 5000 -> "Wi-Fi Direct 5G"
+            group -> "Wi-Fi Direct 2,4G"
             p2pState == "WiFi apagado" -> "WiFi apagado"
             !ip.isNullOrBlank() -> "Wi-Fi · $ip"
             p2pState.isBlank() -> "Wi-Fi · —"
             else -> p2pState
         }
+    }
+}
+
+/**
+ * Creación del grupo Wi-Fi Direct en 5 GHz.
+ *
+ * Vive aparte a propósito: `WifiP2pConfig.Builder` y `createGroup(Channel,
+ * WifiP2pConfig, ActionListener)` son API 29+. En el estéreo Android 8.1 este
+ * objeto nunca se carga, así que el verificador no toca clases que no existen.
+ */
+private object P2pBand {
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.Q)
+    fun create5Ghz(
+        manager: WifiP2pManager,
+        channel: WifiP2pManager.Channel,
+        listener: WifiP2pManager.ActionListener
+    ) {
+        // El framework solo aplica la banda si el config es "válido como grupo":
+        // dirección no vacía + SSID + passphrase.
+        val config = WifiP2pConfig.Builder()
+            .setDeviceAddress(android.net.MacAddress.fromString("02:00:00:00:00:01"))
+            .setNetworkName("DIRECT-IbizaDash")
+            .setPassphrase("ibizadash-5g")
+            .setGroupOperatingBand(WifiP2pConfig.GROUP_OWNER_BAND_5GHZ)
+            .build()
+        manager.createGroup(channel, config, listener)
     }
 }

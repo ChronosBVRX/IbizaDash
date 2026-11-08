@@ -24,6 +24,7 @@ object Prefs {
     private const val BRIGHTNESS_PCT = "brightness_pct"
     private const val NIGHT_MODE = "night_mode"
     private const val VOICE_ON = "voice_on"
+    private const val P2P_5GHZ = "p2p_5ghz"
 
     private fun p(context: Context) =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -99,6 +100,18 @@ object Prefs {
 
     fun setVoiceOn(context: Context, value: Boolean) {
         p(context).edit().putBoolean(VOICE_ON, value).apply()
+    }
+
+    /**
+     * Preferir la banda de 5 GHz para el grupo Wi-Fi Direct del estéreo.
+     * El Bluetooth vive en 2,4 GHz: separar el enlace evita que el vídeo del
+     * mapa o las teselas ahoguen el audio A2DP.
+     */
+    fun p2pPrefer5Ghz(context: Context): Boolean =
+        p(context).getBoolean(P2P_5GHZ, true)
+
+    fun setP2pPrefer5Ghz(context: Context, value: Boolean) {
+        p(context).edit().putBoolean(P2P_5GHZ, value).apply()
     }
 
     fun totalOdometerKm(context: Context): Float =

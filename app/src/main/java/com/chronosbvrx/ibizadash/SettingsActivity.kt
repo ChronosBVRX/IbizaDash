@@ -26,11 +26,18 @@ class SettingsActivity : AppCompatActivity() {
 
         val showWeather = findViewById<CheckBox>(R.id.showWeather)
         val demoMedia = findViewById<CheckBox>(R.id.demoMedia)
+        val p2p5ghz = findViewById<CheckBox>(R.id.p2p5ghz)
         val unitKmh = findViewById<RadioButton>(R.id.unitKmh)
         val unitMph = findViewById<RadioButton>(R.id.unitMph)
 
         showWeather.isChecked = Prefs.showWeather(this)
         demoMedia.isChecked = Prefs.demoMedia(this)
+        p2p5ghz.isChecked = Prefs.p2pPrefer5Ghz(this)
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) {
+            // Este estéreo no puede elegir banda para el grupo Wi-Fi Direct.
+            p2p5ghz.isEnabled = false
+            p2p5ghz.text = "Wi-Fi Direct en 5 GHz (no disponible en este estéreo)"
+        }
         if (Prefs.useMph(this)) {
             unitMph.isChecked = true
         } else {
@@ -43,6 +50,11 @@ class SettingsActivity : AppCompatActivity() {
             Prefs.setShowWeather(this, showWeather.isChecked)
             Prefs.setDemoMedia(this, demoMedia.isChecked)
             Prefs.setUseMph(this, unitMph.isChecked)
+            val bandChanged = Prefs.p2pPrefer5Ghz(this) != p2p5ghz.isChecked
+            Prefs.setP2pPrefer5Ghz(this, p2p5ghz.isChecked)
+            if (bandChanged) {
+                com.chronosbvrx.ibizadash.nav.WifiNavBridgeServer.refreshBandPreference()
+            }
             finish()
         }
 

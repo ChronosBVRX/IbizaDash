@@ -145,6 +145,26 @@
                         android:text="Modo demo de media (portada Bluetooth)"
                         android:textColor="@color/text_secondary"
                         android:textSize="13sp" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginStart="14dp"
+                        android:layout_marginEnd="14dp"
+                        android:background="#12FFFFFF" />
+
+                    <CheckBox
+                        android:id="@+id/p2p5ghz"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:buttonTint="@color/checkbox_tint"
+                        android:fontFamily="sans-serif"
+                        android:gravity="center_vertical"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:text="Wi-Fi Direct en 5 GHz (evita cortes de Bluetooth)"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp" />
                 </LinearLayout>
 
                 <TextView
