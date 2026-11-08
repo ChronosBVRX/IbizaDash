@@ -68,8 +68,10 @@ object OtaInstaller {
                 setPackage(context.packageName)
             }
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    PendingIntent.FLAG_IMMUTABLE
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    // El sistema añade EXTRA_STATUS al intent; con IMMUTABLE se
+                    // pierden los extras y el receptor recibe status=-1.
+                    PendingIntent.FLAG_MUTABLE
                 } else {
                     0
                 }
@@ -86,8 +88,17 @@ object OtaInstaller {
         }
     }
 
-    private fun installViaIntent(context: Context, pending: OtaReceiver.PendingUpdate) {
-        try {
+    /**
+     * Respaldo cuando el sistema no entrega los extras de la sesión:
+     * abre el instalador clásico con el APK ya verificado.
+     */
+    fun fallbackInstall(context: Context) {
+        val pending = OtaReceiver.pendingUpdate(context) ?: return
+        if (!OtaReceiver.isValidApk(context, pending.file)) return
+        installViaIntent(context, pending)
+    }
+
+    private fun installViaIntent(context: Context, pending: OtaReceiver.PendingUpdate) {        try {
             val uri: Uri = FileProvider.getUriForFile(
                 context,
                 "${context.packageName}.fileprovider",
@@ -121,6 +132,11 @@ class OtaInstallReceiver : BroadcastReceiver() {
             "status=$status msg=$message extras=${intent.extras?.keySet()?.joinToString("|")}"
         )
         when (status) {
+            -1 -> {
+                // Algunos sistemas no entregan los extras de la sesión.
+                Log.w("OtaInstall", "sin estado de sesión; se usa el instalador clásico")
+                OtaInstaller.fallbackInstall(context)
+            }
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 val confirmIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)

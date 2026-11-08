@@ -133,7 +133,7 @@ object OtaSender {
                 setStatus("La OTA necesita Wi-Fi Direct activo", 0f, false)
                 return false
             }
-            val latest = latestApk(context, force = false) ?: run {
+            val latest = latestApk(context, force = true) ?: run {
                 setStatus("No se pudo descargar el APK del estéreo desde GitHub", 0f, false)
                 return false
             }

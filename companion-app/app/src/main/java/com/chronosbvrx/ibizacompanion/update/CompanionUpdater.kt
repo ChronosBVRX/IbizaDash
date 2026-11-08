@@ -179,6 +179,15 @@ object CompanionUpdater {
         }
     }
 
+    /**
+     * Respaldo cuando el sistema no entrega los extras de la sesión:
+     * abre el instalador clásico con el APK ya verificado.
+     */
+    fun fallbackInstall(context: Context) {
+        val pending = pendingUpdate(context) ?: return
+        installViaIntent(context, pending.file)
+    }
+
     private fun installViaSession(context: Context, file: File) {
         val installer = context.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(
@@ -194,7 +203,13 @@ object CompanionUpdater {
                 }
             }
             val statusIntent = Intent(ACTION_INSTALL_STATUS).setPackage(context.packageName)
-            val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    // PackageInstaller escribe EXTRA_STATUS en este intent.
+                    PendingIntent.FLAG_MUTABLE
+                } else {
+                    0
+                }
             val statusPending = PendingIntent.getBroadcast(
                 context, sessionId, statusIntent, flags
             )
@@ -397,6 +412,10 @@ class CompanionInstallReceiver : BroadcastReceiver() {
         val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: ""
         Log.i("CompanionInstall", "status=$status msg=$message")
         when (status) {
+            -1 -> {
+                Log.w("CompanionInstall", "sin estado de sesión; se usa el instalador clásico")
+                CompanionUpdater.fallbackInstall(context)
+            }
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 val confirmIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)

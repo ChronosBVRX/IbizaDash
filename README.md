@@ -10,7 +10,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
   (`IbizaDash.apk` para el estéreo, `IbizaCompanion.apk` para el teléfono).
 - **Paquete del estéreo:** `com.chronosbvrx.ibizadash`
 - **Paquete del teléfono:** `com.chronosbvrx.ibizacompanion`
-- **Versiones actuales:** IbizaDash **1.5.1** (versionCode 20) · IbizaCompanion **1.5.1** (versionCode 15)
+- **Versiones actuales:** IbizaDash **1.5.2** (versionCode 21) · IbizaCompanion **1.5.2** (versionCode 16)
 - **minSdk 23 / targetSdk 33 / compileSdk 36** (estéreo)
 - Hecho con **Views** (sin Compose) en el estéreo para que sea liviano en el Cortex-A7.
 
