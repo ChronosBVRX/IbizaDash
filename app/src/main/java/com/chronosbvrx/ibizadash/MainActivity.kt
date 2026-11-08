@@ -3166,7 +3166,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             val resolve = packageManager.resolveActivity(homeIntent, 0)
             val pkg = resolve?.activityInfo?.packageName
             if (pkg == packageName) {
-                homeStatus.text = "IbizaDash ✓"
+                homeStatus.text = "IbizaDash activo"
                 homeStatus.setTextColor(ContextCompat.getColor(this, R.color.green))
             } else {
                 homeStatus.text = "No es IbizaDash"

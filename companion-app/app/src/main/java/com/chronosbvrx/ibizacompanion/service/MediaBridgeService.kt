@@ -551,7 +551,7 @@ class MediaBridgeService : Service() {
         if (b64.isNotBlank()) {
             router?.sendMediaArt(title, artist, album, isPlaying, b64)
         }
-        updateNotification("♪ $title — $artist")
+        updateNotification("$title — $artist")
         bringAppToFrontIfAllowed()
     }
 
