@@ -366,6 +366,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
     }
 
     private var lastMapBearing = 0f
+    private var followAnimator: android.animation.ValueAnimator? = null
+    private var followPoint: GeoPoint? = null
 
     // Estado de seguimiento del mapa
     private var mapMode = MapMode.FOLLOWING
@@ -3256,23 +3258,64 @@ class MainActivity : AppCompatActivity(), LocationListener {
         if (focus == Focus.NAV) {
             val bearing = if (speedKmh > 12f && location.hasBearing()) location.bearing else 0f
             animateMapBearing(bearing)
-            // Un solo redibujado por fix: animar el paneo en cada GPS (1 Hz)
-            // mantiene el mapa redibujándose casi sin pausa y en el Cortex-A7
-            // eso se nota. Con setCenter el movimiento sigue al coche igual.
-            try {
-                map.controller.setCenter(target)
-            } catch (_: Exception) {
-            }
+            // Interpola coche y mapa a 60 fps entre fixes de 1 Hz.
+            animateFollow(target, speedKmh)
         } else {
             resetMapBearing()
             if (now - lastFollowCenterMs > 1500L) {
                 lastFollowCenterMs = now
                 try {
-                    map.controller.setCenter(target)
+                    followPoint = target
+                    map.controller.animateTo(target, map.zoomLevelDouble, 600L)
                 } catch (_: Exception) {
                 }
             }
         }
+    }
+
+    private fun animateFollow(target: GeoPoint, speedKmh: Float) {
+        val from = followPoint ?: positionMarker?.position ?: target
+        // Primer fix o salto grande: recolocar sin animación.
+        val distance = try {
+            val out = FloatArray(1)
+            android.location.Location.distanceBetween(
+                from.latitude, from.longitude,
+                target.latitude, target.longitude,
+                out
+            )
+            out[0].toDouble()
+        } catch (_: Exception) {
+            Double.MAX_VALUE
+        }
+        if (distance > 300.0) {
+            followPoint = target
+            try {
+                positionMarker?.position = target
+                if (mapMode == MapMode.FOLLOWING) map.controller.setCenter(target)
+                map.invalidate()
+            } catch (_: Exception) {
+            }
+            return
+        }
+        followAnimator?.cancel()
+        followAnimator = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = if (speedKmh > 2f) 900L else 350L
+            interpolator = android.view.animation.LinearInterpolator()
+            addUpdateListener { anim ->
+                val t = anim.animatedValue as Float
+                val lat = from.latitude + (target.latitude - from.latitude) * t
+                val lon = from.longitude + (target.longitude - from.longitude) * t
+                val p = GeoPoint(lat, lon)
+                try {
+                    positionMarker?.position = p
+                    if (mapMode == MapMode.FOLLOWING) map.controller.setCenter(p)
+                    map.invalidate()
+                } catch (_: Exception) {
+                }
+            }
+            start()
+        }
+        followPoint = target
     }
 
     /** Gira el mapa suavemente hacia el rumbo, por el camino más corto. */

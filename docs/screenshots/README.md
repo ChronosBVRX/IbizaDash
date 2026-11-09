@@ -19,8 +19,8 @@ Haz clic en cualquier captura para verla a tamaño completo.
 
 | Carpeta | App | Pantallas |
 |---|---|---|
-| `stereo/` | IbizaDash 1.7.0 | Inicio, luces encendidas, mapa, música, radio, mi auto, diagnóstico, motor, eléctrico, fallas, consola, ajustes rápidos, conexión, ajustes y apps |
-| `phone/` | IbizaCompanion 1.7.0 | Inicio, rutas, música, conexión, OTA, ajustes, módulos y sistema |
+| `stereo/` | IbizaDash 1.8.0 | Inicio, luces encendidas, mapa, música, radio, mi auto, diagnóstico, motor, eléctrico, fallas, consola, ajustes rápidos, conexión, ajustes y apps |
+| `phone/` | IbizaCompanion 1.8.0 | Inicio, rutas, música, conexión, OTA, ajustes, módulos y sistema |
 
 Hojas de contacto:
 

@@ -1,4 +1,4 @@
-# Galería de pantallas · IbizaDash 1.7.0 + IbizaCompanion 1.7.0
+# Galería de pantallas · IbizaDash 1.8.0 + IbizaCompanion 1.8.0
 
 Capturas reales del emulador a 1280×720, con datos OBD de demostración y el
 paquete offline de Morelia. Haz clic en cualquier imagen para verla completa.

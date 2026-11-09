@@ -23,6 +23,12 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 object MapFrameSender {
     private const val TAG = "MapFrame"
+    /**
+     * El estéreo pinta su mapa local a 60 fps. Enviar vídeo por Wi-Fi a 2 fps
+     * se ve a saltos y además compite con el audio Bluetooth. Se deja apagado;
+     * el enlace solo lleva ruta, voz y teselas.
+     */
+    private const val ENABLE_REMOTE_MAP = false
     private const val INTERVAL_SLOW_MS = 600L // ~1,7 fps aparcado / despacio
     private const val INTERVAL_FAST_MS = 400L // 2,5 fps por encima de 30 km/h
     private const val FAST_SPEED_KMH = 30f
@@ -96,6 +102,10 @@ object MapFrameSender {
         (if (speedKmh > FAST_SPEED_KMH) INTERVAL_FAST_MS else INTERVAL_SLOW_MS) + throttleMs
 
     fun start(view: WebView) {
+        if (!ENABLE_REMOTE_MAP) {
+            Log.i(TAG, "mapa remoto desactivado; el estéreo usa su mapa local")
+            return
+        }
         if (suppressed) {
             Log.i(TAG, "proyección suprimida por el estéreo (modo navegación)")
             return

@@ -20,6 +20,12 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 object RemoteMapBridge {
     private const val TAG = "RemoteMap"
+    /**
+     * El mapa local de osmdroid es fluido y no compite con el audio.
+     * El vídeo remoto queda desactivado; se conserva el receptor por
+     * compatibilidad con versiones antiguas del teléfono.
+     */
+    private const val ENABLE_REMOTE_MAP = false
     private const val TIMEOUT_MS = 5000L
 
     @Volatile
@@ -83,6 +89,10 @@ object RemoteMapBridge {
 
     /** Llamado desde el hilo lector del socket. */
     fun onFrame(obj: JSONObject) {
+        if (!ENABLE_REMOTE_MAP) {
+            // Ignorar el vídeo de teléfonos antiguos: el mapa local es más fluido.
+            return
+        }
         if (onFrame == null) return
         val b64 = obj.optString("jpegBase64", "")
         if (b64.isBlank()) return

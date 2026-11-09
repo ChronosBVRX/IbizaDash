@@ -131,6 +131,7 @@ object TileSender {
     private fun corridorTiles(points: List<Pair<Double, Double>>): List<TileKey> {
         val overview = LinkedHashSet<TileKey>()
         val centers = LinkedHashSet<TileKey>()
+        val street = LinkedHashSet<TileKey>()
         val ring = LinkedHashSet<TileKey>()
 
         val step = max(1, points.size / 350)
@@ -141,6 +142,9 @@ object TileSender {
             val x = lonToTileX(lon, 15)
             val y = latToTileY(lat, 15)
             centers.add(TileKey(15, x, y))
+            // El estéreo pinta su mapa local a z16; sin estas teselas la
+            // calle se vería vacía fuera del paquete offline.
+            street.add(TileKey(16, lonToTileX(lon, 16), latToTileY(lat, 16)))
             if (ring.size < MAX_TILES) {
                 for (dx in -1..1) {
                     for (dy in -1..1) {
@@ -155,6 +159,7 @@ object TileSender {
         val out = LinkedHashSet<TileKey>()
         out.addAll(overview)
         out.addAll(centers)
+        out.addAll(street)
         out.addAll(ring)
         return out.take(MAX_TILES)
     }
