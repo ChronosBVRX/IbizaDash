@@ -3,6 +3,7 @@ package com.chronosbvrx.ibizacompanion.modules
 import android.content.Context
 import android.util.Base64
 import android.util.Log
+import com.chronosbvrx.ibizacompanion.AudioCoexistence
 import com.chronosbvrx.ibizacompanion.BridgeLink
 import org.json.JSONObject
 import java.io.File
@@ -132,6 +133,12 @@ object ModuleSender {
                     index++
                     if (index % 4 == 0 || offset >= size) {
                         report(module.id, offset, size, "Enviando ${ModuleCatalog.formatSize(offset)} de ${ModuleCatalog.formatSize(size)}")
+                    }
+                    if (AudioCoexistence.isMusicPlaying(context)) {
+                        try {
+                            Thread.sleep(50L)
+                        } catch (_: Exception) {
+                        }
                     }
                 }
             }

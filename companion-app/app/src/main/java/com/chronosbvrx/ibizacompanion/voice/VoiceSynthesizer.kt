@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import com.chronosbvrx.ibizacompanion.AudioCoexistence
 import com.chronosbvrx.ibizacompanion.BridgeLink
 import org.json.JSONObject
 import java.io.File
@@ -92,7 +93,7 @@ object VoiceSynthesizer {
                 }
                 sendClip(key, wav)
                 // El enlace comparte antena con el audio A2DP: no enviar en ráfaga.
-                pace(wav.length())
+                pace(context, wav.length())
             }
             Log.i(TAG, "voz enviada: ${items.size} clips")
         } catch (e: Exception) {
@@ -161,8 +162,8 @@ object VoiceSynthesizer {
     }
 
     /** Duerme lo justo para no saturar el enlace compartido con el Bluetooth. */
-    private fun pace(bytes: Long) {
-        val ms = (bytes * 1000L / 400_000L).coerceIn(0L, 300L)
+    private fun pace(context: Context, bytes: Long) {
+        val ms = AudioCoexistence.paceMs(context, bytes)
         if (ms <= 0L) return
         try {
             Thread.sleep(ms)

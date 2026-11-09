@@ -3,6 +3,7 @@ package com.chronosbvrx.ibizacompanion.data
 import android.content.Context
 import android.util.Base64
 import android.util.Log
+import com.chronosbvrx.ibizacompanion.AudioCoexistence
 import com.chronosbvrx.ibizacompanion.BridgeLink
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -30,8 +31,8 @@ object TileSender {
     private const val TAG = "TileSender"
     private const val MAX_TILES = 420
     private const val MAX_BYTES = 8L * 1024L * 1024L
-    // El enlace se comparte con el audio A2DP: se envía a un ritmo suave.
-    private const val TARGET_BYTES_PER_SEC = 400_000L
+    // El enlace se comparte con el audio A2DP. El ritmo lo decide
+    // AudioCoexistence (60 KB/s con música, 250 KB/s en silencio).
 
     private val http = OkHttpClient.Builder()
         .connectTimeout(8, TimeUnit.SECONDS)
@@ -74,7 +75,12 @@ object TileSender {
                 Log.w(TAG, "Wi-Fi perdido tras $sent teselas")
                 break
             }
-            val png = readLocalTile(context, tile) ?: downloadTile(tile)
+            // Con música sonando no se descarga online (riega más Wi-Fi y
+            // corta el A2DP): solo se envían teselas locales; las faltantes
+            // se completan en la próxima ruta sin música.
+            val musicPlaying = AudioCoexistence.isMusicPlaying(context)
+            val png = readLocalTile(context, tile)
+                ?: if (musicPlaying) null else downloadTile(tile)
             if (png == null || png.size < 40) {
                 failed++
                 onProgress(index + 1, total)
@@ -98,7 +104,7 @@ object TileSender {
                 break
             }
             // Ritmo suave: deja aire al audio Bluetooth aunque el enlace sea 2,4 GHz.
-            pace(png.size)
+            pace(context, png.size)
         }
 
         try {
@@ -114,9 +120,9 @@ object TileSender {
         return Result(sent, total, failed, bytes)
     }
 
-    /** Duerme lo justo para no pasar de [TARGET_BYTES_PER_SEC] (máx. 150 ms). */
-    private fun pace(bytes: Int) {
-        val ms = (bytes * 1000L / TARGET_BYTES_PER_SEC).coerceIn(0L, 150L)
+    /** Duerme lo justo para el ritmo permitido (máx. 400 ms con música). */
+    private fun pace(context: Context, bytes: Int) {
+        val ms = AudioCoexistence.paceMs(context, bytes.toLong())
         if (ms <= 0L) return
         try {
             Thread.sleep(ms)

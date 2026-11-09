@@ -12,7 +12,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
   (capturas reales del estéreo y del teléfono, con hojas de contacto).
 - **Paquete del estéreo:** `com.chronosbvrx.ibizadash`
 - **Paquete del teléfono:** `com.chronosbvrx.ibizacompanion`
-- **Versiones actuales:** IbizaDash **1.9.2** (versionCode 32) · IbizaCompanion **1.9.2** (versionCode 26)
+- **Versiones actuales:** IbizaDash **1.9.3** (versionCode 33) · IbizaCompanion **1.9.3** (versionCode 27)
 - **minSdk 23 / targetSdk 33 / compileSdk 36** (estéreo)
 - Hecho con **Views** (sin Compose) en el estéreo para que sea liviano en el Cortex-A7.
 
@@ -345,6 +345,12 @@ Si todavía se corta, en el teléfono: **Opciones de desarrollador → códec de
 Bluetooth → SBC** y desactivar la sincronización de contactos/historial del perfil.
 **No** desactives "Audio multimedia": la música viaja del teléfono al estéreo por A2DP,
 no por Wi-Fi Direct.
+
+Desde **1.9.3** la compañera detecta si suena música (`AudioManager.isMusicActive`)
+y baja automáticamente los envíos grandes: teselas a **60 KB/s** (y solo locales,
+sin descargar online con música), voces a 60 KB/s, y OTA/módulos espaciados
+(60 ms/chunk). Sin música el ritmo es 250 KB/s. Así el Wi-Fi Direct deja hueco
+para el A2DP del POCO en el 2,4 GHz.
 
 ---
 

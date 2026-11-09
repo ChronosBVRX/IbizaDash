@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Base64
 import android.util.Log
+import com.chronosbvrx.ibizacompanion.AudioCoexistence
 import com.chronosbvrx.ibizacompanion.BridgeLink
 import com.chronosbvrx.ibizacompanion.core.state.CompanionState
 import org.json.JSONObject
@@ -212,6 +213,14 @@ object OtaSender {
                     "Enviando v${latest.versionName} al estéreo…",
                     index.toFloat() / totalChunks
                 )
+                // Con música sonando se espacian los chunks para no cortar
+                // el A2DP del POCO durante la OTA.
+                if (AudioCoexistence.isMusicPlaying(context)) {
+                    try {
+                        Thread.sleep(60L)
+                    } catch (_: Exception) {
+                    }
+                }
             }
 
             // 3) END + espera de confirmación.
