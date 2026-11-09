@@ -45,6 +45,8 @@ class BleElm327Link(
     private val connectLatch = CountDownLatch(1)
     private val buffer = StringBuilder()
     private val lock = Any()
+    @Volatile
+    private var writeLatch: CountDownLatch? = null
 
     @SuppressLint("MissingPermission")
     fun connect(timeoutMs: Long = 12_000L): Boolean {
@@ -108,6 +110,14 @@ class BleElm327Link(
                     ready = status == BluetoothGatt.GATT_SUCCESS
                     connectLatch.countDown()
                 }
+            }
+
+            override fun onCharacteristicWrite(
+                g: BluetoothGatt,
+                characteristic: BluetoothGattCharacteristic,
+                status: Int
+            ) {
+                writeLatch?.countDown()
             }
 
             override fun onCharacteristicChanged(
@@ -199,24 +209,36 @@ class BleElm327Link(
             while (!sent && attempts < 3) {
                 attempts++
                 try {
+                    val latch = CountDownLatch(1)
+                    writeLatch = latch
                     ch.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
                     ch.value = chunk
                     if (g.writeCharacteristic(ch)) {
-                        sent = true
+                        // Esperar el ack antes de reutilizar la misma
+                        // característica: en Android 8 sobrescribirla sin
+                        // esperar corrompe el siguiente comando BLE.
+                        if (latch.await(600L, TimeUnit.MILLISECONDS)) {
+                            sent = true
+                        } else {
+                            sent = true // el stack a veces no llama; no bloquear
+                        }
+                        writeLatch = null
                     } else {
                         // Algunos B16 solo aceptan escritura sin respuesta.
                         ch.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
                         ch.value = chunk
                         sent = g.writeCharacteristic(ch)
+                        writeLatch = null
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "write: ${e.message}")
                 }
+                writeLatch = null
                 if (!sent) Thread.sleep(15L)
             }
             if (!sent) return false
             offset = end
-            Thread.sleep(8L)
+            Thread.sleep(25L)
         }
         return true
     }

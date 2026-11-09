@@ -328,8 +328,22 @@ class Elm327Client(private val context: Context) {
                 ObdRepository.publish(last)
 
                 var slowCounter = 0
+                var silentCycles = 0
                 while (alive(gen)) {
+                    // Si el enlace murió (Broken pipe / BLE caído), no seguir
+                    // consultando el socket muerto: se fuerza reapertura.
+                    val bleLink = ble
+                    if (bleLink != null && !bleLink.isConnected()) {
+                        throw IOException("BLE link lost")
+                    }
+                    val stSocket = socket
+                    if (stSocket == null && bleLink == null) {
+                        throw IOException("OBD link lost")
+                    }
                     val now = SystemClock.elapsedRealtime()
+                    // Sondeo ligero: RPM y velocidad cada ciclo; carga y
+                    // acelerador cada 2. En BLE/v1.5, 10 consultas por segundo
+                    // agotan la ECU (NO DATA tras las primeras).
                     val rpm = if (supports(0x0C)) queryValue("010C", "410C") { bytes ->
                         if (bytes.size >= 2) {
                             (((bytes[0] * 256) + bytes[1]) / 4).toFloat()
@@ -337,13 +351,14 @@ class Elm327Client(private val context: Context) {
                             null
                         }
                     } else null
-                    val load = if (supports(0x04)) queryValue("0104", "4104") { bytes ->
+                    slowCounter++
+                    val load = if (slowCounter % 8 == 0 && supports(0x04)) queryValue("0104", "4104") { bytes ->
                         if (bytes.isNotEmpty()) bytes[0] * 100f / 255f else null
                     } else null
-                    val throttle = if (supports(0x11)) queryValue("0111", "4111") { bytes ->
+                    val throttle = if (slowCounter % 8 == 0 && supports(0x11)) queryValue("0111", "4111") { bytes ->
                         if (bytes.isNotEmpty()) bytes[0] * 100f / 255f else null
                     } else null
-                    val speed = if (supports(0x0D)) queryValue("010D", "410D") { bytes ->
+                    val speed = if (slowCounter % 2 == 0 && supports(0x0D)) queryValue("010D", "410D") { bytes ->
                         if (bytes.isNotEmpty()) bytes[0].toFloat() else null
                     } else null
 
@@ -352,7 +367,10 @@ class Elm327Client(private val context: Context) {
                     fast.put(K_THROTTLE, throttle, now)
                     fast.put(K_SPEED, speed, now)
 
-                    if (++slowCounter % 2 == 0) {
+                    // Bloque lento completo cada 10 ciclos (~10 s con sleep
+                    // 1000 ms): puebla el dashboard tras cada reconexión y
+                    // refresca sin ráfagas constantes.
+                    if (slowCounter % 10 == 0) {
                         val coolant = if (supports(0x05)) queryValue("0105", "4105") { bytes ->
                             if (bytes.isNotEmpty()) (bytes[0] - 40).toFloat() else null
                         } else null
@@ -430,6 +448,20 @@ class Elm327Client(private val context: Context) {
                             "load=${last.loadPct} throttle=${last.throttlePct} fuel=${last.fuelPct} " +
                             "trim=${last.fuelTrimPct} timing=${last.timingAdvanceDeg} bat=${last.batteryV}"
                     )
+                    // Si la ECU no responde en varios ciclos seguidos (todos
+                    // los rápidos null) se fuerza reapertura en vez de quedarse
+                    // en NO DATA para siempre.
+                    if (rpm == null && load == null && throttle == null && speed == null) {
+                        silentCycles++
+                        if (silentCycles >= 8) {
+                            ObdConsole.info("= La ECU no responde (NO DATA)… reconectando adaptador")
+                            Log.w(TAG, "silent streak -> reconnect")
+                            closeSocket()
+                            throw IOException("ECU silent, reconnect")
+                        }
+                    } else {
+                        silentCycles = 0
+                    }
                     // Comandos puntuales pedidos desde la UI (releer fallas, sondas).
                     while (onceQueue.isNotEmpty()) {
                         try {
@@ -438,7 +470,7 @@ class Elm327Client(private val context: Context) {
                             Log.w(TAG, "once: ${e.message}")
                         }
                     }
-                    Thread.sleep(350L)
+                    Thread.sleep(1000L)
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "OBD session: ${e.message}")
@@ -472,6 +504,9 @@ class Elm327Client(private val context: Context) {
         // Clones v2.1 may answer '?' to ATS0; never abort on that.
         sendCommand("ATS0", 800L)
         sendCommand("ATH0", 800L)
+        // Temporizado adaptativo del clon BLE: sin él, la ECU suele dejar de
+        // responder (NO DATA) tras las primeras consultas.
+        sendCommand("ATAT2", 800L)
 
         // Identificar el clon (MINI ELM327 v1.5/2.1, Vgate, etc.) y el
         // protocolo negociado. Es la primera línea que hay que mirar si una
@@ -788,10 +823,12 @@ class Elm327Client(private val context: Context) {
         prefix: String,
         parser: (IntArray) -> Float?
     ): Float? {
-        // Accelerate CAN responses on v2.1 clones by requesting a single frame.
-        var response = sendCommand("$command 1", 1500L)
+        // Consulta en la forma estándar (sin sufijo). En el ELM327 v1.5/BLE
+        // del estéreo (68:03…) el sufijo " 1" devolvía NO DATA aunque la ECU
+        // sí respondía; se prueba el comando limpio primero.
+        var response = sendCommand(command, 1500L)
         if (response.isBlank() || response.contains("?")) {
-            response = sendCommand(command, 1500L)
+            response = sendCommand("$command 1", 1500L)
         }
         if (response.contains("NO DATA", ignoreCase = true) ||
             response.contains("UNABLE", ignoreCase = true) ||
@@ -800,7 +837,21 @@ class Elm327Client(private val context: Context) {
             Log.d(TAG, "$command no data: ${response.replace("\n", " ").take(80)}")
             return null
         }
-        val bytes = payload(response, prefix) ?: return null
+        var bytes = payload(response, prefix)
+        if (bytes == null) {
+            // Eco o respuesta truncada por BLE: se reintenta una vez en vez
+            // de dar el ciclo por perdido.
+            try {
+                Thread.sleep(40L)
+            } catch (_: Exception) {
+            }
+            response = sendCommand(command, 1500L)
+            if (response.contains("NO DATA", ignoreCase = true)) {
+                Log.d(TAG, "$command no data (retry): ${response.replace("\n", " ").take(80)}")
+                return null
+            }
+            bytes = payload(response, prefix) ?: return null
+        }
         return parser(bytes)
     }
 
@@ -1030,11 +1081,15 @@ class Elm327Client(private val context: Context) {
     private fun restoreObd() {
         sendCommand("ATFCSM0", 350L)
         sendCommand("ATCAF1", 350L)
-        val reset = sendCommand("ATCRA7E8", 450L)
-        if (reset.contains("?")) {
-            sendCommand("ATAR", 350L)
-        }
+        sendCommand("ATCRA7E8", 450L)
         sendCommand("ATSH7DF", 400L)
+        // ATZ limpia filtros ATCRA/ATCM left-over del UDS: sin él, un filtro
+        // 0x77E del cuadro dejaba los PIDs del motor en NO DATA.
+        sendCommand("ATZ", 800L)
+        try {
+            Thread.sleep(700L)
+        } catch (_: Exception) {
+        }
         sendCommand("ATSP6", 500L)
         sendCommand("ATH0", 300L)
     }
