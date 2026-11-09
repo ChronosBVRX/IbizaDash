@@ -27,12 +27,14 @@ class SettingsActivity : AppCompatActivity() {
         val showWeather = findViewById<CheckBox>(R.id.showWeather)
         val demoMedia = findViewById<CheckBox>(R.id.demoMedia)
         val p2p5ghz = findViewById<CheckBox>(R.id.p2p5ghz)
+        val usePhoneGps = findViewById<CheckBox>(R.id.usePhoneGps)
         val unitKmh = findViewById<RadioButton>(R.id.unitKmh)
         val unitMph = findViewById<RadioButton>(R.id.unitMph)
 
         showWeather.isChecked = Prefs.showWeather(this)
         demoMedia.isChecked = Prefs.demoMedia(this)
         p2p5ghz.isChecked = Prefs.p2pPrefer5Ghz(this)
+        usePhoneGps.isChecked = Prefs.usePhoneGps(this)
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) {
             // Este estéreo no puede elegir banda para el grupo Wi-Fi Direct.
             p2p5ghz.isEnabled = false
@@ -50,6 +52,14 @@ class SettingsActivity : AppCompatActivity() {
             Prefs.setShowWeather(this, showWeather.isChecked)
             Prefs.setDemoMedia(this, demoMedia.isChecked)
             Prefs.setUseMph(this, unitMph.isChecked)
+            Prefs.setUsePhoneGps(this, usePhoneGps.isChecked)
+            com.chronosbvrx.ibizadash.nav.PhoneNavBridge
+                .setUsePhoneGps(usePhoneGps.isChecked)
+            com.chronosbvrx.ibizadash.nav.NavLink.broadcastAsync(
+                org.json.JSONObject()
+                    .put("type", "NAV_MODE")
+                    .put("gps", if (usePhoneGps.isChecked) "phone" else "stereo")
+            )
             val bandChanged = Prefs.p2pPrefer5Ghz(this) != p2p5ghz.isChecked
             Prefs.setP2pPrefer5Ghz(this, p2p5ghz.isChecked)
             if (bandChanged) {

@@ -15,6 +15,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.chronosbvrx.ibizadash.music.OfflineMusicCatalog
 
 /**
@@ -144,6 +145,7 @@ class BluetoothMediaReceiver : BroadcastReceiver() {
             "android.bluetooth.a2dpsink.extra.playing_state"
         )
         val artwork = map.bitmap("artwork", "album_art", "albumart", "cover", "cover_art", "bitmap")
+        val sourcePackage = map.sourcePackage(action)
 
         if (title.isNullOrBlank()) {
             // State-only packets (pause/play) keep the last track.
@@ -165,7 +167,7 @@ class BluetoothMediaReceiver : BroadcastReceiver() {
             album = album.orEmpty(),
             artwork = artwork ?: previous?.takeIf { it.title == title }?.artwork,
             isPlaying = resolvedPlaying(playing ?: previous?.isPlaying),
-            packageName = "bluetooth",
+            packageName = sourcePackage,
             isBluetooth = true,
             positionMs = positionMs ?: 0L,
             durationMs = durationMs ?: 0L
@@ -221,7 +223,10 @@ class BluetoothMediaReceiver : BroadcastReceiver() {
             album = album,
             artwork = art ?: previous?.takeIf { sameTrack }?.artwork,
             isPlaying = playing,
-            packageName = "bluetooth",
+            packageName = previous
+                ?.takeIf { sameTrack && it.packageName != "bluetooth" }
+                ?.packageName
+                ?: "bluetooth",
             isBluetooth = true,
             positionMs = playback?.position?.takeIf { it >= 0L } ?: 0L,
             durationMs = duration
@@ -229,6 +234,31 @@ class BluetoothMediaReceiver : BroadcastReceiver() {
         MediaRepository.updateBluetooth(now)
         context?.let { saveCache(it, now) }
         loadCover(now)
+    }
+
+    /**
+     * Detecta la app que reproduce cuando el stack la expone.
+     *
+     * Spotify anuncia públicamente `com.spotify.music.metadatachanged`,
+     * así que esa action por sí sola ya es una fuente confiable. Las apps
+     * genéricas A2DP/AVRCP normalmente no envían esta identificación.
+     */
+    private fun MutableMap<String, Any?>.sourcePackage(action: String?): String {
+        val direct = text(
+            "package", "package_name", "packagename", "originating_package",
+            "source_package", "session_package", "media_package",
+            "source_app", "app_package", "player_package", "application",
+            "source", "app"
+        )?.trim()?.takeIf { it.contains(".") }
+        if (direct != null) return direct.lowercase()
+        val act = action.orEmpty().lowercase()
+        return when {
+            act.startsWith("com.spotify.music") -> "com.spotify.music"
+            act.contains("youtube") && act.contains("music") ->
+                "com.google.android.apps.youtube.music"
+            act.contains("youtube") -> "com.google.android.youtube"
+            else -> "bluetooth"
+        }
     }
 
     private fun loadCover(track: NowPlaying) {
@@ -377,7 +407,11 @@ class BluetoothMediaReceiver : BroadcastReceiver() {
             "com.android.music.metachanged",
             "com.android.music.playstatechanged",
             "com.spotify.music.metadatachanged",
-            "com.spotify.music.playbackstatechanged"
+            "com.spotify.mobile.android.metadatachanged",
+            "com.spotify.music.playbackstatechanged",
+            "com.spotify.mobile.android.playbackstatechanged",
+            "com.spotify.music.active",
+            "com.spotify.music.queuechanged"
         )
 
         private var instance: BluetoothMediaReceiver? = null
@@ -388,7 +422,12 @@ class BluetoothMediaReceiver : BroadcastReceiver() {
             val filter = IntentFilter()
             ACTIONS.forEach { filter.addAction(it) }
             try {
-                context.registerReceiver(receiver, filter)
+                ContextCompat.registerReceiver(
+                    context,
+                    receiver,
+                    filter,
+                    ContextCompat.RECEIVER_EXPORTED
+                )
                 instance = receiver
                 receiver.context = context.applicationContext
                 receiver.restoreCache(context)

@@ -12,7 +12,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
   (capturas reales del estéreo y del teléfono, con hojas de contacto).
 - **Paquete del estéreo:** `com.chronosbvrx.ibizadash`
 - **Paquete del teléfono:** `com.chronosbvrx.ibizacompanion`
-- **Versiones actuales:** IbizaDash **1.8.0** (versionCode 29) · IbizaCompanion **1.8.0** (versionCode 23)
+- **Versiones actuales:** IbizaDash **1.9.0** (versionCode 30) · IbizaCompanion **1.9.0** (versionCode 24)
 - **minSdk 23 / targetSdk 33 / compileSdk 36** (estéreo)
 - Hecho con **Views** (sin Compose) en el estéreo para que sea liviano en el Cortex-A7.
 
@@ -215,6 +215,53 @@ del sistema y la envía por Wi-Fi Direct como un WAV corto:
 
 Se activa o desactiva en **Ajustes rápidos → Navegación → Voz de navegación**, donde también
 se ve el peso de la caché y se puede liberar. Las frases se piden una sola vez.
+
+### OBD: velocidad y gasolina
+
+La app consulta todos los PIDs aunque la máscara `0100/0120/0140` llegue
+incompleta (en clones ELM327 se perdían `010D` y `012F`). El nivel de gasolina
+se lee del **cuadro UDS** `0x714 → 0x77E`, DID `0x2206` (litros), usando la
+secuencia raw con flow control que funciona en estos adaptadores. Si el cuadro
+no responde, la UI muestra autonomía estimada marcada como tal, nunca un valor
+inventado. Detalle y referencias: [docs/OBD_FUEL_INVESTIGATION.md](docs/OBD_FUEL_INVESTIGATION.md).
+
+### Seguimiento y diagnóstico del GPS
+
+El coche se sigue con su propio GPS. Tres descarte comunes de “se queda
+pegado” están corregidos:
+
+- Un solo toque en el mapa **ya no** detiene el seguimiento; solo un arrastre
+  de más de 18 px activa el modo libre.
+- El centrado en modo Cockpit pasó de cada 1.5 s a cada fix reciente
+  (límite 600 ms) para no ir un paso atrás a velocidad.
+- Con precisión peor que 30 m no se suaviza la posición, para no clavarlo en
+  la misma cuadra.
+
+El mapa muestra un chip **GPS en vivo / impreciso / viejo** con la calidad de
+señal. Si el GPS del estéreo falla, la app lo declara en la UI en vez de
+mover el coche.
+
+### GPS del coche (por defecto)
+
+La navegación usa el **GPS del estéreo**: la cámara sigue el coche, el marcador
+avanza sobre la ruta y lo recorrido se recorta. El teléfono solo manda la ruta
+(`ROUTE_SET`) y, al conectar o fijar destino, recibe `NAV_MODE {"gps":"stereo"}`
+para dejar de transmitir posiciones cada segundo y no saturar el enlace Wi-Fi.
+
+Si el estéreo no tiene señal GPS, se puede activar el respaldo en
+**Ajustes → GPS del teléfono (respaldo; usa más datos)**. En ese modo vuelven
+los `PHONE_NAV_STATE` y el teléfono calcula posición/progreso.
+
+El marcador del coche se dibuja a **56 dp** de ancho para distinguirse en la
+pantalla de 1280×720.
+
+### Mapa en el teléfono
+
+La pantalla **Rutas** de IbizaCompanion dibuja el mismo concepto: un coche SVG
+de 56 dp dentro de un halo, con el morro blanco apuntando al rumbo real. El
+rumbo sale del `bearing` del GPS; si el teléfono no lo publica, se deduce del
+desplazamiento entre fixes y se suaviza. El mini-mapa del Inicio también pinta
+el coche orientado sobre el trazo de la ruta.
 
 ### Tráfico en tiempo real (TomTom)
 

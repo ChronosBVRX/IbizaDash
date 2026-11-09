@@ -316,6 +316,14 @@ object WifiNavBridgeServer {
                     // Snapshot inmediato para que el teléfono pinte la ruta
                     // activa aunque el estéreo llevara horas encendido.
                     writeLine(out, NavStateRelay.snapshotObject())
+                    // Fuente de posición: por defecto el GPS del estéreo.
+                    // El teléfono deja de emitir PHONE_NAV_STATE si no se usa.
+                    writeLine(
+                        out,
+                        JSONObject()
+                            .put("type", "NAV_MODE")
+                            .put("gps", if (Prefs.usePhoneGps(context)) "phone" else "stereo")
+                    )
                     Log.i(
                         TAG,
                         "cliente Wi-Fi autenticado ${socket.inetAddress?.hostAddress} " +

@@ -128,6 +128,13 @@ fun projectOnSegment(
     var t = (px * bx + py * by) / len2
     t = t.coerceIn(0.0, 1.0)
     val segLen = sqrt(len2)
-    val lateral = abs(px * by - py * bx) / segLen
-    return Triple(t, t * segLen, lateral)
+    // Distancia al punto MÁS CERCANO DEL SEGMENTO, no a la recta infinita.
+    // Sin esto, en una calle recta cualquier punto de la misma longitud
+    // "encaja" con el primer segmento y el cursor de ruta nunca avanza.
+    val projX = t * bx
+    val projY = t * by
+    val dx = px - projX
+    val dy = py - projY
+    val distance = sqrt(dx * dx + dy * dy)
+    return Triple(t, t * segLen, distance)
 }

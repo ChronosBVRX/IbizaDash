@@ -281,6 +281,13 @@ class MediaBridgeService : Service() {
                 }
                 "PONG" -> lastPongMs = SystemClock.elapsedRealtime()
                 "NAV_STATE" -> handleNavState(obj)
+                "NAV_MODE" -> {
+                    // El estéreo prefiere su propio GPS: suspendemos el envío
+                    // de posiciones para no saturar el enlace Wi-Fi.
+                    PhoneNavController.setPositionStreaming(
+                        obj.optString("gps", "stereo") != "stereo"
+                    )
+                }
                 "REROUTE_REQUEST" -> handleReroute(obj)
                 "MEDIA_CMD" -> handleMediaCommand(obj.optString("cmd", ""))
                 "MAP_STREAM" -> {

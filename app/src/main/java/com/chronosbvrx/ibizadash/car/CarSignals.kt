@@ -71,9 +71,10 @@ class CarSignals(
     }
 
     private fun emit() {
-        // Expire stale OBD data: if the adapter stops talking, fall back to
-        // CAN/GPS instead of freezing the last speed forever.
-        val fresh = android.os.SystemClock.elapsedRealtime() - obdKmhAtMs < 4000L
+        // OBD es la fuente de referencia: se conserva 10 s para que uno o dos
+        // paquetes perdidos no hagan parpadear el velocímetro entre OBD y GPS.
+        // El fallback solo aparece si el adaptador deja de contestar de verdad.
+        val fresh = android.os.SystemClock.elapsedRealtime() - obdKmhAtMs < 10_000L
         val obd = if (fresh) obdKmh else null
         val canSpeed = readProp("persist.can.speed")?.toFloatOrNull()
         val hasCan = canSpeed != null && canSpeed > 0.5f

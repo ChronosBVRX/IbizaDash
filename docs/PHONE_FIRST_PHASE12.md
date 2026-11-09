@@ -82,6 +82,40 @@
 - Notificaciones: `Shell · Prueba · Mensaje` visible en la cápsula del estéreo.
 - Teselas del corredor: 54/54 (`TILE_STATS`).
 
+## Correcciones de navegación (8 nov 2026)
+
+- **Map-matching en rectas:** `projectOnSegment` medía la distancia a la *recta
+  infinita*; en una calle recta cualquier punto de la misma longitud encajaba
+  con el primer segmento y el cursor se quedaba al inicio. Ahora devuelve la
+  distancia al punto más cercano del segmento (extremos incluidos). Esto
+  corrige el avance del coche y del progreso en rutas rectas.
+- **Recorte de la ruta recorrida:** el estéreo conserva la geometría completa,
+  pero la `Polyline` visible se recorta al progreso actual (y también los
+  tramos de tráfico). Lo recorrido deja de pintarse.
+- **Phone-first con cámara:** los `PHONE_NAV_STATE` ahora centran el mapa en
+  `snappedLat/snappedLon` y no solo mueven el marcador. El seguimiento se
+  limita a ~800 ms para no encadenar animaciones.
+- **Rumbo estable:** en navegación se usa el rumbo del segmento de ruta
+  (promedio corto, umbral de 10°) en lugar del bearing GPS; el mapa solo gira
+  cuando cambia de verdad la carretera. El marcador queda siempre apuntando
+  arriba en modo heading-up.
+- **Carrera ROUTE_SET/PHONE_NAV_STATE:** si el primer estado del teléfono
+  llega antes que la geometría, se reaplica al terminar `drawNavRoute` para
+  centrar y recortar en el primer frame.
+- **GPS del coche por defecto:** el estéreo navega con su propio GPS y la
+  cámara/marcador/progreso locales. Los `PHONE_NAV_STATE` se ignoran salvo que
+  el usuario active **Ajustes → GPS del teléfono (respaldo)**. Al conectar o
+  poner una ruta, el estéreo envía `NAV_MODE {"gps":"stereo"}` y la compañera
+  deja de transmitir posiciones cada segundo (solo sigue su UI local).
+- **Marcador del coche:** el sprite del mapa pasó de 26 dp a **56 dp** de
+  ancho para que se distinga en la pantalla de 1280×720 sin tapar la ruta.
+- **Coche en la app del teléfono:** la pantalla Rutas usa un SVG de coche
+  dentro de un halo, con el morro apuntando al rumbo (bearing GPS o deducido
+  del desplazamiento) y suavizado para no vibrar. El mini-mapa del Inicio
+  dibuja el coche orientado sobre la ruta.
+- **WebView del teléfono:** se fuerza `map.invalidateSize()` al cargar y al
+  redimensionar para que el mapa ocupe todo el alto del Scaffold.
+
 ## Notas de prueba
 
 - En el emulador Android 36 hay que desactivar el **cached app freezer** para

@@ -17,7 +17,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -25,6 +27,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -521,19 +524,64 @@ private fun RouteSketch(encoded: String, color: Color, progress: Float) {
         )
         drawCircle(IbizaColors.Success, radius = 3.dp.toPx(), center = Offset(sx, sy))
         val cp = sample[split]
-        drawCircle(
-            Color.White,
-            radius = 3.dp.toPx(),
-            center = Offset(
-                offX + ((cp.lon - minLon).toFloat() * scale),
-                offY + ((maxLat - cp.lat).toFloat() * scale)
+        val cpX = offX + ((cp.lon - minLon).toFloat() * scale)
+        val cpY = offY + ((maxLat - cp.lat).toFloat() * scale)
+        val nextIdx = if (split < sample.lastIndex) split + 1 else split
+        val prevIdx = if (split > 0) split - 1 else 0
+        val bearingFrom = if (split < sample.lastIndex) cp else sample[prevIdx]
+        val bearingTo = if (split < sample.lastIndex) sample[nextIdx] else cp
+        rotate(degrees = sketchBearing(bearingFrom, bearingTo), pivot = Offset(cpX, cpY)) {
+            drawCircle(
+                Color(0xFF0B0F17),
+                radius = 7.dp.toPx(),
+                center = Offset(cpX, cpY)
             )
-        )
+            drawCircle(
+                color,
+                radius = 7.dp.toPx(),
+                center = Offset(cpX, cpY),
+                style = Stroke(width = 1.5.dp.toPx())
+            )
+            val carW = 5.dp.toPx()
+            val carH = 11.dp.toPx()
+            drawRoundRect(
+                color = color,
+                topLeft = Offset(cpX - carW / 2f, cpY - carH / 2f),
+                size = Size(carW, carH),
+                cornerRadius = CornerRadius(2.5f)
+            )
+            drawRoundRect(
+                color = Color(0xFF0B0F17),
+                topLeft = Offset(cpX - carW * 0.35f, cpY - carH * 0.26f),
+                size = Size(carW * 0.7f, carH * 0.24f),
+                cornerRadius = CornerRadius(1f)
+            )
+            val nose = Path().apply {
+                moveTo(cpX, cpY - carH / 2f - 3.dp.toPx())
+                lineTo(cpX + 3.dp.toPx(), cpY - carH / 2f)
+                lineTo(cpX - 3.dp.toPx(), cpY - carH / 2f)
+                close()
+            }
+            drawPath(nose, Color.White)
+        }
         drawCircle(color, radius = 4.dp.toPx(), center = Offset(ex, ey))
     }
 }
 
 private data class Pt(val lat: Double, val lon: Double)
+
+/** Rumbo geográfico (0 = norte, 90 = este) entre dos puntos. */
+private fun sketchBearing(from: Pt, to: Pt): Float {
+    val lat1 = Math.toRadians(from.lat)
+    val lat2 = Math.toRadians(to.lat)
+    val dLon = Math.toRadians(to.lon - from.lon)
+    val y = Math.sin(dLon) * Math.cos(lat2)
+    val x = Math.cos(lat1) * Math.sin(lat2) -
+        Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon)
+    var deg = Math.toDegrees(Math.atan2(y, x))
+    if (deg < 0) deg += 360.0
+    return deg.toFloat()
+}
 
 /** Standard Google encoded polyline decoder (same format OSRM returns). */
 private fun decodePolyline(encoded: String): List<Pt> {

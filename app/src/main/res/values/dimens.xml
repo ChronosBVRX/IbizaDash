@@ -12,9 +12,9 @@
     <dimen name="elev_dock">18dp</dimen>
 
     <dimen name="panel_width">420dp</dimen>
-    <dimen name="dock_height">84dp</dimen>
+    <dimen name="dock_height">76dp</dimen>
     <dimen name="screen_margin">16dp</dimen>
-    <dimen name="panel_bottom_gap">104dp</dimen>
+    <dimen name="panel_bottom_gap">96dp</dimen>
 
     <dimen name="hud_speed">96sp</dimen>
     <dimen name="time_size">36sp</dimen>

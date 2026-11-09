@@ -31,6 +31,8 @@ object PhoneNavController {
     @Volatile private var lastSendMs = 0L
     @Volatile private var lastSnapshot: PhoneNavSnapshot? = null
     @Volatile private var completed = false
+    /** Si el estéreo usa su GPS, no hace falta inundar el enlace con estados. */
+    @Volatile private var positionStreaming = true
     private var watchdog: Thread? = null
     /** Red en un hilo propio: el GPS entrega en el hilo principal. */
     private val sender = Executors.newSingleThreadExecutor { r ->
@@ -138,6 +140,11 @@ object PhoneNavController {
         }
     }
 
+    fun setPositionStreaming(enabled: Boolean) {
+        positionStreaming = enabled
+        Log.i(TAG, "PHONE_NAV_STATE streaming=$enabled")
+    }
+
     fun clear() {
         active = false
         completed = false
@@ -178,6 +185,9 @@ object PhoneNavController {
 
     private fun sendToStereo(snapshot: PhoneNavSnapshot) {
         lastSendMs = SystemClock.elapsedRealtime()
+        // El estéreo navega con su GPS: el teléfono conserva su UI local,
+        // pero no transmite posiciones cada segundo.
+        if (!positionStreaming) return
         val json = JSONObject()
             .put("type", "PHONE_NAV_STATE")
             .put("active", true)

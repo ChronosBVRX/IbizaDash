@@ -28,5 +28,15 @@ object NavLink {
         }
     }
 
+    /** Encola un envío a todos los clientes conectados. */
+    fun broadcastAsync(obj: JSONObject) {
+        tx.execute {
+            try {
+                broadcast(obj)
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     fun wifiActive(): Boolean = WifiNavBridgeServer.hasClients()
 }

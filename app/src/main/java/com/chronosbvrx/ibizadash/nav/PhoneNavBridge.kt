@@ -3,6 +3,7 @@ package com.chronosbvrx.ibizadash.nav
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
+import com.chronosbvrx.ibizadash.Prefs
 
 /**
  * Puente de navegación "phone-first".
@@ -20,6 +21,14 @@ object PhoneNavBridge {
     var active: Boolean = false
         private set
 
+    /**
+     * El GPS del estéreo es la fuente por defecto. El teléfono solo se usa
+     * como respaldo manual para no enviar posiciones cada segundo.
+     */
+    @Volatile
+    var usePhoneGps: Boolean = false
+        private set
+
     @Volatile
     private var lastStateMs = 0L
 
@@ -30,6 +39,7 @@ object PhoneNavBridge {
 
     fun start(context: Context) {
         appContext = context.applicationContext
+        usePhoneGps = Prefs.usePhoneGps(context)
         if (watchdog == null) {
             watchdog = Thread {
                 while (true) {
@@ -60,6 +70,9 @@ object PhoneNavBridge {
     /** Llega un estado calculado por el teléfono. */
     fun onState(context: Context, state: NavState) {
         appContext = context.applicationContext
+        // Fuente por defecto: GPS del coche. Se ignora el estado del teléfono
+        // para no gastar enlace ni competir con RouteNavigator.
+        if (!usePhoneGps) return
         active = true
         lastStateMs = SystemClock.elapsedRealtime()
         start(context)
@@ -67,6 +80,15 @@ object PhoneNavBridge {
         if (RouteNavigator.isRunning()) RouteNavigator.stop()
         NavStateRepository.publish(state)
         NavRepository.publish(state.actionText, state.remainingText, state.distText)
+    }
+
+    /** Cambia la fuente en caliente (Ajustes → GPS del teléfono). */
+    fun setUsePhoneGps(enabled: Boolean) {
+        usePhoneGps = enabled
+        if (!enabled) {
+            active = false
+            lastStateMs = 0L
+        }
     }
 
     /** Ruta borrada o reiniciada: el próximo ROUTE_SET decide el modo. */

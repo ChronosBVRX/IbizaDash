@@ -71,6 +71,7 @@ private const val MAP_HTML = """
   #map { position:absolute; top:0; right:0; bottom:0; left:0; }
   .leaflet-control-attribution { font-size:9px; background:rgba(8,13,20,.7); color:#91A2B5; }
   .leaflet-control-attribution a { color:#42C8E8; }
+  .car-icon { background:transparent; border:none; }
 </style>
 </head>
 <body>
@@ -103,24 +104,59 @@ private const val MAP_HTML = """
     offline.setUrl(base + '/{z}/{x}/{y}.png');
     if (!map.hasLayer(offline)) { offline.addTo(map); offline.bringToFront(); }
     if (routeLine) routeLine.bringToFront();
+    if (me) me.bringToFront();
     console.log('offline_on ' + base);
   }
   setTimeout(function(){ console.log('mapsize ' + map.getSize().x + 'x' + map.getSize().y + ' zoom ' + map.getZoom()); }, 1000);
-  var me = null, routeLine = null;
-  function setCurrent(lat, lon, center) {
-    if (me) map.removeLayer(me);
-    me = L.circleMarker([lat, lon], { radius:7, color:'#42C8E8', fillColor:'#42C8E8', fillOpacity:1, weight:3 }).addTo(map);
-    if (center) map.setView([lat, lon], 16);
+  // La WebView puede medirse antes de que el Scaffold termine de asentar el
+  // teclado/insets. Recalcular el tamaño evita que el mapa quede a media altura.
+  window.addEventListener('resize', function(){ setTimeout(function(){ map.invalidateSize(); }, 120); });
+  setTimeout(function(){ map.invalidateSize(); }, 700);
+  setTimeout(function(){ map.invalidateSize(); }, 1600);
+  var me = null, routeLine = null, carBearing = 0;
+  // Coche visto desde arriba con morro blanco: la rotación del grupo indica
+  // el rumbo real (0 = norte). Es un SVG para no depender de imágenes extra.
+  var CAR_SVG = '<svg width="56" height="56" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">'
+    + '<circle cx="32" cy="32" r="30" fill="#0B0F17" fill-opacity="0.92" stroke="#42C8E8" stroke-width="2"/>'
+    + '<g id="carRot">'
+    + '<rect x="24" y="12" width="16" height="40" rx="8" fill="#42C8E8"/>'
+    + '<rect x="26.5" y="17" width="11" height="9" rx="3" fill="#0B0F17"/>'
+    + '<rect x="26.5" y="39" width="11" height="7" rx="2.5" fill="#0B0F17"/>'
+    + '<path d="M32 5 L37.5 13 L26.5 13 Z" fill="#F8FAFC"/>'
+    + '</g></svg>';
+  function setCurrent(lat, lon, bearing, center) {
+    if (bearing !== undefined && bearing !== null && isFinite(bearing)) {
+      carBearing = bearing;
+    }
+    if (!me) {
+      me = L.marker([lat, lon], {
+        icon: L.divIcon({
+          className: 'car-icon',
+          html: CAR_SVG,
+          iconSize: [56, 56],
+          iconAnchor: [28, 28]
+        }),
+        interactive: false,
+        keyboard: false
+      }).addTo(map);
+    } else {
+      me.setLatLng([lat, lon]);
+    }
+    var rot = document.getElementById('carRot');
+    if (rot) rot.setAttribute('transform', 'rotate(' + carBearing + ' 32 32)');
+    if (center) map.setView([lat, lon], Math.max(map.getZoom(), 16));
   }
   function setRoute(points) {
     if (routeLine) map.removeLayer(routeLine);
     routeLine = L.polyline(points, { color:'#42C8E8', weight:7, opacity:0.95 }).addTo(map);
+    if (me) me.bringToFront();
+    map.invalidateSize();
     map.fitBounds(routeLine.getBounds(), { padding:[60,60] });
   }
   function clearRoute() {
     if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
   }
-  function center(lat, lon) { map.setView([lat, lon], 16); }
+  function center(lat, lon) { map.setView([lat, lon], 16); map.invalidateSize(); }
 </script>
 </body>
 </html>
@@ -148,7 +184,9 @@ fun NavigationScreen() {
     var mapReady by remember { mutableStateOf(false) }
     var currentLat by remember { mutableStateOf(19.7060) }
     var currentLon by remember { mutableStateOf(-101.1950) }
+    var currentBearing by remember { mutableStateOf(0f) }
     var centeredOnce by remember { mutableStateOf(false) }
+    var hasFix by remember { mutableStateOf(false) }
 
     val hasLocationPermission = ContextCompat.checkSelfPermission(
         context, Manifest.permission.ACCESS_FINE_LOCATION
@@ -159,13 +197,37 @@ fun NavigationScreen() {
         val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
         val listener = object : LocationListener {
             override fun onLocationChanged(location: Location) {
+                val prevLat = currentLat
+                val prevLon = currentLon
                 currentLat = location.latitude
                 currentLon = location.longitude
+                // Rumbo: el que publica el GPS; si no lo trae, se deduce del
+                // desplazamiento entre fixes. Se mantiene el último cuando el
+                // coche está parado y se suaviza para que no vibre.
+                val moved = if (hasFix) {
+                    val out = FloatArray(1)
+                    Location.distanceBetween(
+                        prevLat, prevLon, location.latitude, location.longitude, out
+                    )
+                    out[0].toDouble()
+                } else {
+                    0.0
+                }
+                val rawBearing = when {
+                    location.hasBearing() && location.speed > 1f -> location.bearing
+                    moved > 3.0 -> bearingBetween(
+                        prevLat, prevLon, location.latitude, location.longitude
+                    )
+                    else -> currentBearing
+                }
+                currentBearing = smoothBearing(currentBearing, rawBearing)
+                hasFix = true
                 val center = !centeredOnce || followState.value
                 centeredOnce = true
                 webView?.post {
                     webView?.evaluateJavascript(
-                        "setCurrent(${location.latitude},${location.longitude},$center)", null
+                        "setCurrent(${location.latitude},${location.longitude},${currentBearing},$center)",
+                        null
                     )
                 }
             }
@@ -397,7 +459,9 @@ fun NavigationScreen() {
 
         LaunchedEffect(webView) {
             delay(1200L)
-            webView?.evaluateJavascript("setCurrent($currentLat,$currentLon,true)", null)
+            webView?.evaluateJavascript(
+                "setCurrent($currentLat,$currentLon,$currentBearing,true)", null
+            )
             // Offline tile pack (scripts/build_offline_pack.py) if present.
             // External app storage first so adb can push the PNG tree without root.
             try {
@@ -414,9 +478,9 @@ fun NavigationScreen() {
             }
         }
 
-        LaunchedEffect(appState.routePolyline) {
-            if (appState.routePolyline.isNotBlank() && route == null) {
-                delay(400L)
+        LaunchedEffect(webView, mapReady, appState.routePolyline) {
+            if (mapReady && appState.routePolyline.isNotBlank() && route == null) {
+                delay(500L)
                 drawRouteFromPolyline(appState.routePolyline)
             }
         }
@@ -669,6 +733,28 @@ fun NavigationScreen() {
             }
         }
     }
+}
+
+/** Suaviza el rumbo por el camino más corto (evita saltos 359°→0°). */
+private fun smoothBearing(from: Float, to: Float): Float {
+    val delta = ((to - from + 540f) % 360f) - 180f
+    return (from + delta * 0.45f + 360f) % 360f
+}
+
+/** Rumbo geográfico (0 = norte, 90 = este) entre dos coordenadas. */
+private fun bearingBetween(
+    lat1: Double, lon1: Double,
+    lat2: Double, lon2: Double
+): Float {
+    val p1 = Math.toRadians(lat1)
+    val p2 = Math.toRadians(lat2)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val y = Math.sin(dLon) * Math.cos(p2)
+    val x = Math.cos(p1) * Math.sin(p2) -
+        Math.sin(p1) * Math.cos(p2) * Math.cos(dLon)
+    var deg = Math.toDegrees(Math.atan2(y, x))
+    if (deg < 0) deg += 360.0
+    return deg.toFloat()
 }
 
 private fun decodePolyline(encoded: String): List<Pair<Double, Double>> {

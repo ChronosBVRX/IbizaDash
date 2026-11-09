@@ -181,6 +181,9 @@ object NavBridgeProtocol {
             }
 
             "PHONE_NAV_STATE" -> {
+                // GPS del coche por defecto: no construir ni publicar estados
+                // del teléfono si no se está usando como respaldo.
+                if (!PhoneNavBridge.usePhoneGps) return
                 val lat = obj.optDouble("lat", 0.0)
                 val lon = obj.optDouble("lon", 0.0)
                 val icon = try {

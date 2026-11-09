@@ -83,6 +83,23 @@
                 android:textColor="@color/text_muted"
                 android:textSize="11sp" />
 
+            <TextView
+                android:id="@+id/gpsStateChip"
+                android:layout_width="wrap_content"
+                android:layout_height="26dp"
+                android:layout_gravity="top|end"
+                android:layout_marginTop="52dp"
+                android:layout_marginEnd="16dp"
+                android:background="@drawable/bg_chip_glass"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="center"
+                android:letterSpacing="0.04"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:text="GPS en vivo"
+                android:textColor="@color/accent_sky"
+                android:textSize="10sp" />
+
             <View
                 android:layout_width="match_parent"
                 android:layout_height="150dp"
@@ -342,6 +359,100 @@
             android:fontFamily="sans-serif-medium"
             android:textColor="@color/text_primary"
             android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/nowPlayingToast"
+        android:layout_width="match_parent"
+        android:layout_height="76dp"
+        android:layout_gravity="bottom"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="108dp"
+        android:background="@drawable/bg_now_playing_toast"
+        android:elevation="18dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:visibility="gone">
+
+        <FrameLayout
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:background="@drawable/bg_media_stage"
+            android:padding="3dp">
+
+            <ImageView
+                android:id="@+id/npToastArt"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_album"
+                android:clipToOutline="true"
+                android:contentDescription="Portada"
+                android:padding="10dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_media"
+                android:tint="@color/text_muted" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="11dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/npToastTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:text="Sin reproducción"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp" />
+
+            <TextView
+                android:id="@+id/npToastSubtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Bluetooth · Radio FM"
+                android:textColor="@color/text_muted"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/npToastEq"
+            android:layout_width="30dp"
+            android:layout_height="18dp"
+            android:layout_marginStart="12dp"
+            android:indeterminateOnly="true"
+            android:indeterminateDrawable="@drawable/bg_media_eq"
+            android:indeterminateDuration="900" />
+
+        <ImageView
+            android:id="@+id/npToastStateIcon"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginEnd="8dp"
+            android:contentDescription="Estado de reproducción"
+            android:src="@drawable/ic_pause"
+            android:tint="@color/accent_sky" />
+
+        <TextView
+            android:id="@+id/npToastTime"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFeatureSettings="tnum"
+            android:text="0:00"
+            android:textColor="@color/text_faint"
+            android:textSize="10sp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <LinearLayout

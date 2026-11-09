@@ -25,6 +25,7 @@ object Prefs {
     private const val NIGHT_MODE = "night_mode"
     private const val VOICE_ON = "voice_on"
     private const val P2P_5GHZ = "p2p_5ghz"
+    private const val NAV_GPS_SOURCE = "nav_gps_source"
 
     private fun p(context: Context) =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -112,6 +113,21 @@ object Prefs {
 
     fun setP2pPrefer5Ghz(context: Context, value: Boolean) {
         p(context).edit().putBoolean(P2P_5GHZ, value).apply()
+    }
+
+    /**
+     * Fuente de posición para la navegación. Por defecto usa el GPS del
+     * estéreo; el GPS del teléfono solo se activa como respaldo manual para
+     * no llenar el enlace Wi-Fi con estados de posición cada segundo.
+     */
+    fun usePhoneGps(context: Context): Boolean =
+        p(context).getString(NAV_GPS_SOURCE, "car") == "phone"
+
+    fun setUsePhoneGps(context: Context, value: Boolean) {
+        p(context)
+            .edit()
+            .putString(NAV_GPS_SOURCE, if (value) "phone" else "car")
+            .apply()
     }
 
     fun totalOdometerKm(context: Context): Float =

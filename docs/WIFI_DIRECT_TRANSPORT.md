@@ -82,6 +82,8 @@ mensaje. Después envía un `NAV_STATE` completo (con polilínea) al cliente nue
 - `TILE_BATCH`: `zoom`, `x`, `y`, `pngBase64`.
 - `WEATHER`: `tempC`, `code` (WMO), `text`.
 - `PHONE_NAV_STATE`: snapshot de navegación calculado en el teléfono.
+- `NAV_MODE`: el estéreo indica la fuente de posición (`gps: "stereo"` o `"phone"`).
+  Con `stereo` (por defecto) el teléfono suspende el envío de `PHONE_NAV_STATE`.
 - `MAP_FRAME` / `MAP_FRAME_STOP`: mapa remoto dibujado en el teléfono.
 - `NOTIFY`: avisos del teléfono.
 - `PING` / `PONG`: heartbeat cada 15 s.

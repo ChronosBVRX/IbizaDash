@@ -25,6 +25,9 @@ object RoadSnapper {
     /**
      * Snap local sincrónico: proyección sobre la ruta o fix suavizado.
      * Devuelve Triple(lat, lon, snapped).
+     *
+     * Con mala exactitud se devuelve el fix crudo: suavizar con ±60 m de
+     * error hace que el coche se quede clavado en la misma cuadra.
      */
     fun snapLocal(
         lat: Double,
@@ -36,6 +39,11 @@ object RoadSnapper {
             shownLat = plat
             shownLon = plon
             return Triple(plat, plon, true)
+        }
+        if (accuracyM > 30f) {
+            shownLat = lat
+            shownLon = lon
+            return Triple(lat, lon, false)
         }
         // Rechazo de saltos: ignora fixes absurdos mientras el coche se mueve.
         if (!shownLat.isNaN() && speedKmh > 8 && accuracyM > 0 && accuracyM < 200) {

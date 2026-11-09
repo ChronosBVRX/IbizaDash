@@ -73,6 +73,8 @@ import com.chronosbvrx.ibizadash.nav.PhoneNotifyBridge
 import com.chronosbvrx.ibizadash.nav.RemoteMapBridge
 import com.chronosbvrx.ibizadash.nav.WifiNavBridgeServer
 import com.chronosbvrx.ibizadash.nav.TurnInstruction
+import com.chronosbvrx.ibizadash.nav.geoDist
+import com.chronosbvrx.ibizadash.nav.projectOnSegment
 import com.chronosbvrx.ibizadash.obd.DtcDictionary
 import com.chronosbvrx.ibizadash.obd.Elm327Client
 import com.chronosbvrx.ibizadash.obd.ObdRepository
@@ -103,8 +105,11 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private lateinit var unitText: TextView
     private lateinit var gearText: TextView
     private lateinit var speedSource: TextView
+    private lateinit var speedometer: com.chronosbvrx.ibizadash.ui.SpeedometerView
     private lateinit var mediaTitle: TextView
     private lateinit var mediaSubtitle: TextView
+    private lateinit var mediaSourceIcon: ImageView
+    private lateinit var mediaDevice: TextView
     private lateinit var albumArt: ImageView
     private lateinit var btnPlay: ImageButton
     private lateinit var btStatus: TextView
@@ -152,6 +157,16 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private lateinit var alertCapsule: View
     private lateinit var alertText: TextView
     private lateinit var nightDim: View
+    private lateinit var nowPlayingToast: View
+    private lateinit var npToastArt: ImageView
+    private lateinit var npToastTitle: TextView
+    private lateinit var npToastSubtitle: TextView
+    private lateinit var npToastEq: ProgressBar
+    private lateinit var npToastStateIcon: ImageView
+    private lateinit var npToastTime: TextView
+    private var lastMediaKey: String? = null
+    private var lastMediaPlaying: Boolean? = null
+    private var mediaToastLastShownMs = 0L
 
     // Vista de navegación
     private lateinit var navOverlay: View
@@ -199,6 +214,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private lateinit var mmProgress: ProgressBar
     private lateinit var mmTime: TextView
     private lateinit var mmSource: TextView
+    private lateinit var mmSourceIcon: ImageView
+    private lateinit var mmDevice: TextView
     private lateinit var mmSrcBt: TextView
     private lateinit var mmSrcRadio: TextView
 
@@ -258,6 +275,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private lateinit var vTrimState: TextView
     private lateinit var vSpeedObd: TextView
     private lateinit var vSpeedObdAdv: TextView
+    private lateinit var vFuelEngine: TextView
+    private lateinit var vFuelEngineAdv: TextView
     private lateinit var vVin: TextView
     private lateinit var vDtc: TextView
     private lateinit var vDtcMeanings: TextView
@@ -299,6 +318,18 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private var lastSnapCenterMs = 0L
     private lateinit var locationManager: LocationManager
     private var lastLocation: Location? = null
+
+    // Geometría completa de la ruta activa. La polilínea visible se recorta
+    // conforme el coche avanza; estos arrays se conservan para calcular el
+    // punto de corte, el rumbo de la carretera y el progreso.
+    private var routePoints: List<GeoPoint> = emptyList()
+    private var routeCum = DoubleArray(0)
+    private var routePolyline: Polyline? = null
+    private val routeTrafficOverlays = mutableListOf<RouteTrafficOverlay>()
+    private var routeTrimCursor = 0
+    private var lastRouteProgress = -1f
+    private var lastRouteTrimMs = 0L
+    private var lastNavFollowMs = 0L
 
     private var carSignals: CarSignals? = null
     private var twClient: TwCommandClient? = null
@@ -372,7 +403,12 @@ class MainActivity : AppCompatActivity(), LocationListener {
     // Estado de seguimiento del mapa
     private var mapMode = MapMode.FOLLOWING
     private var lastUserMapTouchMs = 0L
+    private var touchStartX = 0f
+    private var touchStartY = 0f
+    private var touchMoved = false
     private var lastFollowCenterMs = 0L
+    private var lastGpsStateUiMs = 0L
+    private lateinit var gpsStateChip: TextView
     private var currentBearingDeg = 0f
     private var mapSpriteKey = ""
     private var lastDisplayBearing = 0f
@@ -401,19 +437,46 @@ class MainActivity : AppCompatActivity(), LocationListener {
         miniMavIcon.setImageResource(state.icon.resId)
         miniMavDist.text = state.distText
         miniMavAction.text = state.actionText
-        // Marcador sobre la carretera (el centrado lo hace onLocationChanged).
-        if (!RemoteMapBridge.active) {
+
+        // El rumbo de la carretera es estable: sale de la geometría de la ruta,
+        // no del bearing GPS (que salta y obliga a redibujar el mapa). Solo se
+        // usa el bearing del teléfono cuando no hay ruta proyectable.
+        val routeBearing = routeBearingAt(state.progress)
+        val displayBearing = routeBearing ?: state.bearing
+        val snapLat = if (state.snappedLat != 0.0 || state.snappedLon != 0.0) {
+            state.snappedLat
+        } else {
+            state.lat
+        }
+        val snapLon = if (state.snappedLat != 0.0 || state.snappedLon != 0.0) {
+            state.snappedLon
+        } else {
+            state.lon
+        }
+        val hasFix = snapLat != 0.0 || snapLon != 0.0
+
+        // Vista heading-up: el mapa gira aunque la cámara esté en pausa por
+        // una exploración del usuario, para que el coche siempre mire al
+        // frente durante la ruta.
+        if (focus == Focus.NAV) {
+            applyNavigationHeading(displayBearing)
+        }
+
+        // Marcador sobre la carretera. En modo phone-first el teléfono manda la
+        // posición; en modo local el centrado lo hace onLocationChanged.
+        if (!RemoteMapBridge.active && hasFix) {
             try {
-                positionMarker?.position = GeoPoint(state.snappedLat, state.snappedLon)
-                if (state.bearing > 0) {
-                    updateMapMarkerSprite(state.bearing, carLightsOn)
-                } else {
-                    updateMapMarkerSprite(lastDisplayBearing, carLightsOn)
+                val target = GeoPoint(snapLat, snapLon)
+                positionMarker?.position = target
+                updateMapMarkerSprite(displayBearing, carLightsOn)
+                if (PhoneNavBridge.active) {
+                    followNavState(state, displayBearing, target)
                 }
                 map.invalidate()
             } catch (_: Exception) {
             }
         }
+        updateRouteDisplay(state)
         renderNavOverlay()
         com.chronosbvrx.ibizadash.nav.VoiceGuidance.onState(
             this,
@@ -549,7 +612,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         COCKPIT(0.55f, 0),
         NAV(1.00f, 1),
         MEDIA(0.25f, 2),
-        VEHICLE(0.25f, 4)
+        VEHICLE(0.25f, 3)
     }
 
     /** Seguimiento del mapa: el coche manda salvo que el usuario lo mueva. */
@@ -584,6 +647,12 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private val alertHide = Runnable {
         alertCapsule.animate().alpha(0f).setDuration(180L).withEndAction {
             alertCapsule.visibility = View.GONE
+        }.start()
+    }
+
+    private val mediaToastHide = Runnable {
+        nowPlayingToast.animate().alpha(0f).setDuration(220L).withEndAction {
+            nowPlayingToast.visibility = View.GONE
         }.start()
     }
 
@@ -694,6 +763,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         remoteMap = findViewById(R.id.remoteMap)
         remoteArrow = findViewById(R.id.remoteArrow)
         mapSourceChip = findViewById(R.id.mapSourceChip)
+        gpsStateChip = findViewById(R.id.gpsStateChip)
         clock = findViewById(R.id.clock)
         date = findViewById(R.id.date)
         weatherTop = findViewById(R.id.weatherTop)
@@ -701,8 +771,11 @@ class MainActivity : AppCompatActivity(), LocationListener {
         unitText = findViewById(R.id.unit)
         gearText = findViewById(R.id.gear)
         speedSource = findViewById(R.id.speedSource)
+        speedometer = findViewById(R.id.speedometer)
         mediaTitle = findViewById(R.id.mediaTitle)
         mediaSubtitle = findViewById(R.id.mediaSubtitle)
+        mediaSourceIcon = findViewById(R.id.mediaSourceIcon)
+        mediaDevice = findViewById(R.id.mediaDevice)
         albumArt = findViewById(R.id.albumArt)
         btnPlay = findViewById(R.id.btnPlay)
         btStatus = findViewById(R.id.btStatus)
@@ -744,6 +817,13 @@ class MainActivity : AppCompatActivity(), LocationListener {
         cockpitFuel = findViewById(R.id.cockpitFuel)
         alertCapsule = findViewById(R.id.alertCapsule)
         alertText = findViewById(R.id.alertText)
+        nowPlayingToast = findViewById(R.id.nowPlayingToast)
+        npToastArt = findViewById(R.id.npToastArt)
+        npToastTitle = findViewById(R.id.npToastTitle)
+        npToastSubtitle = findViewById(R.id.npToastSubtitle)
+        npToastEq = findViewById(R.id.npToastEq)
+        npToastStateIcon = findViewById(R.id.npToastStateIcon)
+        npToastTime = findViewById(R.id.npToastTime)
         nightDim = findViewById(R.id.nightDim)
 
         navOverlay = findViewById(R.id.navOverlay)
@@ -806,6 +886,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
         mmProgress = findViewById(R.id.mmProgress)
         mmTime = findViewById(R.id.mmTime)
         mmSource = findViewById(R.id.mmSource)
+        mmSourceIcon = findViewById(R.id.mmSourceIcon)
+        mmDevice = findViewById(R.id.mmDevice)
         mmSrcBt = findViewById(R.id.mmSrcBt)
         mmSrcRadio = findViewById(R.id.mmSrcRadio)
 
@@ -948,6 +1030,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
         vTrimState = findViewById(R.id.vTrimState)
         vSpeedObd = findViewById(R.id.vSpeedObd)
         vSpeedObdAdv = findViewById(R.id.vSpeedObdAdv)
+        vFuelEngine = findViewById(R.id.vFuelEngine)
+        vFuelEngineAdv = findViewById(R.id.vFuelEngineAdv)
         vVin = findViewById(R.id.vVin)
         vDtc = findViewById(R.id.vDtc)
         vDtcMeanings = findViewById(R.id.vDtcMeanings)
@@ -1047,11 +1131,25 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private fun setupMap() {
         MapHelper.configure(this, map)
         map.controller.setCenter(MapHelper.MORELIA)
-        // Si el usuario arrastra el mapa, se deja de seguir hasta que pulse
-        // "Centrar" o pasen 10 s sin tocarlo.
-        map.setOnTouchListener { _, event ->
-            if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
-                markMapFree()
+        // Solo se deja de seguir si el usuario ARRASTRA de verdad (> 18 px en
+        // el mapa). Un toque rápido no debe “pegar” el coche durante 10 s.
+        map.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    touchStartX = event.x
+                    touchStartY = event.y
+                    touchMoved = false
+                }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    if (!touchMoved) {
+                        val dx = event.x - touchStartX
+                        val dy = event.y - touchStartY
+                        if (dx * dx + dy * dy > 18f * 18f) {
+                            touchMoved = true
+                            markMapFree()
+                        }
+                    }
+                }
             }
             false
         }
@@ -1090,6 +1188,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         WifiNavBridgeServer.start(this)
         MapTileBridge.addListener(mapTileListener)
         NavStateRelay.start()
+        PhoneNavBridge.setUsePhoneGps(Prefs.usePhoneGps(this))
         // Debug route injection.
         try {
             ContextCompat.registerReceiver(
@@ -1122,6 +1221,13 @@ class MainActivity : AppCompatActivity(), LocationListener {
         } else {
             drawNavRoute(route)
             NavStateRelay.onRouteSet(route)
+            // El estéreo navega con su propio GPS. Avisar al teléfono para
+            // que deje de enviar PHONE_NAV_STATE y no sature el enlace.
+            NavLink.broadcastAsync(
+                org.json.JSONObject()
+                    .put("type", "NAV_MODE")
+                    .put("gps", if (Prefs.usePhoneGps(this)) "phone" else "stereo")
+            )
             RouteNavigator.start(this)
             // Pide al teléfono las voces de esta ruta (si faltan).
             com.chronosbvrx.ibizadash.nav.VoiceGuidance.onRouteSet(this, route)
@@ -1136,6 +1242,12 @@ class MainActivity : AppCompatActivity(), LocationListener {
         clearNavRoute()
         val points = MapHelper.decodePolyline(route.encodedPolyline)
         if (points.isEmpty()) return
+        routePoints = points
+        routeCum = buildRouteCum(points)
+        routeTrimCursor = 0
+        lastRouteProgress = -1f
+        lastRouteTrimMs = 0L
+        followPoint = points.first()
         val polyline = Polyline(map)
         polyline.setPoints(points)
         polyline.outlinePaint.color = android.graphics.Color.parseColor("#00E5FF")
@@ -1143,6 +1255,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         polyline.isGeodesic = false
         map.overlays.add(polyline)
         routeOverlays.add(polyline)
+        routePolyline = polyline
 
         // Tramos con tráfico: se pintan encima y más gruesos, como en Waze.
         if (route.trafficSections.isNotEmpty() && points.size > 2) {
@@ -1160,6 +1273,9 @@ class MainActivity : AppCompatActivity(), LocationListener {
                 overlay.isGeodesic = false
                 map.overlays.add(overlay)
                 routeOverlays.add(overlay)
+                routeTrafficOverlays.add(
+                    RouteTrafficOverlay(overlay, span.from, span.to, ArrayList(sub))
+                )
             }
         }
         val end = points.last()
@@ -1179,6 +1295,14 @@ class MainActivity : AppCompatActivity(), LocationListener {
         map.invalidate()
         applyFocus(Focus.NAV)
         NavRepository.publish(route.destinationName, "A ${route.totalDistanceMeters / 1000} km · ${route.totalDurationSeconds / 60} min", null)
+        // Si el teléfono mandó su primer estado antes de que llegara la ruta
+        // (race ROUTE_SET/PHONE_NAV_STATE), reaplicarlo ahora que la geometría
+        // ya existe: así el mapa se centra en el coche y la ruta se recorta.
+        lastNavState?.let { st ->
+            if (st.destName.isBlank() || st.destName == route.destinationName) {
+                renderNavState(st)
+            }
+        }
     }
 
     /** Color del tramo según la velocidad efectiva que reporta el proveedor. */
@@ -1188,11 +1312,237 @@ class MainActivity : AppCompatActivity(), LocationListener {
         else -> Color.parseColor("#EAB308")
     }
 
-    private fun clearNavRoute() {        if (routeOverlays.isNotEmpty()) {
+    private fun clearNavRoute() {
+        if (routeOverlays.isNotEmpty()) {
             routeOverlays.forEach { map.overlays.remove(it) }
             routeOverlays.clear()
         }
+        routeTrafficOverlays.clear()
+        routePolyline = null
+        routePoints = emptyList()
+        routeCum = DoubleArray(0)
+        routeTrimCursor = 0
+        lastRouteProgress = -1f
+        lastRouteTrimMs = 0L
+        followPoint = null
         map.invalidate()
+    }
+
+    private data class RouteTrafficOverlay(
+        val overlay: Polyline,
+        val from: Float,
+        val to: Float,
+        val points: List<GeoPoint>
+    )
+
+    private fun buildRouteCum(points: List<GeoPoint>): DoubleArray {
+        val cum = DoubleArray(points.size)
+        for (i in 1 until points.size) {
+            cum[i] = cum[i - 1] + geoDist(
+                points[i - 1].latitude, points[i - 1].longitude,
+                points[i].latitude, points[i].longitude
+            )
+        }
+        return cum
+    }
+
+    /** Índice del punto de ruta más cercano a [progress] (0..1). */
+    private fun cutIndexForProgress(progress: Float): Int {
+        if (routeCum.isEmpty()) return 0
+        val total = routeCum.last()
+        if (total <= 1.0) return 0
+        val target = progress.coerceIn(0f, 1f) * total
+        var lo = 0
+        var hi = routeCum.lastIndex
+        while (lo < hi) {
+            val mid = (lo + hi) / 2
+            if (routeCum[mid] < target) lo = mid + 1 else hi = mid
+        }
+        return lo
+    }
+
+    /**
+     * Proyecta la posición actual sobre la ruta activa. Devuelve (progreso,
+     * índice de segmento). Primero busca en una ventana alrededor del último
+     * corte y solo hace un recorrido completo si el coche se salió del tramo.
+     */
+    private fun projectOnActiveRoute(lat: Double, lon: Double): Pair<Float, Int>? {
+        if (routePoints.size < 2 || routeCum.isEmpty()) return null
+        val lastSeg = routePoints.size - 2
+        var bestIdx = -1
+        var bestT = 0.0
+        var bestDist = Double.MAX_VALUE
+
+        fun scan(from: Int, to: Int) {
+            for (i in from..to) {
+                val (t, _, lateral) = projectOnSegment(
+                    lat, lon,
+                    routePoints[i].latitude, routePoints[i].longitude,
+                    routePoints[i + 1].latitude, routePoints[i + 1].longitude
+                )
+                if (lateral < bestDist) {
+                    bestDist = lateral
+                    bestIdx = i
+                    bestT = t
+                }
+            }
+        }
+
+        val lo = (routeTrimCursor - 8).coerceAtLeast(0)
+        val hi = (routeTrimCursor + 48).coerceAtMost(lastSeg)
+        scan(lo, hi)
+        if (bestIdx < 0 || bestDist > 90.0) {
+            bestIdx = -1
+            bestDist = Double.MAX_VALUE
+            scan(0, lastSeg)
+        }
+        if (bestIdx < 0 || bestDist > 120.0) return null
+        val segStart = routeCum[bestIdx]
+        val segLen = (routeCum[bestIdx + 1] - segStart).coerceAtLeast(0.0)
+        val traveled = segStart + bestT * segLen
+        val total = routeCum.last().coerceAtLeast(1.0)
+        return Pair((traveled / total).toFloat().coerceIn(0f, 1f), bestIdx)
+    }
+
+    /**
+     * Recorta la polilínea visible al progreso actual: lo recorrido desaparece
+     * en lugar de quedarse pintado debajo del coche.
+     */
+    private fun updateRouteDisplay(state: NavState) {
+        if (routePoints.size < 3 || routeCum.isEmpty()) return
+        val now = SystemClock.elapsedRealtime()
+        val projected = if (state.snappedLat != 0.0 || state.snappedLon != 0.0) {
+            projectOnActiveRoute(state.snappedLat, state.snappedLon)
+        } else {
+            null
+        }
+        val progress = (projected?.first ?: state.progress).coerceIn(0f, 0.999f)
+        val wentBack = lastRouteProgress >= 0f && progress + 0.03f < lastRouteProgress
+        if (wentBack) {
+            // Reroute, giro en U o nueva ruta: rearmar desde la posición actual.
+            lastRouteProgress = progress
+        }
+        if (!wentBack && now - lastRouteTrimMs < 800L &&
+            Math.abs(progress - lastRouteProgress) < 0.003f
+        ) {
+            return
+        }
+        lastRouteTrimMs = now
+        lastRouteProgress = progress
+        val cut = cutIndexForProgress(progress)
+            .coerceIn(0, routePoints.size - 2)
+        if (cut != routeTrimCursor) {
+            routeTrimCursor = cut
+            val remaining = routePoints.subList(cut, routePoints.size)
+            if (remaining.size >= 2) {
+                routePolyline?.setPoints(ArrayList(remaining))
+            }
+        }
+        trimTrafficOverlays(progress)
+        map.invalidate()
+    }
+
+    private fun trimTrafficOverlays(progress: Float) {
+        if (routeTrafficOverlays.isEmpty()) return
+        for (t in routeTrafficOverlays) {
+            val start = maxOf(t.from, progress)
+            if (t.to <= start + 0.0005f) {
+                t.overlay.isEnabled = false
+                continue
+            }
+            val span = (t.to - t.from).coerceAtLeast(0.0001f)
+            val startT = ((start - t.from) / span).coerceIn(0f, 1f)
+            val fromIdx = (startT * (t.points.size - 1)).toInt()
+                .coerceIn(0, (t.points.size - 2).coerceAtLeast(0))
+            val sub = t.points.subList(fromIdx, t.points.size)
+            if (sub.size >= 2) {
+                t.overlay.isEnabled = true
+                t.overlay.setPoints(ArrayList(sub))
+            } else {
+                t.overlay.isEnabled = false
+            }
+        }
+    }
+
+    /**
+     * Rumbo local de la carretera en [progress]. La dirección se promedia con
+     * un corto recorrido anterior/posterior para seguir curvas sin saltos:
+     * un único segmento es ruidoso y un promedio largo esconde el giro.
+     */
+    private fun routeBearingAt(progress: Float): Float? {
+        if (routePoints.size < 2) return null
+        val idx = cutIndexForProgress(progress)
+            .coerceIn(0, routePoints.size - 2)
+        var x = 0.0
+        var y = 0.0
+        var count = 0
+        val start = (idx - 1).coerceAtLeast(0)
+        val end = (idx + 2).coerceAtMost(routePoints.size - 2)
+        for (j in start..end) {
+            val a = routePoints[j]
+            val b = routePoints[j + 1]
+            val segLen = geoDist(a.latitude, a.longitude, b.latitude, b.longitude)
+            if (segLen < 0.5) continue
+            val rad = Math.toRadians(
+                bearingBetween(a.latitude, a.longitude, b.latitude, b.longitude).toDouble()
+            )
+            // El tramo actual manda; los vecinos estabilizan el rumbo.
+            val weight = segLen.coerceAtMost(25.0).coerceAtLeast(1.0) *
+                if (j == idx) 2.0 else 1.0
+            x += Math.cos(rad) * weight
+            y += Math.sin(rad) * weight
+            count++
+        }
+        if (count == 0) return null
+        var deg = Math.toDegrees(Math.atan2(y, x))
+        if (deg < 0) deg += 360.0
+        return deg.toFloat()
+    }
+
+    private fun bearingBetween(
+        lat1: Double, lon1: Double,
+        lat2: Double, lon2: Double
+    ): Float {
+        val p1 = Math.toRadians(lat1)
+        val p2 = Math.toRadians(lat2)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val y = Math.sin(dLon) * Math.cos(p2)
+        val x = Math.cos(p1) * Math.sin(p2) -
+            Math.sin(p1) * Math.cos(p2) * Math.cos(dLon)
+        var deg = Math.toDegrees(Math.atan2(y, x))
+        if (deg < 0) deg += 360.0
+        return deg.toFloat()
+    }
+
+    /**
+     * En modo phone-first el teléfono manda la posición; el estéreo solo
+     * sigue el coche y mantiene el rumbo estable. Se limita a ~1.5 Hz para no
+     * encadenar animaciones de cámara ni recalcular el giro del mapa.
+     */
+    private fun followNavState(state: NavState, bearing: Float, target: GeoPoint) {
+        if (RemoteMapBridge.active) return
+        val now = SystemClock.elapsedRealtime()
+        if (mapMode == MapMode.FREE && now - lastUserMapTouchMs > 30_000L) {
+            mapMode = MapMode.FOLLOWING
+            updateRecenterVisibility()
+        }
+        if (mapMode != MapMode.FOLLOWING) return
+        if (focus == Focus.NAV) {
+            if (now - lastNavFollowMs < 800L) return
+            lastNavFollowMs = now
+            animateMapBearing(bearing)
+            animateFollow(target, state.speedKmh)
+        } else {
+            resetMapBearing()
+            if (now - lastFollowCenterMs > 1500L) {
+                lastFollowCenterMs = now
+                followPoint = target
+                try {
+                    map.controller.animateTo(target, map.zoomLevelDouble, 600L)
+                } catch (_: Exception) {
+                }
+            }
+        }
     }
 
     private val debugRouteReceiver = object : android.content.BroadcastReceiver() {
@@ -1532,9 +1882,12 @@ class MainActivity : AppCompatActivity(), LocationListener {
         val res = mapCarRes(sector, lightsOn)
         if (res == 0) return
         val bitmap = android.graphics.BitmapFactory.decodeResource(resources, res) ?: return
-        val width = dp(26)
+        // El marcador anterior (26 dp) era casi invisible en el mapa del
+        // estéreo. 56 dp mantiene la proporción del coche y se distingue
+        // sin tapar la ruta ni la maniobra.
+        val width = dp(56)
         val height = (width * bitmap.height / bitmap.width.toFloat())
-            .toInt().coerceIn(dp(12), dp(30))
+            .toInt().coerceIn(dp(22), dp(52))
         val scaled = android.graphics.Bitmap.createScaledBitmap(bitmap, width, height, true)
         marker.icon = android.graphics.drawable.BitmapDrawable(resources, scaled)
         marker.rotation = 0f
@@ -1602,6 +1955,36 @@ class MainActivity : AppCompatActivity(), LocationListener {
             vTrimAdv.text = trimAdvice(s.fuelTrimPct)
             vSpeedObd.text = s.speedKmh?.let { "$it km/h" } ?: "--"
             vSpeedObdAdv.text = if (s.speedKmh != null) "PID 010D de la ECU" else "Sin lectura"
+
+            val fuelPct = s.fuelLevelPct ?: s.fuelPct
+            val estimatedKm = Prefs.estimatedRangeKm(this)
+            when {
+                fuelPct != null -> {
+                    val liters = s.fuelLevelLiters
+                        ?: (fuelPct * Prefs.fuelTankLiters(this) / 100f)
+                    vFuelEngine.text = "${fuelPct.roundToInt()} %"
+                    vFuelEngineAdv.text = "≈%.1f L · %s".format(
+                        liters,
+                        s.fuelSource ?: if (s.fuelPct != null) "OBD" else "UDS"
+                    )
+                    vFuelEngine.setTextColor(
+                        ContextCompat.getColor(
+                            this,
+                            if (fuelPct <= 12f) R.color.danger else R.color.text_primary
+                        )
+                    )
+                }
+                estimatedKm > 0f -> {
+                    vFuelEngine.text = "${estimatedKm.roundToInt()} km"
+                    vFuelEngineAdv.text = "Autonomía estimada · sin nivel del cuadro"
+                    vFuelEngine.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
+                }
+                else -> {
+                    vFuelEngine.text = "--"
+                    vFuelEngineAdv.text = "Nivel UDS del cuadro · 0x2206"
+                    vFuelEngine.setTextColor(ContextCompat.getColor(this, R.color.text_muted))
+                }
+            }
 
             vVoltage.text = s.batteryV?.let { "%.1f V".format(it) } ?: "--"
             vVoltageState.text = batteryAdvice(s.batteryV, s.rpm)
@@ -1969,6 +2352,16 @@ class MainActivity : AppCompatActivity(), LocationListener {
         val pct = state.fuelLevelPct ?: state.fuelPct
         val source = state.fuelSource ?: if (state.fuelPct != null) "OBD" else null
         if (pct == null) {
+            // Respaldo útil mientras el cuadro no responde: la autonomía
+            // estimada por los botones de tanque y el odómetro local.
+            val estimatedKm = Prefs.estimatedRangeKm(this)
+            if (estimatedKm > 0f) {
+                return HumanInsight(
+                    "fuel_est", "Autonomía ~${estimatedKm.roundToInt()} km",
+                    "Estimado local · aún sin nivel del cuadro (UDS 0x2206)",
+                    Severity.INFO
+                )
+            }
             return HumanInsight(
                 "fuel_na", "Sin lectura de nivel",
                 "El cuadro se consulta por UDS 0x2206", Severity.INFO
@@ -2246,19 +2639,11 @@ class MainActivity : AppCompatActivity(), LocationListener {
             applyFocus(Focus.NAV)
         }
         addDockItem(R.drawable.ic_media, "MÚSICA") {
-            // Al volver a MÚSICA se muestra el reproductor, no la radio.
+            // Música y radio viven en el mismo módulo: el dock abre el
+            // reproductor y el selector superior cambia a RADIO FM.
             radioSource = false
             updateSourceToggle()
             applyFocus(Focus.MEDIA)
-        }
-        addDockItem(R.drawable.ic_radio, "RADIO") {
-            // La radio integrada vive en el módulo de música; abrir la app nativa
-            // sacaba del launcher y dejaba el dock sin control real.
-            radioSource = true
-            applyFocus(Focus.MEDIA)
-            setupRadio()
-            updateSourceToggle()
-            setActiveDock(3)
         }
         addDockItem(R.drawable.ic_car, "AUTO") {
             applyFocus(Focus.VEHICLE)
@@ -2550,6 +2935,130 @@ class MainActivity : AppCompatActivity(), LocationListener {
         }
     }
 
+    private data class MediaSourceInfo(val iconRes: Int, val label: String)
+
+    /**
+     * Etiqueta e icono de la app que reproduce.
+     *
+     * Con A2DP el paquete real del teléfono no siempre viaja en el propio
+     * metadato; en ese caso el receiver reconoce al menos Spotify por su
+     * broadcast público y el resto cae en un Bluetooth honesto.
+     */
+    private fun mediaSourceInfo(packageName: String?): MediaSourceInfo {
+        val pkg = packageName.orEmpty().lowercase().trim()
+        return when {
+            pkg == "com.spotify.music" || pkg.startsWith("com.spotify.") ->
+                MediaSourceInfo(R.drawable.ic_spotify, "Spotify")
+            pkg == "com.google.android.apps.youtube.music" ||
+                pkg == "com.google.android.music" ->
+                MediaSourceInfo(R.drawable.ic_youtube_music, "YouTube Music")
+            pkg == "com.google.android.youtube" ||
+                pkg == "com.google.android.youtubemusic" ->
+                MediaSourceInfo(R.drawable.ic_youtube, "YouTube")
+            pkg == "com.apple.android.music" ->
+                MediaSourceInfo(R.drawable.ic_media, "Apple Music")
+            pkg == "com.tidal" || pkg.startsWith("com.tidal.") ->
+                MediaSourceInfo(R.drawable.ic_media, "Tidal")
+            pkg == "deezer.android.app" || pkg.startsWith("com.deezer.") ->
+                MediaSourceInfo(R.drawable.ic_media, "Deezer")
+            pkg == "com.amazon.mp3" || pkg.startsWith("com.amazon.") ->
+                MediaSourceInfo(R.drawable.ic_media, "Amazon Music")
+            pkg == "com.soundcloud.android" || pkg.startsWith("com.soundcloud.") ->
+                MediaSourceInfo(R.drawable.ic_media, "SoundCloud")
+            pkg == "bluetooth" || pkg == "phone" ->
+                MediaSourceInfo(R.drawable.ic_bluetooth, "Bluetooth")
+            pkg == "demo" ->
+                MediaSourceInfo(R.drawable.ic_media, "Demo")
+            else -> MediaSourceInfo(R.drawable.ic_media, "Reproductor")
+        }
+    }
+
+    private fun mediaDeviceLabel(nowPlaying: NowPlaying?): String {
+        val source = mediaSourceInfo(nowPlaying?.packageName)
+        val deviceName = lastBluetooth?.name
+            ?.takeIf { it.isNotBlank() }
+            ?: if (nowPlaying?.isBluetooth == true) "Teléfono Bluetooth" else source.label
+        return if (source.label == "Bluetooth" || source.label == "Demo") {
+            deviceName
+        } else {
+            "$deviceName · ${source.label}"
+        }
+    }
+
+    private fun applyMediaSourceIcon(iconView: ImageView, info: MediaSourceInfo) {
+        iconView.setImageResource(info.iconRes)
+        val brandIcon = info.iconRes in intArrayOf(
+            R.drawable.ic_spotify,
+            R.drawable.ic_youtube_music,
+            R.drawable.ic_youtube
+        )
+        if (brandIcon) {
+            iconView.imageTintList = null
+        } else {
+            iconView.imageTintList = ContextCompat.getColorStateList(
+                this,
+                R.color.accent_sky
+            )
+        }
+    }
+
+    /**
+     * Modal del mapa estilo Android Auto: tapa inferior del lienzo con portada,
+     * título, artista y estado. Se muestra al iniciar la reproducción y cada
+     * vez que cambia de canción; los avisos genéricos no lo disparan.
+     */
+    private fun showNowPlayingToast(nowPlaying: NowPlaying?) {
+        if (nowPlaying == null || focus != Focus.NAV) return
+        val title = nowPlaying.title.ifBlank { getString(R.string.media_title) }
+        val key = "${nowPlaying.packageName}|$title|${nowPlaying.album}"
+        val changed = key != lastMediaKey
+        val stateChanged = lastMediaPlaying != null && lastMediaPlaying != nowPlaying.isPlaying
+        if (!changed && !stateChanged) return
+        val now = SystemClock.elapsedRealtime()
+        if (changed && now - mediaToastLastShownMs < 1200L) {
+            lastMediaKey = key
+            lastMediaPlaying = nowPlaying.isPlaying
+            renderNowPlayingToast(nowPlaying)
+            return
+        }
+        lastMediaKey = key
+        mediaToastLastShownMs = now
+        lastMediaPlaying = nowPlaying.isPlaying
+        renderNowPlayingToast(nowPlaying)
+        uiHandler.removeCallbacks(mediaToastHide)
+        nowPlayingToast.visibility = View.VISIBLE
+        nowPlayingToast.alpha = 0f
+        nowPlayingToast.translationY = 40f
+        nowPlayingToast.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(240L)
+            .start()
+        uiHandler.postDelayed(mediaToastHide, 4200L)
+    }
+
+    private fun renderNowPlayingToast(nowPlaying: NowPlaying) {
+        val title = nowPlaying.title.ifBlank { getString(R.string.media_title) }
+        renderArt(npToastArt, nowPlaying.artwork, 10)
+        npToastTitle.text = title
+        val subtitle = listOf(
+            nowPlaying.artist.ifBlank { "Desconocido" },
+            mediaDeviceLabel(nowPlaying),
+            if (nowPlaying.isPlaying) "Reproduciendo" else "En pausa"
+        ).joinToString(" · ")
+        npToastSubtitle.text = subtitle
+        npToastEq.visibility = if (nowPlaying.isPlaying) View.VISIBLE else View.GONE
+        npToastStateIcon.setImageResource(
+            if (nowPlaying.isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+        )
+        if (nowPlaying.durationMs > 0L) {
+            npToastTime.visibility = View.VISIBLE
+            npToastTime.text = formatDuration(nowPlaying.durationMs)
+        } else {
+            npToastTime.visibility = View.GONE
+        }
+    }
+
     private fun updateMedia(nowPlaying: NowPlaying?) {
         if (nowPlaying == null) {
             mediaTitle.text = getString(R.string.media_title)
@@ -2572,20 +3081,32 @@ class MainActivity : AppCompatActivity(), LocationListener {
             mmProgress.visibility = View.GONE
             mmTime.visibility = View.GONE
             mmSource.text = "—"
+            mediaSourceIcon.setImageResource(R.drawable.ic_bluetooth)
+            mediaDevice.text = lastBluetooth?.name?.takeIf { it.isNotBlank() }
+                ?: "Teléfono Bluetooth"
+            mmSourceIcon.setImageResource(R.drawable.ic_bluetooth)
+            mmDevice.text = mediaDevice.text
+            lastMediaKey = null
+            lastMediaPlaying = null
+            renderNowPlayingToastIdle()
             return
         }
 
         val title = nowPlaying.title.ifBlank { getString(R.string.media_title) }
         mediaTitle.text = title
-        val source = when {
-            nowPlaying.isBluetooth -> "Bluetooth"
-            nowPlaying.album.isNotBlank() -> nowPlaying.album
-            else -> "Media"
+        val sourceInfo = mediaSourceInfo(nowPlaying.packageName)
+        val deviceText = mediaDeviceLabel(nowPlaying)
+        val source = if (sourceInfo.label == "Bluetooth" && nowPlaying.album.isNotBlank()) {
+            nowPlaying.album
+        } else {
+            sourceInfo.label
         }
         val subtitle = listOf(nowPlaying.artist, source)
             .filter { it.isNotBlank() }
             .joinToString(" • ")
         mediaSubtitle.text = subtitle
+        mediaDevice.text = deviceText
+        applyMediaSourceIcon(mediaSourceIcon, sourceInfo)
 
         renderArt(albumArt, nowPlaying.artwork, 14)
         renderArt(miniArt, nowPlaying.artwork, 9)
@@ -2602,7 +3123,9 @@ class MainActivity : AppCompatActivity(), LocationListener {
         mmTitle.text = title
         mmArtist.text = nowPlaying.artist.ifBlank { "Reproducción activa" }
         mmAlbum.text = nowPlaying.album
-        mmSource.text = if (nowPlaying.isBluetooth) "BLUETOOTH" else "APP"
+        mmSource.text = sourceInfo.label
+        mmDevice.text = deviceText
+        applyMediaSourceIcon(mmSourceIcon, sourceInfo)
 
         val playRes = if (nowPlaying.isPlaying) R.drawable.ic_pause else R.drawable.ic_play
         btnPlay.setImageResource(playRes)
@@ -2610,6 +3133,16 @@ class MainActivity : AppCompatActivity(), LocationListener {
         mmPlay.setImageResource(playRes)
 
         renderProgress(nowPlaying.positionMs, nowPlaying.durationMs)
+        showNowPlayingToast(nowPlaying)
+    }
+
+    private fun renderNowPlayingToastIdle() {
+        npToastTitle.text = "Sin reproducción"
+        npToastSubtitle.text = "Bluetooth · Radio FM"
+        npToastEq.visibility = View.GONE
+        npToastStateIcon.setImageResource(R.drawable.ic_play)
+        npToastTime.visibility = View.GONE
+        renderArt(npToastArt, null, 10)
     }
 
     private fun renderArt(view: ImageView, art: android.graphics.Bitmap?, placeholderPaddingDp: Int) {
@@ -2684,6 +3217,9 @@ class MainActivity : AppCompatActivity(), LocationListener {
         speedText.text = speedLabel
         unitText.text = unitLabel
         speedSource.text = signals.source
+        speedometer.source = signals.source
+        speedometer.useMph = mph
+        speedometer.setSpeed(signals.speedKmh)
         gearText.text = gear
 
         miniSpeed.text = speedLabel
@@ -2969,7 +3505,12 @@ class MainActivity : AppCompatActivity(), LocationListener {
             else -> null
         }
         if (provider != null) {
-            locationManager.requestLocationUpdates(provider, 1000L, 0f, this)
+            // 500 ms para no perder avances a baja velocidad; los textos de
+            // UI se limitan aparte a ~4 Hz.
+            locationManager.requestLocationUpdates(provider, 500L, 0f, this)
+            locationManager.requestLocationUpdates(
+                LocationManager.NETWORK_PROVIDER, 1000L, 0f, this
+            )
             locationManager.getLastKnownLocation(provider)?.let { onLocationChanged(it) }
         }
     }
@@ -2998,7 +3539,9 @@ class MainActivity : AppCompatActivity(), LocationListener {
         }
         // Marcador sobre la carretera + seguimiento del vehículo.
         // Con mapa remoto el MapView está oculto y no hace falta.
-        if (!RemoteMapBridge.active) {
+        // En modo phone-first el teléfono manda posición/progreso; el GPS
+        // local no debe competir con él (causaría saltos y rumbo inestable).
+        if (!RemoteMapBridge.active && !PhoneNavBridge.active) {
             try {
                 val acc = if (location.hasAccuracy()) location.accuracy else 999f
                 val (slat, slon, _) = com.chronosbvrx.ibizadash.nav.RoadSnapper.snapLocal(
@@ -3010,13 +3553,25 @@ class MainActivity : AppCompatActivity(), LocationListener {
                 }
                 val now = android.os.SystemClock.elapsedRealtime()
                 // Si el usuario movió el mapa, vuelve a seguir solo.
-                if (mapMode == MapMode.FREE && now - lastUserMapTouchMs > 10_000L) {
+                if (mapMode == MapMode.FREE && now - lastUserMapTouchMs > 30_000L) {
                     mapMode = MapMode.FOLLOWING
                     updateRecenterVisibility()
+                }
+                if (focus == Focus.NAV) {
+                    val routeBearing = if (routePoints.size >= 2) {
+                        projectOnActiveRoute(location.latitude, location.longitude)
+                            ?.first?.let { routeBearingAt(it) }
+                    } else {
+                        null
+                    }
+                    val heading = routeBearing
+                        ?: if (speedKmh > 12f && location.hasBearing()) location.bearing else null
+                    heading?.let { applyNavigationHeading(it) }
                 }
                 if (mapMode == MapMode.FOLLOWING) {
                     centerOnPosition(slat, slon, speedKmh, location, now)
                 }
+                updateGpsStateChip(location, now)
                 map.invalidate()
             } catch (_: Exception) {
             }
@@ -3178,9 +3733,19 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
         setActiveDock(target.dockIndex)
 
+        // Transición en fade: el lienzo y el mapa nunca se recrean. Las
+        // capas sí pueden solapar suavemente sus alphas, sin tocar layout.
         for (view in arrayOf(cockpitPanel, miniHud, mediaModule, vehicleModule, navOverlay)) {
             view.animate().cancel()
             view.alpha = 1f
+        }
+        if (changed && animate) {
+            for (view in arrayOf(cockpitPanel, miniHud, mediaModule, vehicleModule, navOverlay)) {
+                if (view.visibility == View.VISIBLE) {
+                    view.animate().alpha(0.55f).setDuration(60L).start()
+                    view.animate().alpha(1f).setDuration(240L).setStartDelay(60L).start()
+                }
+            }
         }
         // Single measure/layout pass: no per-frame LayoutParams mutation.
         setSplit(target.fraction)
@@ -3199,14 +3764,26 @@ class MainActivity : AppCompatActivity(), LocationListener {
                 } catch (_: Exception) {
                 }
             }
+            // Al entrar al mapa, mostrar la reproducción actual de inmediato,
+            // como hace Android Auto al abrir la vista de mapa.
+            val cur = MediaRepository.current
+            if (cur != null) {
+                lastMediaKey = null
+                lastMediaPlaying = null
+                showNowPlayingToast(cur)
+            }
         } else {
             resetMapBearing()
         }
         updateRecenterVisibility()
 
-        if (changed && animate && target != Focus.NAV) {
+        if (changed && animate) {
             shown.alpha = 0f
-            shown.animate().alpha(1f).setDuration(180L).start()
+            shown.animate()
+                .alpha(1f)
+                .setDuration(280L)
+                .setInterpolator(PathInterpolator(0.2f, 0f, 0f, 1f))
+                .start()
         } else {
             shown.alpha = 1f
         }
@@ -3227,7 +3804,12 @@ class MainActivity : AppCompatActivity(), LocationListener {
     // Navegación: seguimiento del vehículo y tarjeta de maniobra
     // ---------------------------------------------------------------------
 
-    /** El usuario tocó el mapa: deja de seguir hasta que recentre o pasen 10 s. */
+    /**
+     * El usuario movió el mapa a mano: se deja de seguir hasta que pulse
+     * "Centrar" o haya un avance real. Un solo toque (toque rápido) NO debe
+     * detener el seguimiento: antes cualquier ACTION_DOWN ponía FREE y el
+     * coche parecía quedarse pegado hasta pasados 10 s.
+     */
     private fun markMapFree() {
         lastUserMapTouchMs = SystemClock.elapsedRealtime()
         if (mapMode != MapMode.FREE) {
@@ -3240,6 +3822,43 @@ class MainActivity : AppCompatActivity(), LocationListener {
         if (!::btnRecenter.isInitialized) return
         val show = mapMode == MapMode.FREE && !RemoteMapBridge.active
         btnRecenter.visibility = if (show) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * Chip de diagnóstico GPS (satélites, exactitud y edad del segundo fix).
+     * Enmascara un GPS “pegado”: si la precisión supera 40 m o el fix tiene
+     * > 15 s, el chip se tiñe en ámbar y el texto lo declara.
+     */
+    private fun updateGpsStateChip(location: Location, now: Long) {
+        if (!::gpsStateChip.isInitialized) return
+        if (now - lastGpsStateUiMs < 250L) return
+        lastGpsStateUiMs = now
+        val sats = if (location.hasAccuracy()) {
+            // La app no expone satélites sin gnssStatus; la exactitud es el
+            // mejor proxy que queda en Android 8.1 con estos permisos.
+            when {
+                location.accuracy <= 8f -> "buena señal"
+                location.accuracy <= 22f -> "señal media"
+                else -> "señal débil"
+            }
+        } else {
+            "sin precisión"
+        }
+        val age = location.time.coerceAtLeast(1L)
+        val ageSeconds = ((System.currentTimeMillis() - age) / 1000L).coerceAtLeast(0L)
+        val stale = ageSeconds > 15L || location.accuracy > 40f
+        val heading = when {
+            stale -> "GPS viejo"
+            location.accuracy > 25f -> "GPS impreciso"
+            else -> "GPS en vivo"
+        }
+        gpsStateChip.text = "$heading · $sats"
+        gpsStateChip.setTextColor(
+            ContextCompat.getColor(
+                this,
+                if (stale) R.color.amber else R.color.accent_sky
+            )
+        )
     }
 
     /**
@@ -3256,17 +3875,28 @@ class MainActivity : AppCompatActivity(), LocationListener {
     ) {
         val target = GeoPoint(lat, lon)
         if (focus == Focus.NAV) {
-            val bearing = if (speedKmh > 12f && location.hasBearing()) location.bearing else 0f
+            // Rumbo estable desde la geometría de la ruta; el bearing GPS solo
+            // se usa cuando no hay ruta proyectable.
+            val routeBearing = if (routePoints.size >= 2) {
+                projectOnActiveRoute(lat, lon)?.first?.let { routeBearingAt(it) }
+            } else {
+                null
+            }
+            val bearing = routeBearing
+                ?: if (speedKmh > 12f && location.hasBearing()) location.bearing else 0f
             animateMapBearing(bearing)
-            // Interpola coche y mapa a 60 fps entre fixes de 1 Hz.
+            // Interpola coche y mapa entre fixes.
             animateFollow(target, speedKmh)
         } else {
             resetMapBearing()
-            if (now - lastFollowCenterMs > 1500L) {
+            // A 60 km/h el coche recorre ~8 m en 500 ms: centrar cada 1.5 s
+            // dejaba la cámara un paso atrás. Ahora cada fix reciente mueve
+            // la cámara, limitado a 600 ms para no encadenar animaciones.
+            if (now - lastFollowCenterMs > 600L) {
                 lastFollowCenterMs = now
                 try {
                     followPoint = target
-                    map.controller.animateTo(target, map.zoomLevelDouble, 600L)
+                    map.controller.animateTo(target, map.zoomLevelDouble, 500L)
                 } catch (_: Exception) {
                 }
             }
@@ -3318,18 +3948,26 @@ class MainActivity : AppCompatActivity(), LocationListener {
         followPoint = target
     }
 
+    /** Mantiene la vista heading-up: el rumbo del coche queda arriba. */
+    private fun applyNavigationHeading(bearing: Float) {
+        if (focus != Focus.NAV || RemoteMapBridge.active) return
+        val target = ((bearing % 360f) + 360f) % 360f
+        animateMapBearing(target)
+    }
+
     /** Gira el mapa suavemente hacia el rumbo, por el camino más corto. */
     private fun animateMapBearing(targetBearing: Float) {
         val from = currentBearingDeg
         var delta = ((targetBearing - from + 540f) % 360f) - 180f
-        // Umbral alto: corregir 3° cada segundo obliga a redibujar el mapa
-        // entero. Solo se gira cuando el rumbo cambia de verdad.
-        if (Math.abs(delta) < 10f) return
+        // Los cambios continuos son los que hacen que el mapa “acompane” el
+        // avance: un umbral de 10° dejaba la cámara quieta en curvas suaves.
+        if (Math.abs(delta) < 2f) return
         bearingAnimator?.cancel()
         val to = from + delta
         currentBearingDeg = to
+        val duration = (Math.abs(delta) * 12f).toLong().coerceIn(280L, 680L)
         bearingAnimator = android.animation.ValueAnimator.ofFloat(from, to).apply {
-            duration = 700L
+            this.duration = duration
             interpolator = android.view.animation.DecelerateInterpolator()
             addUpdateListener {
                 try {

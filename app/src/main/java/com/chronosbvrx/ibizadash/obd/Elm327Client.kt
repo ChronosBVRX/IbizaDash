@@ -352,7 +352,7 @@ class Elm327Client(private val context: Context) {
                     fast.put(K_THROTTLE, throttle, now)
                     fast.put(K_SPEED, speed, now)
 
-                    if (++slowCounter % 4 == 0) {
+                    if (++slowCounter % 2 == 0) {
                         val coolant = if (supports(0x05)) queryValue("0105", "4105") { bytes ->
                             if (bytes.isNotEmpty()) (bytes[0] - 40).toFloat() else null
                         } else null
@@ -473,9 +473,23 @@ class Elm327Client(private val context: Context) {
         sendCommand("ATS0", 800L)
         sendCommand("ATH0", 800L)
 
+        // Identificar el clon (MINI ELM327 v1.5/2.1, Vgate, etc.) y el
+        // protocolo negociado. Es la primera línea que hay que mirar si una
+        // lectura no aparece.
+        val adapterId = sendCommand("ATI", 900L)
+        if (adapterId.isNotBlank()) {
+            ObdConsole.info("= Adaptador: ${oneLine(adapterId)}")
+            Log.i(TAG, "ATI: ${oneLine(adapterId)}")
+        }
+
         // Try auto-detect first (safest for 2009–2013 Ibiza variants).
         sendCommand("ATSP0", 1500L)
         var supported = sendCommand("0100", 6000L)
+        val protocol = sendCommand("ATDPN", 900L)
+        if (protocol.isNotBlank()) {
+            ObdConsole.info("= Protocolo: ${oneLine(protocol)}")
+            Log.i(TAG, "ATDPN: ${oneLine(protocol)}")
+        }
         Log.d(TAG, "0100 (ATSP0): ${supported.replace("\n", " ").take(120)}")
         if (!supported.contains("4100") && !supported.contains("41 00")) {
             // Fall back to forced ISO 15765-4 CAN 11-bit 500k.
@@ -515,9 +529,15 @@ class Elm327Client(private val context: Context) {
         }
     }
 
-    /** ¿La ECU declara este PID? Si el mapa no es fiable, se consulta igual. */
-    private fun supports(pid: Int): Boolean =
-        !pidMaskTrusted || supportedPids.isEmpty() || supportedPids.contains(pid)
+    /**
+     * La máscara 0100/0120/0140 se conserva solo para diagnóstico.
+     *
+     * En clones ELM327 y en respuestas multi-ECU la máscara llega incompleta:
+     * se observó que 010D (velocidad) y 012F (combustible) desaparecían aunque
+     * la ECU sí respondía. Ocultar lecturas por esa máscara es peor que perder
+     * unos milisegundos en un PID no soportado, así que se consulta todo.
+     */
+    private fun supports(pid: Int): Boolean = true
 
     /** Decodifica una respuesta de máscara de PIDs (4 bytes = 32 PIDs). */
     private fun parseSupported(response: String, prefix: String, basePid: Int) {
@@ -547,7 +567,7 @@ class Elm327Client(private val context: Context) {
                 val name = device.name?.lowercase().orEmpty()
                 name.contains("obd") || name.contains("elm") || name.contains("vgate") ||
                     name.contains("v-link") || name.contains("superbox") || name.contains("327") ||
-                    name.contains("b16")
+                    name.contains("b16") || name.contains("mini")
             }.orEmpty()
             val match = candidates.firstOrNull { it.name?.lowercase()?.contains("obdii") == true }
                 ?: candidates.firstOrNull()
@@ -699,7 +719,7 @@ class Elm327Client(private val context: Context) {
         }
         // Purge invalid device (BLE or non-OBD name) so auto-scan can recover.
         val name = device.name?.lowercase().orEmpty()
-        val keywords = listOf("obd", "elm", "vgate", "v-link", "superbox", "327", "obdii", "b16")
+        val keywords = listOf("obd", "elm", "vgate", "v-link", "superbox", "327", "obdii", "b16", "mini")
         if (device.type == BluetoothDevice.DEVICE_TYPE_LE || keywords.none { name.contains(it) }) {
             Prefs.setObdMac(context, null)
         }
@@ -868,9 +888,13 @@ class Elm327Client(private val context: Context) {
 
     /**
      * Petición UDS de solo lectura al cuadro (0x714 → 0x77E):
-     * `22 2206` devuelve el nivel de combustible (raw/2 = litros en VAG).
-     * En el Ibiza 6J el cuadro es UDS (`EV_Kombi_UDS...`); el motor no
-     * entrega PID 2F, por eso hay que preguntarle al cuadro.
+     * `22 2206` devuelve el nivel de combustible en **litros** (raw directo,
+     * p. ej. 2C = 44 L). El cuadro del Ibiza 6J es UDS VDO
+     * (`EV_Kombi_UDS_VDD_RM09`); el motor no entrega PID 2F.
+     *
+     * La secuencia raw (`ATCAF0` + `03 22 22 06 55 55 55 55` + flow control)
+     * es la que funciona en estos clones; dejar que el ELM327 auto-formatee
+     * la petición suele devolver NO DATA.
      */
     private fun readFuelUds(log: Boolean): FuelReading? {
         if (!isLive()) return null
@@ -885,10 +909,31 @@ class Elm327Client(private val context: Context) {
                 sendCommand("ATCF77E", 450L)
                 sendCommand("ATCM7FF", 450L)
             }
+            // Secuencia UDS VAG probada: frame ISO-TP completo con PCI 0x03,
+            // padding 0x55 y flow control explícito hacia 0x714.
+            sendCommand("ATFCSH714", 450L)
+            sendCommand("ATFCSD300000", 450L)
+            sendCommand("ATFCSM1", 450L)
+            sendCommand("ATAL", 450L)
+            val caf = sendCommand("ATCAF0", 450L)
+            // Un MINI ELM327 v1.5 que no soporte ATCAF0 devuelve "?".
+            // En ese caso el frame raw no se puede enviar: usar auto-formato.
+            if (caf.isNotBlank() && !caf.contains("?")) {
+                val rawFrame = "03 22 %04X 55 55 55 55".format(did)
+                val rawResp = sendCommand(rawFrame, 1800L)
+                if (log) ObdConsole.info("= UDS raw $rawFrame → ${oneLine(rawResp)}")
+                val raw2 = parseUdsFuel(rawResp, did)
+                if (raw2 != null) return FuelReading(raw2)
+            } else if (log) {
+                ObdConsole.info("= Este clon no soporta ATCAF0; probando auto-formato")
+            }
+
+            // Fallback: petición auto-formateada y sesión extendida. Algunos
+            // clones no aceptan ATCAF0 pero sí el formato normal.
+            sendCommand("ATCAF1", 400L)
             var resp = sendCommand(req, 1800L)
             if (log) ObdConsole.info("= UDS $req → ${oneLine(resp)}")
             if (isNegative(resp)) {
-                // Sesión extendida UDS y reintento (algunos cuadros la piden).
                 val session = sendCommand("1003", 1200L)
                 if (log) ObdConsole.info("= UDS 1003 → ${oneLine(session)}")
                 resp = sendCommand(req, 1800L)
@@ -898,17 +943,7 @@ class Elm327Client(private val context: Context) {
             if (raw == null && log) {
                 ObdConsole.info("= Sin nivel válido. Respuesta: ${oneLine(resp)}")
             }
-            if (raw != null) return FuelReading(raw)
-
-            // Fallback probado en foros VAG: desactivar auto-formato y enviar
-            // la trama ISO-TP completa con padding 0x55.
-            sendCommand("ATCAF0", 450L)
-            val rawFrame = "03 22 %04X 55 55 55 55".format(did)
-            val rawResp = sendCommand(rawFrame, 1800L)
-            if (log) ObdConsole.info("= UDS raw $rawFrame → ${oneLine(rawResp)}")
-            val raw2 = parseUdsFuel(rawResp, did)
-            sendCommand("ATCAF1", 400L)
-            raw2?.let { FuelReading(it) }
+            raw?.let { FuelReading(it) }
         } catch (e: Exception) {
             Log.w(TAG, "UDS fuel: ${e.message}")
             null
@@ -993,6 +1028,7 @@ class Elm327Client(private val context: Context) {
     }
 
     private fun restoreObd() {
+        sendCommand("ATFCSM0", 350L)
         sendCommand("ATCAF1", 350L)
         val reset = sendCommand("ATCRA7E8", 450L)
         if (reset.contains("?")) {
@@ -1031,10 +1067,10 @@ class Elm327Client(private val context: Context) {
             UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
         /** PIDs rápidos: caducan antes para no mostrar valores viejos. */
-        private const val FAST_TTL_MS = 6_000L
+        private const val FAST_TTL_MS = 10_000L
 
-        /** PIDs lentos (cada 4 ciclos, con posibles timeouts): más margen. */
-        private const val SLOW_TTL_MS = 30_000L
+        /** PIDs lentos (cada 2 ciclos, con posibles timeouts): más margen. */
+        private const val SLOW_TTL_MS = 120_000L
 
         /** Nivel UDS del cuadro: se relee cada 60 s; 3 min sin respuesta lo borra. */
         private const val FUEL_UDS_TTL_MS = 180_000L
