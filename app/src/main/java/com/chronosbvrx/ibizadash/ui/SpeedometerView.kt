@@ -45,7 +45,7 @@ class SpeedometerView @JvmOverloads constructor(
     private var gaugeBounds = RectF()
 
     private val trackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#16202B")
+        color = Color.parseColor("#3A4756")
         style = Paint.Style.STROKE
         strokeWidth = 5f
         strokeCap = Paint.Cap.ROUND
@@ -139,23 +139,24 @@ class SpeedometerView @JvmOverloads constructor(
             canvas.drawArc(gaugeBounds, 135f, 270f * ratio, false, activePaint)
         }
 
-        speedPaint.textSize = radius * 0.56f
-        canvas.drawText(
-            converted.roundToInt().toString(),
-            cx,
-            cy + radius * 0.21f,
-            speedPaint
-        )
-
-        unitPaint.textSize = radius * 0.12f
+        // Texto centrado como bloque (número + unidad + fuente) sobre cy.
+        // Antes el bloque quedaba ~0.2R abajo, pegado al borde inferior.
+        speedPaint.textSize = radius * 0.52f
+        unitPaint.textSize = radius * 0.115f
+        sourcePaint.textSize = radius * 0.09f
+        val numText = converted.roundToInt().toString()
+        val numBounds = android.graphics.Rect()
+        speedPaint.getTextBounds(numText, 0, numText.length, numBounds)
+        val numBaseline = cy - radius * 0.02f - (numBounds.top + numBounds.bottom) / 2f
+        canvas.drawText(numText, cx, numBaseline, speedPaint)
         canvas.drawText(
             if (useMph) "mph" else "km/h",
             cx,
-            cy + radius * 0.38f,
+            numBaseline + radius * 0.21f,
             unitPaint
         )
 
-        drawSource(canvas, cx, cy + radius * 0.58f, radius)
+        drawSource(canvas, cx, numBaseline + radius * 0.37f, radius)
     }
 
     private fun drawSource(canvas: Canvas, cx: Float, y: Float, radius: Float) {
@@ -163,7 +164,7 @@ class SpeedometerView @JvmOverloads constructor(
         val color = if (isObd) Color.parseColor("#10B981") else Color.parseColor("#38BDF8")
         sourceDotPaint.color = color
         sourcePaint.color = color
-        sourcePaint.textSize = radius * 0.095f
+        sourcePaint.textSize = radius * 0.09f
         val label = source.uppercase()
         val textWidth = sourcePaint.measureText(label)
         val dotRadius = radius * 0.022f
