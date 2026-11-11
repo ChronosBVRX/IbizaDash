@@ -113,7 +113,8 @@ object WeatherSender {
         return try {
             val url = URL(
                 "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
-                    "&current=temperature_2m,weather_code&timezone=auto"
+                    "&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m" +
+                    "&daily=temperature_2m_max,temperature_2m_min&timezone=auto"
             )
             connection = url.openConnection() as HttpURLConnection
             connection.connectTimeout = 10_000
@@ -121,7 +122,8 @@ object WeatherSender {
             connection.setRequestProperty("User-Agent", "IbizaCompanion")
             if (connection.responseCode !in 200..299) return null
             val body = connection.inputStream.bufferedReader().use { it.readText() }
-            val current = JSONObject(body).getJSONObject("current")
+            val root = JSONObject(body)
+            val current = root.getJSONObject("current")
             val temp = current.getDouble("temperature_2m")
             val code = current.getInt("weather_code")
             JSONObject()
@@ -129,6 +131,11 @@ object WeatherSender {
                 .put("tempC", temp)
                 .put("code", code)
                 .put("text", describe(code))
+                .put("humidityPct", current.optInt("relative_humidity_2m", -1))
+                .put("feelsLikeC", if (current.has("apparent_temperature")) current.optDouble("apparent_temperature", Double.NaN) else Double.NaN)
+                .put("windKmh", if (current.has("wind_speed_10m")) current.optDouble("wind_speed_10m", Double.NaN) else Double.NaN)
+                .put("maxC", root.optJSONObject("daily")?.optJSONArray("temperature_2m_max")?.optDouble(0, Double.NaN) ?: Double.NaN)
+                .put("minC", root.optJSONObject("daily")?.optJSONArray("temperature_2m_min")?.optDouble(0, Double.NaN) ?: Double.NaN)
         } catch (e: Exception) {
             Log.w(TAG, "open-meteo: ${e.message}")
             null

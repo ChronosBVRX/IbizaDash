@@ -8,6 +8,8 @@ object CompanionPrefs {
     private const val KEY_AUTO_UPDATE = "auto_update"
     private const val KEY_TRAFFIC = "traffic_key"
     private const val KEY_MODULE_MANIFEST = "module_manifest_url"
+    private const val KEY_CAR_BT_MAC = "car_bt_mac"
+    private const val KEY_CAR_BT_NAME = "car_bt_name"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -49,6 +51,24 @@ object CompanionPrefs {
     fun setModuleManifestUrl(context: Context, url: String) {
         prefs(context).edit()
             .putString(KEY_MODULE_MANIFEST, url.trim())
+            .apply()
+    }
+
+    /**
+     * Bluetooth del auto (receptor AUX / adaptador OBD). Cuando el teléfono
+     * se conecta a este equipo, el servicio abre solo el enlace Wi-Fi Direct
+     * con el estéreo. Vacío = detección automática por nombre.
+     */
+    fun carBtMac(context: Context): String =
+        prefs(context).getString(KEY_CAR_BT_MAC, "").orEmpty().trim()
+
+    fun carBtName(context: Context): String =
+        prefs(context).getString(KEY_CAR_BT_NAME, "").orEmpty().trim()
+
+    fun setCarBtDevice(context: Context, mac: String?, name: String?) {
+        prefs(context).edit()
+            .putString(KEY_CAR_BT_MAC, mac.orEmpty().trim())
+            .putString(KEY_CAR_BT_NAME, name.orEmpty().trim())
             .apply()
     }
 }

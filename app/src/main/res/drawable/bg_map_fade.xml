@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Faded edges del mini-mapa: fundido a bg_screen en los 4 bordes -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape>
+            <gradient
+                android:angle="0"
+                android:startColor="#00000000"
+                android:centerColor="#00000000"
+                android:endColor="@color/bg_screen" />
+            <corners android:radius="22dp" />
+        </shape>
+    </item>
+    <item>
+        <shape>
+            <gradient
+                android:angle="270"
+                android:startColor="@color/bg_screen"
+                android:centerColor="#00000000"
+                android:endColor="#00000000" />
+            <corners android:radius="22dp" />
+        </shape>
+    </item>
+    <item>
+        <shape>
+            <gradient
+                android:angle="180"
+                android:startColor="#00000000"
+                android:centerColor="#00000000"
+                android:endColor="@color/bg_screen" />
+            <corners android:radius="22dp" />
+        </shape>
+    </item>
+    <item>
+        <shape>
+            <gradient
+                android:angle="90"
+                android:startColor="@color/bg_screen"
+                android:centerColor="#00000000"
+                android:endColor="#00000000" />
+            <corners android:radius="22dp" />
+        </shape>
+    </item>
+</layer-list>

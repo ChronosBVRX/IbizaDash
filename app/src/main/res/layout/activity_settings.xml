@@ -2,7 +2,7 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_screen_gradient"
+    android:background="@drawable/bg_screen"
     android:fillViewport="true"
     android:scrollbars="none">
 
@@ -44,7 +44,7 @@
                     android:layout_gravity="center"
                     android:contentDescription="Ajustes"
                     android:src="@drawable/ic_settings"
-                    android:tint="@color/accent_sky" />
+                    android:tint="@color/accent_primary" />
             </FrameLayout>
 
             <LinearLayout
@@ -142,7 +142,7 @@
                         android:gravity="center_vertical"
                         android:paddingStart="14dp"
                         android:paddingEnd="14dp"
-                        android:text="Modo demo de media (portada Bluetooth)"
+                        android:text="Modo demo de media (portada del teléfono)"
                         android:textColor="@color/text_secondary"
                         android:textSize="13sp" />
 
@@ -267,7 +267,7 @@
                         style="@style/SettingsActionButton"
                         android:layout_width="match_parent"
                         android:drawableStart="@drawable/ic_can"
-                        android:drawableTint="@color/accent_sky"
+                        android:drawableTint="@color/accent_primary"
                         android:text="Abrir Car Choose (CAN)" />
 
                     <View

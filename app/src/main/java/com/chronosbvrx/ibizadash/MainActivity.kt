@@ -10,12 +10,16 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.LayerDrawable
-import android.location.Location
-import android.location.LocationListener
 import java.io.File
-import android.location.LocationManager
 import android.media.AudioManager
 import android.os.Bundle
 import android.os.Handler
@@ -29,7 +33,6 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
 import android.widget.GridLayout
 import android.widget.ImageButton
@@ -42,10 +45,13 @@ import android.widget.TextView
 import android.widget.Button
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import com.chronosbvrx.ibizadash.car.CarSignals
+import com.chronosbvrx.ibizadash.car.GpsEngine
+import com.chronosbvrx.ibizadash.car.GpsFix
 import com.chronosbvrx.ibizadash.car.AvrcpController
 import com.chronosbvrx.ibizadash.car.TwCommandClient
 import com.chronosbvrx.ibizadash.car.HumanCarAssistant
@@ -54,11 +60,17 @@ import com.chronosbvrx.ibizadash.car.HumanVehicleStatus
 import com.chronosbvrx.ibizadash.car.Severity
 import com.chronosbvrx.ibizadash.bluetooth.BluetoothStatus
 import com.chronosbvrx.ibizadash.bluetooth.BluetoothStatusClient
+import com.chronosbvrx.ibizadash.map.CacheAwareTilesOverlay
 import com.chronosbvrx.ibizadash.map.MapHelper
+import com.chronosbvrx.ibizadash.map.RouteChevronOverlay
 import com.chronosbvrx.ibizadash.media.MediaKeys
 import com.chronosbvrx.ibizadash.media.MediaRepository
 import com.chronosbvrx.ibizadash.media.NowPlaying
 import com.chronosbvrx.ibizadash.ui.AutomotiveBarDrawable
+import com.chronosbvrx.ibizadash.ui.Motion
+import com.chronosbvrx.ibizadash.ui.NavPuckOverlay
+import com.chronosbvrx.ibizadash.ui.PerspectiveMapView
+import com.chronosbvrx.ibizadash.ui.PerspectiveNavOverlayView
 import com.chronosbvrx.ibizadash.nav.NavRepository
 import com.chronosbvrx.ibizadash.nav.NavRoute
 import com.chronosbvrx.ibizadash.nav.NavRouteRepository
@@ -92,20 +104,25 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
-class MainActivity : AppCompatActivity(), LocationListener {
+class MainActivity : AppCompatActivity() {
 
     private lateinit var map: MapView
     private lateinit var remoteMap: ImageView
     private lateinit var remoteArrow: View
     private lateinit var mapSourceChip: TextView
     private lateinit var clock: TextView
+    private lateinit var clockGreeting: TextView
+    private lateinit var clockAmPm: TextView
     private lateinit var date: TextView
     private lateinit var weatherTop: TextView
-    private lateinit var speedText: TextView
-    private lateinit var unitText: TextView
+    private lateinit var weatherDesc: TextView
+    private lateinit var weatherFeels: TextView
+    private lateinit var weatherMaxMin: TextView
+    private lateinit var weatherHumidity: TextView
+    private lateinit var weatherWind: TextView
+    private lateinit var weatherUpdated: TextView
     private lateinit var gearText: TextView
-    private lateinit var speedSource: TextView
-    private lateinit var speedometer: com.chronosbvrx.ibizadash.ui.SpeedometerView
+    private lateinit var speedometer: com.chronosbvrx.ibizadash.ui.ProSpeedometerView
     private lateinit var mediaTitle: TextView
     private lateinit var mediaSubtitle: TextView
     private lateinit var mediaSourceIcon: ImageView
@@ -123,6 +140,18 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private lateinit var cockpitHealth: TextView
     private lateinit var cockpitHealthIcon: ImageView
     private lateinit var healthRow: View
+    private lateinit var mediaCard: View
+    private lateinit var weatherCard: View
+    private lateinit var obdCockpitTemp: TextView
+    private lateinit var obdCockpitVoltage: TextView
+    private lateinit var obdCockpitRpm: TextView
+    private lateinit var obdCockpitFuel: TextView
+    private lateinit var obdCockpitDtc: TextView
+    private lateinit var obdCockpitTempBar: ProgressBar
+    private lateinit var obdCockpitVoltageBar: ProgressBar
+    private lateinit var obdCockpitRpmBar: ProgressBar
+    private lateinit var obdCockpitFuelBar: ProgressBar
+    private lateinit var obdCockpitDtcBar: ProgressBar
     private lateinit var headlightState: TextView
     private lateinit var headlightGlow: View
     private lateinit var carRender: ImageView
@@ -131,7 +160,16 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
     // Continuous canvas
     private lateinit var leftPane: FrameLayout
+    private lateinit var centerPane: FrameLayout
     private lateinit var rightPane: FrameLayout
+    private lateinit var miniMapContainer: View
+    private lateinit var homeRoot: View
+    private var nightTheme = true
+    private companion object {
+        const val THEME_DOCK_INDEX = 5
+        const val BTN_THEME_TOGGLE_ID = 9007
+        const val NAV_PITCH = 52f
+    }
     private lateinit var cockpitPanel: View
     private lateinit var miniHud: View
     private lateinit var mediaModule: View
@@ -152,8 +190,6 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private lateinit var hudPill: View
     private lateinit var hudPillSpeed: TextView
     private lateinit var hudPillGear: TextView
-    private lateinit var hudPillFuel: TextView
-    private lateinit var cockpitFuel: TextView
     private lateinit var alertCapsule: View
     private lateinit var alertText: TextView
     private lateinit var nightDim: View
@@ -170,6 +206,11 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
     // Vista de navegación
     private lateinit var navOverlay: View
+
+    /** Paneles que participan en el cross-fade; se reutiliza el mismo array. */
+    private val transitionPanels: Array<View> by lazy {
+        arrayOf(cockpitPanel, centerPane, miniHud, mediaModule, radioModule, vehicleModule, navOverlay)
+    }
     private lateinit var navCard: View
     private lateinit var navCardIcon: ImageView
     private lateinit var navCardDist: TextView
@@ -229,19 +270,14 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private lateinit var vHumanThermalSub: TextView
     private lateinit var vHumanElectrical: TextView
     private lateinit var vHumanElectricalSub: TextView
-    private lateinit var vHumanFuel: TextView
-    private lateinit var vHumanFuelSub: TextView
-    private lateinit var vHumanFuelLevel: android.widget.ProgressBar
     private val metricBars = HashMap<Int, AutomotiveBarDrawable>()
     private lateinit var vHumanMaintenance: TextView
     private lateinit var vHumanMaintenanceSub: TextView
     private lateinit var vHumanThermalBar: View
     private lateinit var vHumanElectricalBar: View
-    private lateinit var vHumanFuelBar: View
     private lateinit var vHumanMaintenanceBar: View
     private lateinit var vHumanThermalIcon: ImageView
     private lateinit var vHumanElectricalIcon: ImageView
-    private lateinit var vHumanFuelIcon: ImageView
     private lateinit var vHumanMaintenanceIcon: ImageView
     private lateinit var vGear: TextView
     private lateinit var vGearText: TextView
@@ -273,10 +309,6 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private lateinit var vTrim: TextView
     private lateinit var vTrimAdv: TextView
     private lateinit var vTrimState: TextView
-    private lateinit var vSpeedObd: TextView
-    private lateinit var vSpeedObdAdv: TextView
-    private lateinit var vFuelEngine: TextView
-    private lateinit var vFuelEngineAdv: TextView
     private lateinit var vVin: TextView
     private lateinit var vDtc: TextView
     private lateinit var vDtcMeanings: TextView
@@ -290,6 +322,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private lateinit var quickSheet: View
     private lateinit var sheetScrim: View
     private lateinit var sheetPanel: View
+    private var quickSheetOpen = false
     private lateinit var brightnessSeek: SeekBar
     private lateinit var brightnessValue: TextView
     private lateinit var swNight: Switch
@@ -309,15 +342,38 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private var hasLightData = false
 
     private val uiHandler = Handler(Looper.getMainLooper())
-    private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+    private val timeFormat = SimpleDateFormat("h:mm", Locale.getDefault())
     private val dateFormat = SimpleDateFormat("EEEE d MMMM", Locale("es", "MX"))
+
+    /** Tinte azul petróleo + contraste para las teselas base en NAV. */
+    private val navRoadColorFilter by lazy {
+        val contrast = 1.24f
+        val translate = (0.5f - 0.5f * contrast) * 255f
+        ColorMatrixColorFilter(
+            ColorMatrix(
+                floatArrayOf(
+                    contrast * 0.92f, 0f, 0f, 0f, translate - 4f,
+                    0f, contrast * 1.00f, 0f, 0f, translate + 2f,
+                    0f, 0f, contrast * 1.12f, 0f, translate + 12f,
+                    0f, 0f, 0f, 1f, 0f
+                )
+            )
+        )
+    }
+
+    private val perspectiveReenable = Runnable {
+        if (!perspectiveTouchDown) updatePerspective()
+    }
 
     private var locationOverlay: MyLocationNewOverlay? = null
     private var positionMarker: org.osmdroid.views.overlay.Marker? = null
     private val routeOverlays = mutableListOf<org.osmdroid.views.overlay.Overlay>()
     private var lastSnapCenterMs = 0L
-    private lateinit var locationManager: LocationManager
-    private var lastLocation: Location? = null
+    private var gpsEngine: GpsEngine? = null
+    private var lastGpsFix: GpsFix? = null
+    private var lastGpsUiMs = 0L
+    private var currentSpeedKmh = 0f
+    private var uiVisible = true
 
     // Geometría completa de la ruta activa. La polilínea visible se recorta
     // conforme el coche avanza; estos arrays se conservan para calcular el
@@ -325,11 +381,42 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private var routePoints: List<GeoPoint> = emptyList()
     private var routeCum = DoubleArray(0)
     private var routePolyline: Polyline? = null
+    private var routeCasing: Polyline? = null
+    private var routeGlow: Polyline? = null
+    private var chevronOverlay: RouteChevronOverlay? = null
+    private var puckOverlay: NavPuckOverlay? = null
+    private var destIcon: BitmapDrawable? = null
+    private var destinationMarker: org.osmdroid.views.overlay.Marker? = null
     private val routeTrafficOverlays = mutableListOf<RouteTrafficOverlay>()
+
+    // Perspectiva de conducción (solo NAV follow).
+    private lateinit var perspectiveMap: PerspectiveMapView
+    private lateinit var perspectiveOverlay: PerspectiveNavOverlayView
+    private lateinit var perspectiveBackdrop: View
+    private var perspectiveActive = false
+    private var perspectiveTouchDown = false
+    private var refTilesOverlay: CacheAwareTilesOverlay? = null
     private var routeTrimCursor = 0
     private var lastRouteProgress = -1f
     private var lastRouteTrimMs = 0L
     private var lastNavFollowMs = 0L
+
+    // Cámara de navegación: coche abajo, zoom por velocidad.
+    private var navZoomBucket = 1          // 0 urbano · 1 carretera · 2 autopista
+    private var navZoomTarget = MapHelper.DEFAULT_ZOOM
+    private var navZoomApplied = false
+    private var lastZoomStepMs = 0L
+    private var lastZoomReadyCheckMs = 0L
+    private var lastZoomReady = false
+    /** Centro del encuadre que se verá al subir un nivel de zoom. */
+    private val ZOOM_PREFETCH_SHRINK = 0.55f
+    /** Encuadre exacto al subir un nivel (mitad lineal). */
+    private val ZOOM_READY_SHRINK = 0.50f
+
+    // Teselas del viewport (solo cuando el teléfono está conectado).
+    private var lastTileReqMs = 0L
+    private var lastTileReqKey = ""
+    private var tileReqLoop: Runnable? = null
 
     private var carSignals: CarSignals? = null
     private var twClient: TwCommandClient? = null
@@ -337,10 +424,6 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private var obdClient: Elm327Client? = null
 
     private val obdListener: (ObdTelemetry) -> Unit = { state ->
-        // OBD speed feeds the speedometer with top priority (OBD > CAN > GPS).
-        carSignals?.setObdSpeed(
-            if (state.connected || state.demo) state.speedKmh?.toFloat() else null
-        )
         runOnUiThread { renderObd(state) }
     }
 
@@ -384,7 +467,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
                     try {
                         // Las teselas nuevas están en disco; limpiar la caché en
                         // memoria obliga a osmdroid a leerlas en el próximo draw.
-                        map.tileProvider?.clearTileCache()
+                        // Incluye la capa de etiquetas (EsriDarkRef).
+                        MapHelper.clearTileCaches(map)
                     } catch (_: Exception) {
                     }
                     try {
@@ -499,6 +583,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             }
             remoteMap.setImageBitmap(bmp)
             updateMapSourceChip()
+            updatePerspective()
         } catch (_: Exception) {
         }
     }
@@ -514,6 +599,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             map.onResume()
             map.invalidate()
             updateMapSourceChip()
+            updatePerspective()
         } catch (_: Exception) {
         }
     }
@@ -608,11 +694,11 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private val dockIndicators = mutableListOf<View>()
     private var activeDockIndex = 0
 
-    private enum class Focus(val fraction: Float, val dockIndex: Int) {
-        COCKPIT(0.55f, 0),
-        NAV(1.00f, 1),
-        MEDIA(0.25f, 2),
-        VEHICLE(0.25f, 3)
+    private enum class Focus(val dockIndex: Int) {
+        COCKPIT(0),
+        NAV(1),
+        MEDIA(2),
+        VEHICLE(3)
     }
 
     /** Seguimiento del mapa: el coche manda salvo que el usuario lo mueva. */
@@ -673,16 +759,23 @@ class MainActivity : AppCompatActivity(), LocationListener {
                     if (value > 0) R.color.accent_sky else R.color.text_muted
                 )
             )
-            // Auto night mode with hysteresis.
-            if (ratio < 0.3f) nightDim.visibility = View.VISIBLE
-            else if (ratio > 0.5f) nightDim.visibility = View.GONE
+            // Atenuador desactivado con tema nativo: se mantiene oculto.
+            nightDim.visibility = View.GONE
         }
     }
 
     private val clockRunnable = object : Runnable {
         override fun run() {
             val now = Date()
+            val cal = java.util.Calendar.getInstance()
             clock.text = timeFormat.format(now)
+            clockAmPm.text = if (cal.get(java.util.Calendar.AM_PM) == java.util.Calendar.PM) "PM" else "AM"
+            val hour = cal.get(java.util.Calendar.HOUR_OF_DAY)
+            clockGreeting.text = when {
+                hour < 12 -> "Buenos días"
+                hour < 19 -> "Buenas tardes"
+                else -> "Buenas noches"
+            }
             val raw = dateFormat.format(now)
             date.text = raw.replaceFirstChar {
                 if (it.isLowerCase()) it.titlecase(Locale("es", "MX")) else it.toString()
@@ -692,7 +785,18 @@ class MainActivity : AppCompatActivity(), LocationListener {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Tema nativo antes de setContentView para no recrear en bucle.
+        try {
+            nightTheme = Prefs.nightMode(this)
+            val want = if (nightTheme) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
+            if (AppCompatDelegate.getDefaultNightMode() != want) {
+                AppCompatDelegate.setDefaultNightMode(want)
+            }
+        } catch (_: Exception) {
+        }
         super.onCreate(savedInstanceState)
+        // Animaciones ligeras: respeta la escala del sistema y low-RAM.
+        Motion.init(this)
         window.setFlags(
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
             WindowManager.LayoutParams.FLAG_FULLSCREEN
@@ -759,18 +863,26 @@ class MainActivity : AppCompatActivity(), LocationListener {
     }
 
     private fun bindViews() {
-        map = findViewById(R.id.map)
+        perspectiveMap = findViewById(R.id.map)
+        map = perspectiveMap
+        perspectiveOverlay = findViewById(R.id.perspectiveOverlay)
+        perspectiveBackdrop = findViewById(R.id.perspectiveBackdrop)
         remoteMap = findViewById(R.id.remoteMap)
         remoteArrow = findViewById(R.id.remoteArrow)
         mapSourceChip = findViewById(R.id.mapSourceChip)
         gpsStateChip = findViewById(R.id.gpsStateChip)
         clock = findViewById(R.id.clock)
+        clockGreeting = findViewById(R.id.greeting)
+        clockAmPm = findViewById(R.id.amPm)
         date = findViewById(R.id.date)
         weatherTop = findViewById(R.id.weatherTop)
-        speedText = findViewById(R.id.speed)
-        unitText = findViewById(R.id.unit)
+        weatherDesc = findViewById(R.id.weatherDesc)
+        weatherFeels = findViewById(R.id.weatherFeels)
+        weatherMaxMin = findViewById(R.id.weatherMaxMin)
+        weatherHumidity = findViewById(R.id.weatherHumidity)
+        weatherWind = findViewById(R.id.weatherWind)
+        weatherUpdated = findViewById(R.id.weatherUpdated)
         gearText = findViewById(R.id.gear)
-        speedSource = findViewById(R.id.speedSource)
         speedometer = findViewById(R.id.speedometer)
         mediaTitle = findViewById(R.id.mediaTitle)
         mediaSubtitle = findViewById(R.id.mediaSubtitle)
@@ -784,12 +896,25 @@ class MainActivity : AppCompatActivity(), LocationListener {
         btBatteryBar = findViewById(R.id.btBatteryBar)
         btBattery = findViewById(R.id.btBattery)
         weatherIcon = findViewById(R.id.weatherIcon)
+        weatherCard = findViewById(R.id.weatherCard)
+        mediaCard = findViewById(R.id.mediaCard)
         mediaProgress = findViewById(R.id.mediaProgress)
         mediaTime = findViewById(R.id.mediaTime)
         cockpitHealth = findViewById(R.id.cockpitHealth)
         headlightState = findViewById(R.id.headlightState)
         healthRow = findViewById(R.id.healthRow)
         healthRow.visibility = View.GONE // Sin dato, no se muestra (ver refreshHealthRow).
+        healthRow.setOnClickListener { applyFocus(Focus.VEHICLE) }
+        obdCockpitTemp = findViewById(R.id.obdCockpitTemp)
+        obdCockpitVoltage = findViewById(R.id.obdCockpitVoltage)
+        obdCockpitRpm = findViewById(R.id.obdCockpitRpm)
+        obdCockpitFuel = findViewById(R.id.obdCockpitFuel)
+        obdCockpitDtc = findViewById(R.id.obdCockpitDtc)
+        obdCockpitTempBar = findViewById(R.id.obdCockpitTempBar)
+        obdCockpitVoltageBar = findViewById(R.id.obdCockpitVoltageBar)
+        obdCockpitRpmBar = findViewById(R.id.obdCockpitRpmBar)
+        obdCockpitFuelBar = findViewById(R.id.obdCockpitFuelBar)
+        obdCockpitDtcBar = findViewById(R.id.obdCockpitDtcBar)
         headlightGlow = findViewById(R.id.headlightGlow)
         carRender = findViewById(R.id.carRender)
         callBanner = findViewById(R.id.callBanner)
@@ -799,7 +924,10 @@ class MainActivity : AppCompatActivity(), LocationListener {
         dock = findViewById(R.id.dock)
 
         leftPane = findViewById(R.id.leftPane)
+        centerPane = findViewById(R.id.centerPane)
         rightPane = findViewById(R.id.rightPane)
+        miniMapContainer = findViewById(R.id.miniMapContainer)
+        homeRoot = findViewById(R.id.homeRoot)
         cockpitPanel = findViewById(R.id.cockpitPanel)
         miniHud = findViewById(R.id.miniHud)
         mediaModule = findViewById(R.id.mediaModule)
@@ -813,8 +941,6 @@ class MainActivity : AppCompatActivity(), LocationListener {
         hudPill = findViewById(R.id.hudPill)
         hudPillSpeed = findViewById(R.id.hudPillSpeed)
         hudPillGear = findViewById(R.id.hudPillGear)
-        hudPillFuel = findViewById(R.id.hudPillFuel)
-        cockpitFuel = findViewById(R.id.cockpitFuel)
         alertCapsule = findViewById(R.id.alertCapsule)
         alertText = findViewById(R.id.alertText)
         nowPlayingToast = findViewById(R.id.nowPlayingToast)
@@ -852,7 +978,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
             mapMode = MapMode.FOLLOWING
             lastUserMapTouchMs = 0L
             updateRecenterVisibility()
-            val target = positionMarker?.position ?: lastLocation?.let {
+            updatePerspective()
+            val target = positionMarker?.position ?: lastGpsFix?.let {
                 GeoPoint(it.latitude, it.longitude)
             }
             if (target != null) {
@@ -900,19 +1027,14 @@ class MainActivity : AppCompatActivity(), LocationListener {
         vHumanThermalSub = findViewById(R.id.vHumanThermalSub)
         vHumanElectrical = findViewById(R.id.vHumanElectrical)
         vHumanElectricalSub = findViewById(R.id.vHumanElectricalSub)
-        vHumanFuel = findViewById(R.id.vHumanFuel)
-        vHumanFuelSub = findViewById(R.id.vHumanFuelSub)
-        vHumanFuelLevel = findViewById(R.id.vHumanFuelLevel)
         vHumanMaintenance = findViewById(R.id.vHumanMaintenance)
         vHumanMaintenanceSub = findViewById(R.id.vHumanMaintenanceSub)
         vHumanThermalBar = findViewById(R.id.vHumanThermalBar)
         vHumanElectricalBar = findViewById(R.id.vHumanElectricalBar)
-        vHumanFuelBar = findViewById(R.id.vHumanFuelBar)
         vHumanMaintenanceBar = findViewById(R.id.vHumanMaintenanceBar)
         vHumanThermalIcon = findViewById(R.id.vHumanThermalIcon)
         vHumanElectricalIcon = findViewById(R.id.vHumanElectricalIcon)
         cockpitHealthIcon = findViewById(R.id.cockpitHealthIcon)
-        vHumanFuelIcon = findViewById(R.id.vHumanFuelIcon)
         vHumanMaintenanceIcon = findViewById(R.id.vHumanMaintenanceIcon)
         val techContainer = findViewById<android.widget.LinearLayout>(R.id.layoutTechDataContainer)
         val toggleBtn = findViewById<View>(R.id.btnToggleTechData)
@@ -945,58 +1067,10 @@ class MainActivity : AppCompatActivity(), LocationListener {
         findViewById<Button>(R.id.btnDtcDictionary).setOnClickListener {
             showDtcDictionary()
         }
-        findViewById<Button>(R.id.btnProbeFuel).setOnClickListener {
-            Toast.makeText(this, "Probando 012F… mira la consola", Toast.LENGTH_SHORT).show()
-            obdClient?.probeFuel()
-            uiHandler.postDelayed({ refreshObdConsole() }, 3000L)
-        }
         findViewById<Button>(R.id.btnProbeVin).setOnClickListener {
             Toast.makeText(this, "Leyendo VIN… mira la consola", Toast.LENGTH_SHORT).show()
             obdClient?.probeVin()
             uiHandler.postDelayed({ refreshObdConsole() }, 3000L)
-        }
-        findViewById<Button>(R.id.btnFuelUds).setOnClickListener {
-            Toast.makeText(this, "Consultando nivel en el cuadro (UDS)…", Toast.LENGTH_SHORT).show()
-            obdClient?.probeFuelUds()
-            uiHandler.postDelayed({ refreshObdConsole() }, 5000L)
-        }
-        findViewById<Button>(R.id.btnFuelCal).setOnClickListener {
-            val raw = ObdRepository.current.fuelRaw
-            if (raw == null) {
-                Toast.makeText(
-                    this,
-                    "Primero lee el nivel UDS con el tanque lleno",
-                    Toast.LENGTH_LONG
-                ).show()
-            } else {
-                Prefs.setFuelCalibration(this, raw, Prefs.fuelEmptyRaw(this))
-                Toast.makeText(
-                    this,
-                    "Tanque lleno calibrado con raw=$raw",
-                    Toast.LENGTH_LONG
-                ).show()
-                obdClient?.probeFuelUds()
-                renderHumanNow()
-            }
-        }
-        findViewById<Button>(R.id.btnFuelCalEmpty).setOnClickListener {
-            val raw = ObdRepository.current.fuelRaw
-            if (raw == null) {
-                Toast.makeText(
-                    this,
-                    "Primero lee el nivel UDS con el tanque en reserva",
-                    Toast.LENGTH_LONG
-                ).show()
-            } else {
-                Prefs.setFuelCalibration(this, Prefs.fuelFullRaw(this), raw)
-                Toast.makeText(
-                    this,
-                    "Reserva calibrada con raw=$raw",
-                    Toast.LENGTH_LONG
-                ).show()
-                obdClient?.probeFuelUds()
-                renderHumanNow()
-            }
         }
         vGear = findViewById(R.id.vGear)
         vGearText = findViewById(R.id.vGearText)
@@ -1028,10 +1102,6 @@ class MainActivity : AppCompatActivity(), LocationListener {
         vTrim = findViewById(R.id.vTrim)
         vTrimAdv = findViewById(R.id.vTrimAdv)
         vTrimState = findViewById(R.id.vTrimState)
-        vSpeedObd = findViewById(R.id.vSpeedObd)
-        vSpeedObdAdv = findViewById(R.id.vSpeedObdAdv)
-        vFuelEngine = findViewById(R.id.vFuelEngine)
-        vFuelEngineAdv = findViewById(R.id.vFuelEngineAdv)
         vVin = findViewById(R.id.vVin)
         vDtc = findViewById(R.id.vDtc)
         vDtcMeanings = findViewById(R.id.vDtcMeanings)
@@ -1092,45 +1162,55 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
     private fun togglePlayback() {
         val playing = MediaRepository.current?.isPlaying == true
-        // El móvil manda: su MediaSession conoce play/pausa mejor que AVRCP.
-        // La escritura va a un hilo de red (Android prohíbe socket en main).
-        if (!MediaRepository.isDemo() &&
-            MediaRepository.current?.isBluetooth != false &&
-            hasPhoneLink()
-        ) {
+        // La música entra por AUX: el control va siempre por Wi-Fi Direct.
+        if (!MediaRepository.isDemo() && hasPhoneLink()) {
             sendPhoneMediaCommand(if (playing) "pause" else "play")
             MediaRepository.current?.let {
                 MediaRepository.updateBluetooth(it.copy(isPlaying = !playing))
             }
             return
         }
-        val address = lastBluetooth?.address
-        val avrcpSent = if (playing) {
-            avrcpController?.pause(address)
-        } else {
-            avrcpController?.play(address)
-        }
-        if (avrcpSent == true) {
-            MediaRepository.current?.let {
-                MediaRepository.updateBluetooth(it.copy(isPlaying = !playing))
-            }
+        if (MediaRepository.isDemo()) {
+            MediaRepository.playPause()
             return
         }
-        val viaMcu = if (playing) twClient?.btPause() else twClient?.btPlay()
-        if (viaMcu == true) {
-            MediaRepository.current?.let {
-                MediaRepository.updateBluetooth(it.copy(isPlaying = !playing))
-            }
-            return
-        }
-        if (!MediaRepository.playPause()) {
-            MediaKeys.send(this, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
-        }
+        Toast.makeText(this, "Abre IbizaCompanion para controlar la música", Toast.LENGTH_SHORT)
+            .show()
     }
 
     private fun setupMap() {
         MapHelper.configure(this, map)
+        refTilesOverlay = map.overlays.filterIsInstance<CacheAwareTilesOverlay>().firstOrNull()
+        // Perspectiva de conducción: el puck y el coche se dibujan fuera de
+        // la matriz 3D para no aplastarse. Un toque aplana el mapa antes de
+        // entregar el evento a osmdroid; al soltar, si seguimos en NAV,
+        // vuelve solo a la inclinación.
+        perspectiveMap.pitch = 0f
+        perspectiveMap.overscan = 1.28f
+        perspectiveMap.carScreenFraction = 0.79f
+        perspectiveMap.onTouchDown = {
+            perspectiveTouchDown = true
+            uiHandler.removeCallbacks(perspectiveReenable)
+            updatePerspective()
+        }
+        perspectiveMap.onTouchUp = {
+            perspectiveTouchDown = false
+            uiHandler.removeCallbacks(perspectiveReenable)
+            uiHandler.postDelayed(perspectiveReenable, 220L)
+        }
+        perspectiveOverlay.bind(
+            perspectiveMap,
+            { positionMarker?.icon },
+            { destIcon },
+            { routePoints.lastOrNull() }
+        )
+        // UA propio y zoom de calle: evita la cuadrícula vacía de osmdroid.
+        try {
+            org.osmdroid.config.Configuration.getInstance().userAgentValue = packageName
+        } catch (_: Exception) {
+        }
         map.controller.setCenter(MapHelper.MORELIA)
+        map.controller.setZoom(16.0)
         // Solo se deja de seguir si el usuario ARRASTRA de verdad (> 18 px en
         // el mapa). Un toque rápido no debe “pegar” el coche durante 10 s.
         map.setOnTouchListener { v, event ->
@@ -1165,6 +1245,16 @@ class MainActivity : AppCompatActivity(), LocationListener {
                 override fun longPressHelper(p: GeoPoint): Boolean = false
             })
         )
+        // Puck (halo + cono) y flechas: viven en el MapView y solo se
+        // activan en NAV. El marcador del coche se crea después y queda
+        // encima; bringPuckToFront() mantiene ese orden al dibujar la ruta.
+        try {
+            puckOverlay = NavPuckOverlay(this).apply {
+                anchor = { positionMarker?.position }
+            }.also { map.overlays.add(it) }
+            chevronOverlay = RouteChevronOverlay(this).also { map.overlays.add(it) }
+        } catch (_: Exception) {
+        }
     }
 
     private fun setupNavBridge() {
@@ -1241,6 +1331,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private fun drawNavRoute(route: NavRoute) {
         clearNavRoute()
         val points = MapHelper.decodePolyline(route.encodedPolyline)
+        Log.i("MainActivity", "drawNavRoute ${route.destinationName}: ${points.size} puntos")
         if (points.isEmpty()) return
         routePoints = points
         routeCum = buildRouteCum(points)
@@ -1248,14 +1339,44 @@ class MainActivity : AppCompatActivity(), LocationListener {
         lastRouteProgress = -1f
         lastRouteTrimMs = 0L
         followPoint = points.first()
-        val polyline = Polyline(map)
-        polyline.setPoints(points)
-        polyline.outlinePaint.color = android.graphics.Color.parseColor("#00E5FF")
-        polyline.outlinePaint.strokeWidth = 10f
-        polyline.isGeodesic = false
-        map.overlays.add(polyline)
-        routeOverlays.add(polyline)
-        routePolyline = polyline
+
+        // Tres pasadas: glow (26 px) → casing oscuro (18 px) → línea cian
+        // (12 px). El resultado es una ruta con borde limpio y un halo suave,
+        // legible sobre el mapa oscuro sin engordar el trazo interior.
+        val glow = Polyline(map).apply {
+            setPoints(points)
+            outlinePaint.color = 0x3300E5FF
+            outlinePaint.strokeWidth = 26f
+            outlinePaint.strokeCap = Paint.Cap.ROUND
+            outlinePaint.strokeJoin = Paint.Join.ROUND
+            outlinePaint.isAntiAlias = true
+            isGeodesic = false
+        }
+        val casing = Polyline(map).apply {
+            setPoints(points)
+            outlinePaint.color = Color.parseColor("#0A1018")
+            outlinePaint.strokeWidth = 18f
+            outlinePaint.strokeCap = Paint.Cap.ROUND
+            outlinePaint.strokeJoin = Paint.Join.ROUND
+            outlinePaint.isAntiAlias = true
+            isGeodesic = false
+        }
+        val core = Polyline(map).apply {
+            setPoints(points)
+            outlinePaint.color = Color.parseColor("#00E5FF")
+            outlinePaint.strokeWidth = 12f
+            outlinePaint.strokeCap = Paint.Cap.ROUND
+            outlinePaint.strokeJoin = Paint.Join.ROUND
+            outlinePaint.isAntiAlias = true
+            isGeodesic = false
+        }
+        for (line in arrayOf(glow, casing, core)) {
+            map.overlays.add(line)
+            routeOverlays.add(line)
+        }
+        routeGlow = glow
+        routeCasing = casing
+        routePolyline = core
 
         // Tramos con tráfico: se pintan encima y más gruesos, como en Waze.
         if (route.trafficSections.isNotEmpty() && points.size > 2) {
@@ -1269,7 +1390,10 @@ class MainActivity : AppCompatActivity(), LocationListener {
                 val overlay = Polyline(map)
                 overlay.setPoints(ArrayList(sub))
                 overlay.outlinePaint.color = trafficColor(span.speedKmh)
-                overlay.outlinePaint.strokeWidth = 13f
+                overlay.outlinePaint.strokeWidth = 14f
+                overlay.outlinePaint.strokeCap = Paint.Cap.ROUND
+                overlay.outlinePaint.strokeJoin = Paint.Join.ROUND
+                overlay.outlinePaint.isAntiAlias = true
                 overlay.isGeodesic = false
                 map.overlays.add(overlay)
                 routeOverlays.add(overlay)
@@ -1278,19 +1402,31 @@ class MainActivity : AppCompatActivity(), LocationListener {
                 )
             }
         }
+
+        // Flechas de dirección cada ~120 m, por encima de la línea y debajo
+        // del destino y del puck.
+        chevronOverlay?.let { overlay ->
+            overlay.arrows = buildChevrons(points, routeCum)
+            overlay.fromIndex = 0
+            overlay.visible = focus == Focus.NAV
+            // Las tres pasadas acaban de añadirse: hay que subir las flechas
+            // por encima de la línea (antes viven debajo del mapa).
+            if (map.overlays.contains(overlay)) map.overlays.remove(overlay)
+            map.overlays.add(overlay)
+        }
+
+        // Pin de destino propio (cobre del sistema visual, no el pin genérico).
         val end = points.last()
         val marker = Marker(map)
         marker.position = end
         marker.title = route.destinationName
+        marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+        marker.icon = destinationPin()
         map.overlays.add(marker)
         routeOverlays.add(marker)
-        // Keep the road-snapped position marker on top of the route line.
-        positionMarker?.let { pm ->
-            if (map.overlays.contains(pm)) {
-                map.overlays.remove(pm)
-                map.overlays.add(pm)
-            }
-        }
+        destinationMarker = marker
+        // El puck (halo + cono + coche) va siempre por encima de la ruta.
+        bringPuckToFront()
         map.controller.animateTo(points.first())
         map.invalidate()
         applyFocus(Focus.NAV)
@@ -1313,12 +1449,18 @@ class MainActivity : AppCompatActivity(), LocationListener {
     }
 
     private fun clearNavRoute() {
+        destinationMarker = null
         if (routeOverlays.isNotEmpty()) {
             routeOverlays.forEach { map.overlays.remove(it) }
             routeOverlays.clear()
         }
         routeTrafficOverlays.clear()
         routePolyline = null
+        routeCasing = null
+        routeGlow = null
+        chevronOverlay?.arrows = emptyList()
+        chevronOverlay?.fromIndex = 0
+        chevronOverlay?.visible = false
         routePoints = emptyList()
         routeCum = DoubleArray(0)
         routeTrimCursor = 0
@@ -1326,6 +1468,66 @@ class MainActivity : AppCompatActivity(), LocationListener {
         lastRouteTrimMs = 0L
         followPoint = null
         map.invalidate()
+    }
+
+    /**
+     * Flechas cada ~120 m. Se calculan una vez por ruta (no por frame) y el
+     * overlay descarta las que ya quedaron atrás.
+     */
+    private fun buildChevrons(
+        points: List<GeoPoint>,
+        cum: DoubleArray
+    ): List<RouteChevronOverlay.Arrow> {
+        if (points.size < 3 || cum.size != points.size) return emptyList()
+        val spacing = 120.0
+        val out = ArrayList<RouteChevronOverlay.Arrow>()
+        var next = spacing
+        for (i in 1 until points.size) {
+            if (cum[i] < next) continue
+            val a = points[i - 1]
+            val b = points[i]
+            if (geoDist(a.latitude, a.longitude, b.latitude, b.longitude) < 0.5) continue
+            val bearing = bearingBetween(a.latitude, a.longitude, b.latitude, b.longitude)
+            out.add(RouteChevronOverlay.Arrow(b, bearing, i))
+            next = cum[i] + spacing
+            if (out.size >= 2000) break
+        }
+        return out
+    }
+
+    /** Pin de destino dibujado en código: cobre con borde carbón. */
+    private fun destinationPin(): BitmapDrawable {
+        destIcon?.let { return it }
+        val width = dp(30)
+        val height = dp(40)
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val cx = width / 2f
+        val radius = dp(10).toFloat()
+        val cy = radius + dp(2)
+        val copper = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#E07A5F")
+        }
+        val dark = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#0B0E14")
+        }
+        // Cola del pin.
+        val tail = Path().apply {
+            moveTo(cx - dp(6).toFloat(), cy + radius * 0.5f)
+            lineTo(cx + dp(6).toFloat(), cy + radius * 0.5f)
+            lineTo(cx, height - dp(2).toFloat())
+            close()
+        }
+        canvas.drawPath(tail, copper)
+        canvas.drawCircle(cx, cy, radius, copper)
+        val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = dp(2).toFloat()
+            color = Color.parseColor("#0B0E14")
+        }
+        canvas.drawCircle(cx, cy, radius, ring)
+        canvas.drawCircle(cx, cy, dp(3).toFloat(), dark)
+        return BitmapDrawable(resources, bitmap).also { destIcon = it }
     }
 
     private data class RouteTrafficOverlay(
@@ -1435,8 +1637,13 @@ class MainActivity : AppCompatActivity(), LocationListener {
             routeTrimCursor = cut
             val remaining = routePoints.subList(cut, routePoints.size)
             if (remaining.size >= 2) {
+                // Las tres pasadas se recortan juntas para que el casing y el
+                // glow no se queden pintados detrás del coche.
                 routePolyline?.setPoints(ArrayList(remaining))
+                routeCasing?.setPoints(ArrayList(remaining))
+                routeGlow?.setPoints(ArrayList(remaining))
             }
+            chevronOverlay?.fromIndex = cut
         }
         trimTrafficOverlays(progress)
         map.invalidate()
@@ -1525,12 +1732,14 @@ class MainActivity : AppCompatActivity(), LocationListener {
         if (mapMode == MapMode.FREE && now - lastUserMapTouchMs > 30_000L) {
             mapMode = MapMode.FOLLOWING
             updateRecenterVisibility()
+            updatePerspective()
         }
         if (mapMode != MapMode.FOLLOWING) return
         if (focus == Focus.NAV) {
             if (now - lastNavFollowMs < 800L) return
             lastNavFollowMs = now
             animateMapBearing(bearing)
+            updateNavZoomTarget(state.speedKmh)
             animateFollow(target, state.speedKmh)
         } else {
             resetMapBearing()
@@ -1548,6 +1757,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private val debugRouteReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
             val json = intent.getStringExtra("routeJson")
+            Log.i("MainActivity", "DEBUG_ROUTE_SET recibido (${json?.length ?: 0} chars)")
             if (json.isNullOrBlank()) {
                 // inject a default test route
                 val test = NavRoute(
@@ -1585,7 +1795,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
                         trafficSections = spans
                     )
                     NavRouteRepository.set(route)
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    Log.w("MainActivity", "DEBUG_ROUTE_SET inválido: ${e.message}")
                 }
             }
         }
@@ -1707,7 +1918,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
                 segmented = true,
                 segmentCount = 13,
                 initialLow = cyan,
-                initialHigh = blue
+                initialHigh = blue,
+                uiContext = this
             )
         )
         attachMetricBar(
@@ -1715,7 +1927,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
             AutomotiveBarDrawable(
                 0f, 100f, d,
                 initialLow = 0xFF4F46E5.toInt(),
-                initialHigh = 0xFF818CF8.toInt()
+                initialHigh = 0xFF818CF8.toInt(),
+                uiContext = this
             )
         )
         attachMetricBar(
@@ -1723,7 +1936,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
             AutomotiveBarDrawable(
                 0f, 100f, d,
                 initialLow = 0xFF06B6D4.toInt(),
-                initialHigh = 0xFF67E8F9.toInt()
+                initialHigh = 0xFF67E8F9.toInt(),
+                uiContext = this
             )
         )
         attachMetricBar(
@@ -1732,7 +1946,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
                 0f, 130f, d,
                 centerBand = 85f to 95f,
                 initialLow = cyan,
-                initialHigh = 0xFF10B981.toInt()
+                initialHigh = 0xFF10B981.toInt(),
+                uiContext = this
             )
         )
         attachMetricBar(
@@ -1740,7 +1955,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
             AutomotiveBarDrawable(
                 -20f, 60f, d,
                 initialLow = cyan,
-                initialHigh = 0xFF10B981.toInt()
+                initialHigh = 0xFF10B981.toInt(),
+                uiContext = this
             )
         )
         attachMetricBar(
@@ -1749,7 +1965,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
                 -10f, 40f, d,
                 bipolar = true,
                 initialLow = 0xFF64748B.toInt(),
-                initialHigh = 0xFFE2E8F0.toInt()
+                initialHigh = 0xFFE2E8F0.toInt(),
+                uiContext = this
             )
         )
         attachMetricBar(
@@ -1758,7 +1975,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
                 -25f, 25f, d,
                 bipolar = true,
                 initialLow = 0xFF64748B.toInt(),
-                initialHigh = 0xFFE2E8F0.toInt()
+                initialHigh = 0xFFE2E8F0.toInt(),
+                uiContext = this
             )
         )
         attachMetricBar(
@@ -1775,19 +1993,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
                     AutomotiveBarDrawable.Zone(12.9f, 13.4f, 0xFF64748B.toInt()),
                     AutomotiveBarDrawable.Zone(13.5f, 14.6f, 0xFF10B981.toInt()),
                     AutomotiveBarDrawable.Zone(14.7f, 15.5f, 0xFFF59E0B.toInt())
-                )
-            ),
-            levelsUp = 2
-        )
-        attachMetricBar(
-            R.id.vHumanFuel,
-            AutomotiveBarDrawable(
-                0f, 100f, d,
-                barHeightDp = 5f,
-                insetDp = 14f,
-                bottomDp = 8f,
-                initialLow = 0xFF059669.toInt(),
-                initialHigh = 0xFF34D399.toInt()
+                ),
+                uiContext = this
             ),
             levelsUp = 2
         )
@@ -1861,6 +2068,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
         carLightsOn = on
         if (::carRender.isInitialized) {
             carRender.setImageResource(if (on) R.drawable.ibiza_on else R.drawable.ibiza_off)
+            // Suaviza el escalado del PNG (bordes dentados en día/noche).
+            carRender.drawable?.isFilterBitmap = true
         }
         updateMapMarkerSprite(lastDisplayBearing, on)
     }
@@ -1868,9 +2077,14 @@ class MainActivity : AppCompatActivity(), LocationListener {
     /** El coche del minimapa cambia de ángulo según el rumbo. */
     private fun updateMapMarkerSprite(bearing: Float, lightsOn: Boolean) {
         lastDisplayBearing = bearing
+        // El cono de rumbo se actualiza aunque el sprite no cambie de sector.
+        puckOverlay?.bearingDeg = bearing
         val marker = positionMarker ?: return
-        val sector = if (map.mapOrientation != 0f) {
-            // Mapa girado: el sprite debe apuntar siempre hacia arriba.
+        val sector = if (focus == Focus.NAV) {
+            // Heading-up: el mapa gira para que el rumbo quede arriba y el
+            // marcador (flat) se dibuja siempre erguido. No se puede mirar
+            // mapOrientation aquí: la animación de giro aún puede estar en 0
+            // y el sprite quedaría torcido 45°.
             "n"
         } else {
             val normalized = ((bearing % 360f) + 360f) % 360f
@@ -1953,38 +2167,6 @@ class MainActivity : AppCompatActivity(), LocationListener {
             vTimingAdv.text = timingAdvice(s.timingAdvanceDeg)
             vTrim.text = s.fuelTrimPct?.let { "%+.1f %%".format(it) } ?: "--"
             vTrimAdv.text = trimAdvice(s.fuelTrimPct)
-            vSpeedObd.text = s.speedKmh?.let { "$it km/h" } ?: "--"
-            vSpeedObdAdv.text = if (s.speedKmh != null) "PID 010D de la ECU" else "Sin lectura"
-
-            val fuelPct = s.fuelLevelPct ?: s.fuelPct
-            val estimatedKm = Prefs.estimatedRangeKm(this)
-            when {
-                fuelPct != null -> {
-                    val liters = s.fuelLevelLiters
-                        ?: (fuelPct * Prefs.fuelTankLiters(this) / 100f)
-                    vFuelEngine.text = "${fuelPct.roundToInt()} %"
-                    vFuelEngineAdv.text = "≈%.1f L · %s".format(
-                        liters,
-                        s.fuelSource ?: if (s.fuelPct != null) "OBD" else "UDS"
-                    )
-                    vFuelEngine.setTextColor(
-                        ContextCompat.getColor(
-                            this,
-                            if (fuelPct <= 12f) R.color.danger else R.color.text_primary
-                        )
-                    )
-                }
-                estimatedKm > 0f -> {
-                    vFuelEngine.text = "${estimatedKm.roundToInt()} km"
-                    vFuelEngineAdv.text = "Autonomía estimada · sin nivel del cuadro"
-                    vFuelEngine.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
-                }
-                else -> {
-                    vFuelEngine.text = "--"
-                    vFuelEngineAdv.text = "Nivel UDS del cuadro · 0x2206"
-                    vFuelEngine.setTextColor(ContextCompat.getColor(this, R.color.text_muted))
-                }
-            }
 
             vVoltage.text = s.batteryV?.let { "%.1f V".format(it) } ?: "--"
             vVoltageState.text = batteryAdvice(s.batteryV, s.rpm)
@@ -2002,33 +2184,126 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
             state.vin?.let { vVin.text = it }
             renderFaults(state)
-        }
-
-        // Odómetro: se integra por tiempo real entre publicaciones. Antes se
-        // sumaba una fracción fija por cada aviso, así que dependía del ritmo
-        // del adaptador y escribía prefs cada segundo. Ahora se acumula en
-        // memoria y se vuelca cada minuto (y al pausar).
-        val spd = state.speedKmh ?: 0
-        if (spd > 2 && lastOdometerMs > 0L) {
-            val dtHours = (now - lastOdometerMs).coerceIn(0L, 5_000L) / 3_600_000f
-            odometerPendingKm += spd * dtHours
-        }
-        lastOdometerMs = now
-        if (odometerPendingKm >= 0.05f && now - odometerFlushMs >= 60_000L) {
-            flushOdometer()
+            renderCockpitObd(s)
         }
 
         if (updateTexts) {
-            val human = HumanCarAssistant.evaluate(this, state, spd)
+            val human = HumanCarAssistant.evaluate(this, state, currentSpeedKmh.roundToInt())
             renderHuman(human, state)
-            // Proactive alert capsule for critical/warning insights (fuel level
-            // excluded: this ECU answers NO DATA to PID 012F, so there is no
-            // real fuel signal to alert on).
+            // Proactive alert capsule for critical/warning insights.
             val alertInsight = listOf(human.thermalMessage, human.electricalMessage, human.maintenanceMessage)
                 .firstOrNull { it.voiceOrBannerAlert && (it.severity == Severity.WARNING || it.severity == Severity.CRITICAL) }
             if (alertInsight != null) {
                 showHumanAlert(alertInsight)
             }
+        }
+    }
+
+    /**
+     * OBD relevante solo en la pantalla principal (Inicio).
+     * Cuatro lecturas reales del adaptador: temperatura, voltaje, RPM y
+     * fallas/MIL. Cuando no hay lectura real se muestra "--", nunca un valor
+     * inventado. El detalle completo vive en el módulo AUTO.
+     */
+    private fun obdSeekColor(level: Int): Int = when (level) {
+        0 -> R.color.accent_teal
+        1 -> R.color.amber
+        else -> R.color.danger
+    }
+
+    private fun setObdBar(bar: ProgressBar, pct: Int, level: Int) {
+        bar.progress = pct.coerceIn(0, 100)
+        bar.progressTintList = ContextCompat.getColorStateList(this, obdSeekColor(level))
+    }
+
+    private fun renderCockpitObd(s: ObdTelemetry) {
+        try {
+            if (!::obdCockpitTemp.isInitialized) return
+            // TEMP: normal 75-98, aviso 99-105, peligro >105
+            val tempLevel = when {
+                s.coolantC == null -> 2
+                s.coolantC > 105f -> 2
+                s.coolantC >= 99f -> 1
+                else -> 0
+            }
+            obdCockpitTemp.text = s.coolantC?.let { it.roundToInt().toString() + "°C" } ?: "--"
+            obdCockpitTemp.setTextColor(
+                ContextCompat.getColor(this, obdSeekColor(tempLevel))
+            )
+            setObdBar(obdCockpitTempBar, ((s.coolantC ?: 0f) / 120f * 100f).toInt(), tempLevel)
+            // VOLT: normal 13.5-14.6, aviso 12.2-13.4, peligro <12.2 o >14.8
+            val voltLevel = when {
+                s.batteryV == null -> 2
+                s.batteryV < 12.2f || s.batteryV > 14.8f -> 2
+                s.batteryV < 13.5f -> 1
+                s.batteryV <= 14.6f -> 0
+                else -> 1
+            }
+            obdCockpitVoltage.text = s.batteryV?.let {
+                String.format(Locale.getDefault(), "%.1fV", it)
+            } ?: "--"
+            obdCockpitVoltage.setTextColor(
+                ContextCompat.getColor(this, obdSeekColor(voltLevel))
+            )
+            setObdBar(obdCockpitVoltageBar, (((s.batteryV ?: 0f) - 10f) / 6f * 100f).toInt(), voltLevel)
+            // RPM: normal 600-3500, aviso 3501-5000, peligro >5000
+            val rpmLevel = when {
+                s.rpm == null -> 2
+                s.rpm > 5000 -> 2
+                s.rpm > 3500 -> 1
+                else -> 0
+            }
+            obdCockpitRpm.text = s.rpm?.toString() ?: "--"
+            obdCockpitRpm.setTextColor(
+                ContextCompat.getColor(this, obdSeekColor(rpmLevel))
+            )
+            setObdBar(obdCockpitRpmBar, (((s.rpm ?: 0).toFloat() / 7000f * 100f).toInt()), rpmLevel)
+            // NIVEL: solo se muestra el % si la ECU lo entrega; si no, "--".
+            val fuelLevel = s.fuelLevelPct
+            val fuelWarning = when {
+                fuelLevel == null -> -1
+                fuelLevel < 12f -> 2
+                fuelLevel < 25f -> 1
+                else -> 0
+            }
+            obdCockpitFuel.text = fuelLevel?.let { "${it.roundToInt()}%" } ?: "--"
+            obdCockpitFuel.setTextColor(
+                ContextCompat.getColor(
+                    this,
+                    when (fuelWarning) {
+                        -1 -> R.color.text_muted
+                        2 -> R.color.danger
+                        1 -> R.color.amber
+                        else -> R.color.accent_teal
+                    }
+                )
+            )
+            setObdBar(
+                obdCockpitFuelBar,
+                fuelLevel?.toInt() ?: 0,
+                if (fuelWarning < 0) 0 else fuelWarning
+            )
+            // FALLAS: 0 OK turquesa, >0 rojo
+            val hasDtc = s.dtcs.isNotEmpty() || s.milOn == true
+            val dtcLevel = if (hasDtc) 2 else 0
+            obdCockpitDtc.text = when {
+                s.dtcs.isNotEmpty() -> "${s.dtcs.size} DTC"
+                s.milOn == true -> "MIL"
+                s.connected || s.demo -> "OK"
+                else -> "--"
+            }
+            obdCockpitDtc.setTextColor(
+                ContextCompat.getColor(
+                    this,
+                    when {
+                        hasDtc -> R.color.danger
+                        s.connected || s.demo -> R.color.accent_teal
+                        else -> R.color.text_muted
+                    }
+                )
+            )
+            setObdBar(obdCockpitDtcBar, if (hasDtc) 100 else if (s.connected || s.demo) 0 else 0, dtcLevel)
+        } catch (_: Exception) {
         }
     }
 
@@ -2084,7 +2359,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             divider = android.graphics.drawable.ColorDrawable(
                 ContextCompat.getColor(this@MainActivity, R.color.line)
             )
-            setBackgroundColor(ContextCompat.getColor(this@MainActivity, R.color.obsidian_900))
+            setBackgroundColor(ContextCompat.getColor(this@MainActivity, R.color.bg_screen))
         }
         val adapter = object : android.widget.BaseAdapter() {
             override fun getCount(): Int = shown.size
@@ -2101,7 +2376,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
                     setLineSpacing(0f, 1.15f)
                     setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_secondary))
                     setBackgroundColor(
-                        ContextCompat.getColor(this@MainActivity, R.color.obsidian_900)
+                        ContextCompat.getColor(this@MainActivity, R.color.bg_card)
                     )
                 }
                 tv.text = shown[position]
@@ -2338,54 +2613,13 @@ class MainActivity : AppCompatActivity(), LocationListener {
         }
     }
 
-    /**
-     * Nivel real del cuadro (UDS 0x2206) con reserva honesta: si el cuadro no
-     * responde, se muestra "sin lectura", nunca un valor inventado.
-     */
-    private fun fuelInsight(state: ObdTelemetry): HumanInsight {
-        if (!state.connected && !state.demo) {
-            return HumanInsight(
-                "fuel_na", "Sin lectura de nivel",
-                "Conecta el adaptador OBD y enciende el contacto", Severity.INFO
-            )
-        }
-        val pct = state.fuelLevelPct ?: state.fuelPct
-        val source = state.fuelSource ?: if (state.fuelPct != null) "OBD" else null
-        if (pct == null) {
-            // Respaldo útil mientras el cuadro no responde: la autonomía
-            // estimada por los botones de tanque y el odómetro local.
-            val estimatedKm = Prefs.estimatedRangeKm(this)
-            if (estimatedKm > 0f) {
-                return HumanInsight(
-                    "fuel_est", "Autonomía ~${estimatedKm.roundToInt()} km",
-                    "Estimado local · aún sin nivel del cuadro (UDS 0x2206)",
-                    Severity.INFO
-                )
-            }
-            return HumanInsight(
-                "fuel_na", "Sin lectura de nivel",
-                "El cuadro se consulta por UDS 0x2206", Severity.INFO
-            )
-        }
-        val liters = state.fuelLevelLiters
-            ?: (pct * Prefs.fuelTankLiters(this) / 100f)
-        val title = "Combustible ${pct.roundToInt()} %"
-        val subtitle = buildString {
-            append("≈%.1f L".format(liters))
-            if (!source.isNullOrBlank()) append(" · $source")
-        }
-        val severity = when {
-            pct <= 10f -> Severity.CRITICAL
-            pct <= 25f -> Severity.WARNING
-            else -> Severity.GOOD
-        }
-        return HumanInsight("fuel_level", title, subtitle, severity, pct <= 10f)
-    }
-
     private fun renderHumanNow() {
         try {
             val state = ObdRepository.current
-            renderHuman(HumanCarAssistant.evaluate(this, state, state.speedKmh ?: 0), state)
+            renderHuman(
+                HumanCarAssistant.evaluate(this, state, currentSpeedKmh.roundToInt()),
+                state
+            )
         } catch (_: Exception) {
         }
     }
@@ -2393,43 +2627,6 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private fun renderHuman(human: HumanVehicleStatus, state: ObdTelemetry) {
         hasObdData = state.connected || state.demo
         refreshHealthRow()
-        val fuelPct = if (state.connected || state.demo) {
-            state.fuelLevelPct ?: state.fuelPct
-        } else {
-            null
-        }
-        val fuelColor = ContextCompat.getColor(
-            this,
-            if ((fuelPct ?: 100f) <= 12f) R.color.danger else R.color.accent_cyan
-        )
-        if (fuelPct != null) {
-            hudPillFuel.visibility = View.VISIBLE
-            cockpitFuel.visibility = View.VISIBLE
-            hudPillFuel.text = "F ${fuelPct.roundToInt()}%"
-            cockpitFuel.text = "F ${fuelPct.roundToInt()}%"
-            hudPillFuel.setTextColor(fuelColor)
-            cockpitFuel.setTextColor(fuelColor)
-            vHumanFuelLevel.visibility = View.GONE
-            metricBars[R.id.vHumanFuel]?.let { bar ->
-                if (fuelPct <= 15f) {
-                    bar.setColors(
-                        ContextCompat.getColor(this, R.color.danger),
-                        ContextCompat.getColor(this, R.color.danger)
-                    )
-                } else {
-                    bar.setColors(0xFF059669.toInt(), 0xFF34D399.toInt())
-                }
-                bar.animateTo(fuelPct)
-            }
-        } else {
-            // Sin lectura de combustible no se muestra el chip: un "F --"
-            // permanente se lee como algo roto.
-            hudPillFuel.visibility = View.GONE
-            cockpitFuel.visibility = View.GONE
-            vHumanFuelLevel.visibility = View.GONE
-            metricBars[R.id.vHumanFuel]?.animateTo(null)
-        }
-
         val heroColor = severityColor(human.headlineSeverity)
         val noLiveData = !state.demo && !state.hasLiveData
         val monitored = monitoredSystems(state)
@@ -2481,10 +2678,6 @@ class MainActivity : AppCompatActivity(), LocationListener {
             human.electricalMessage, R.drawable.ic_battery
         )
         renderHumanInsight(
-            vHumanFuelBar, vHumanFuelIcon, vHumanFuel, vHumanFuelSub,
-            fuelInsight(state), R.drawable.ic_fuel
-        )
-        renderHumanInsight(
             vHumanMaintenanceBar, vHumanMaintenanceIcon, vHumanMaintenance, vHumanMaintenanceSub,
             human.maintenanceMessage, R.drawable.ic_oil
         )
@@ -2497,7 +2690,6 @@ class MainActivity : AppCompatActivity(), LocationListener {
         var n = 1 // aceite/mantenimiento se basa en el odómetro local
         if (state.coolantC != null || state.intakeC != null) n++
         if (state.batteryV != null) n++
-        if (state.fuelLevelPct != null || state.fuelPct != null) n++
         return n
     }
 
@@ -2632,6 +2824,15 @@ class MainActivity : AppCompatActivity(), LocationListener {
     }
 
     private fun setupDock() {
+        // Lee el tema guardado ANTES de crear el ítem dinámico del dock.
+        try {
+            nightTheme = Prefs.nightMode(this)
+        } catch (_: Exception) {
+            nightTheme = true
+        }
+        // Dock Home 9 ítems exactos: Apps, Vol -, Música, Streaming,
+        // Dock original de 6: INICIO, MAPA, MÚSICA, AUTO, APPS, AJUSTES.
+        // El interruptor de tema vive en Ajustes rápidos (switch Modo noche).
         addDockItem(R.drawable.ic_home, "INICIO") {
             applyFocus(Focus.COCKPIT)
         }
@@ -2654,7 +2855,107 @@ class MainActivity : AppCompatActivity(), LocationListener {
         addDockItem(R.drawable.ic_settings, "AJUSTES") {
             openQuickSettings()
         }
+        applyThemeBits()
         applyFocus(Focus.COCKPIT, animate = false)
+    }
+
+    /** Accesos rápidos antiguos del dock de 9 (vol/streaming/bt/waze/wifi). */
+    private fun quickAction(action: String) {
+        when (action) {
+            "VOL_NEG" -> adjustVolumeDir(-1)
+            "VOL_POS" -> adjustVolumeDir(1)
+            "STREAMING" -> openStreaming()
+            "BLUETOOTH" -> showBluetoothDetails()
+            "WAZE" -> if (!openPackage("com.waze")) Toast.makeText(this, "Waze no está instalado", Toast.LENGTH_SHORT).show()
+            "WIFI" -> try {
+                startActivity(Intent(Settings.ACTION_WIFI_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (_: Exception) {
+                openQuickSettings()
+            }
+        }
+    }
+
+    private fun adjustVolumeDir(dir: Int) {
+        try {
+            val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            audio.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC,
+                if (dir > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
+                AudioManager.FLAG_SHOW_UI
+            )
+        } catch (_: Exception) {
+            Toast.makeText(this, "No se pudo cambiar el volumen", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun openStreaming() {
+        val pkg = MediaRepository.current?.packageName
+        if (!pkg.isNullOrBlank() && pkg != "demo" && openPackage(pkg)) return
+        if (openPackage("com.google.android.apps.youtube.music")) return
+        if (openPackage("com.google.android.youtube")) return
+        if (!openPackage("com.tw.media")) {
+            Toast.makeText(this, "Sin app de streaming", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun toggleTheme() {
+        applyTheme(!nightTheme)
+    }
+
+    /**
+     * Tema día/noche NATIVO (AppCompat + values-night/colors.xml).
+     * Los colores semánticos bg_screen/bg_card/stroke_card/bg_pill/
+     * text_primary/text_secondary/accent_blue/car_glow se resuelven solos
+     * por el recurso día/noche; aquí solo se sincroniza el estado.
+     * Noche: dock dice "Modo día" + Sol. Día: "Modo noche" + Luna.
+     * Al cambiar el modo, la Activity se recrea y se re-ejecuta onCreate.
+     */
+    private fun applyTheme(isNightMode: Boolean) {
+        nightTheme = isNightMode
+        try {
+            Prefs.setNightMode(this, isNightMode)
+        } catch (_: Exception) {
+        }
+        val mode = if (isNightMode) {
+            AppCompatDelegate.MODE_NIGHT_YES
+        } else {
+            AppCompatDelegate.MODE_NIGHT_NO
+        }
+        if (AppCompatDelegate.getDefaultNightMode() != mode) {
+            AppCompatDelegate.setDefaultNightMode(mode)
+        }
+        applyThemeBits()
+    }
+
+    /** Bits no cubiertos por recursos: mapa, velocímetro, faros, dock y switch. */
+    private fun applyThemeBits() {
+        try {
+            if (!::homeRoot.isInitialized) return
+            // Sin overlay de atenuación: el tema nativo ya oscurece (#050508).
+            nightDim.visibility = View.GONE
+            // Base Esri: en NAV lleva tinte azul petróleo y más contraste.
+            // El filtro se reaplica sin perder el estado de perspectiva.
+            applyMapBaseFilter()
+            // Marcador, puck y perspectiva según foco.
+            updatePerspective()
+            speedometer.setNightMode(nightTheme)
+            try {
+                setCarLights(nightTheme)
+            } catch (_: Exception) {
+            }
+            // Reflectar en Ajustes rápidos si ya existe (modo noche vive ahí).
+            try {
+                if (::swNight.isInitialized) swNight.isChecked = nightTheme
+            } catch (_: Exception) {
+            }
+            setActiveDock(focus.dockIndex)
+        } catch (_: Exception) {
+        }
+    }
+
+    /** Atajo para el setup inicial: respeta la preferencia guardada. */
+    private fun applyTheme() {
+        applyThemeBits()
     }
 
     private fun addDockItem(iconRes: Int, label: String, action: () -> Unit) {
@@ -2710,24 +3011,73 @@ class MainActivity : AppCompatActivity(), LocationListener {
         dockIndicators += indicator
     }
 
-    private fun setActiveDock(index: Int) {
+    private fun setActiveDock(index: Int, animate: Boolean = false) {
         if (dockItems.isEmpty()) return
-        activeDockIndex = index.coerceIn(0, dockItems.lastIndex)
+        activeDockIndex = index
+        val accent = R.color.accent_primary
+        val muted = R.color.text_secondary
+        val canAnimate = animate && Motion.enabled()
         dockItems.forEachIndexed { i, item ->
-            val active = i == activeDockIndex
+            val active = index >= 0 && i == activeDockIndex
             item.setBackgroundResource(0)
             item.alpha = if (active) 1f else 0.72f
-            dockIcons[i].imageTintList = ContextCompat.getColorStateList(
+            val icon = dockIcons[i]
+            val indicator = dockIndicators[i]
+            icon.imageTintList = ContextCompat.getColorStateList(
                 this,
-                if (active) R.color.accent_sky else R.color.text_muted
+                if (active) accent else muted
             )
             dockLabels[i].setTextColor(
                 ContextCompat.getColor(
                     this,
-                    if (active) R.color.accent_sky else R.color.text_muted
+                    if (active) accent else muted
                 )
             )
-            dockIndicators[i].visibility = if (active) View.VISIBLE else View.INVISIBLE
+            if (active) {
+                indicator.animate().cancel()
+                indicator.visibility = View.VISIBLE
+                if (canAnimate) {
+                    indicator.alpha = 0f
+                    indicator.scaleX = 0.35f
+                    indicator.animate()
+                        .alpha(1f)
+                        .scaleX(1f)
+                        .setDuration(Motion.duration(200L))
+                        .setInterpolator(Motion.emphasized)
+                        .withEndAction {
+                            indicator.alpha = 1f
+                            indicator.scaleX = 1f
+                        }
+                        .start()
+                    Motion.pulse(icon, 1.10f, 90L, 160L)
+                } else {
+                    indicator.alpha = 1f
+                    indicator.scaleX = 1f
+                    icon.animate().cancel()
+                    Motion.resetScale(icon)
+                }
+            } else {
+                val indicatorWasVisible = indicator.visibility == View.VISIBLE
+                indicator.animate().cancel()
+                if (canAnimate && indicatorWasVisible) {
+                    indicator.animate()
+                        .alpha(0f)
+                        .setDuration(Motion.duration(120L))
+                        .setInterpolator(Motion.standard)
+                        .withEndAction {
+                            indicator.visibility = View.INVISIBLE
+                            indicator.alpha = 1f
+                            indicator.scaleX = 1f
+                        }
+                        .start()
+                } else {
+                    indicator.visibility = View.INVISIBLE
+                    indicator.alpha = 1f
+                    indicator.scaleX = 1f
+                }
+                icon.animate().cancel()
+                Motion.resetScale(icon)
+            }
         }
     }
 
@@ -2752,7 +3102,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         mmPlay.setOnClickListener { togglePlayback() }
         findViewById<ImageButton>(R.id.mmNext).setOnClickListener { mediaNext() }
 
-        findViewById<View>(R.id.mediaCard).setOnClickListener {
+        mediaCard.setOnClickListener {
             applyFocus(Focus.MEDIA)
         }
         findViewById<View>(R.id.mmOpenSource).setOnClickListener {
@@ -2768,31 +3118,29 @@ class MainActivity : AppCompatActivity(), LocationListener {
     }
 
     private fun mediaPrev() {
-        if (!MediaRepository.isDemo() &&
-            MediaRepository.current?.isBluetooth != false &&
-            hasPhoneLink()
-        ) {
+        if (!MediaRepository.isDemo() && hasPhoneLink()) {
             sendPhoneMediaCommand("prev")
             return
         }
-        if (twClient?.btPrev() == true) return
-        if (!MediaRepository.prev()) {
-            MediaKeys.send(this, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+        if (MediaRepository.isDemo()) {
+            MediaRepository.prev()
+            return
         }
+        Toast.makeText(this, "Abre IbizaCompanion para controlar la música", Toast.LENGTH_SHORT)
+            .show()
     }
 
     private fun mediaNext() {
-        if (!MediaRepository.isDemo() &&
-            MediaRepository.current?.isBluetooth != false &&
-            hasPhoneLink()
-        ) {
+        if (!MediaRepository.isDemo() && hasPhoneLink()) {
             sendPhoneMediaCommand("next")
             return
         }
-        if (twClient?.btNext() == true) return
-        if (!MediaRepository.next()) {
-            MediaKeys.send(this, KeyEvent.KEYCODE_MEDIA_NEXT)
+        if (MediaRepository.isDemo()) {
+            MediaRepository.next()
+            return
         }
+        Toast.makeText(this, "Abre IbizaCompanion para controlar la música", Toast.LENGTH_SHORT)
+            .show()
     }
 
     private fun setMediaSource(radio: Boolean) {
@@ -2966,7 +3314,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             pkg == "com.soundcloud.android" || pkg.startsWith("com.soundcloud.") ->
                 MediaSourceInfo(R.drawable.ic_media, "SoundCloud")
             pkg == "bluetooth" || pkg == "phone" ->
-                MediaSourceInfo(R.drawable.ic_bluetooth, "Bluetooth")
+                MediaSourceInfo(R.drawable.ic_media, "Música")
             pkg == "demo" ->
                 MediaSourceInfo(R.drawable.ic_media, "Demo")
             else -> MediaSourceInfo(R.drawable.ic_media, "Reproductor")
@@ -2974,15 +3322,9 @@ class MainActivity : AppCompatActivity(), LocationListener {
     }
 
     private fun mediaDeviceLabel(nowPlaying: NowPlaying?): String {
-        val source = mediaSourceInfo(nowPlaying?.packageName)
-        val deviceName = lastBluetooth?.name
-            ?.takeIf { it.isNotBlank() }
-            ?: if (nowPlaying?.isBluetooth == true) "Teléfono Bluetooth" else source.label
-        return if (source.label == "Bluetooth" || source.label == "Demo") {
-            deviceName
-        } else {
-            "$deviceName · ${source.label}"
-        }
+        // La música entra por AUX y los datos por Wi-Fi Direct: no se nombra
+        // Bluetooth ni "line in" en la interfaz.
+        return "Música"
     }
 
     private fun applyMediaSourceIcon(iconView: ImageView, info: MediaSourceInfo) {
@@ -3062,7 +3404,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private fun updateMedia(nowPlaying: NowPlaying?) {
         if (nowPlaying == null) {
             mediaTitle.text = getString(R.string.media_title)
-            mediaSubtitle.text = "Bluetooth / Radio FM"
+            mediaSubtitle.text = "Música · Radio FM"
             renderArt(albumArt, null, 14)
             btnPlay.setImageResource(R.drawable.ic_play)
             mediaProgress.visibility = View.GONE
@@ -3073,7 +3415,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             miniPlay.setImageResource(R.drawable.ic_play)
 
             mmTitle.text = "Sin reproducción"
-            mmArtist.text = "Bluetooth · Radio FM"
+            mmArtist.text = "Música · Radio FM"
             mmAlbum.text = ""
             renderArt(mmArt, null, 70)
         mmBackdrop.setImageDrawable(null)
@@ -3083,7 +3425,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             mmSource.text = "—"
             mediaSourceIcon.setImageResource(R.drawable.ic_bluetooth)
             mediaDevice.text = lastBluetooth?.name?.takeIf { it.isNotBlank() }
-                ?: "Teléfono Bluetooth"
+                ?: "Música"
             mmSourceIcon.setImageResource(R.drawable.ic_bluetooth)
             mmDevice.text = mediaDevice.text
             lastMediaKey = null
@@ -3138,7 +3480,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
     private fun renderNowPlayingToastIdle() {
         npToastTitle.text = "Sin reproducción"
-        npToastSubtitle.text = "Bluetooth · Radio FM"
+        npToastSubtitle.text = "Música · Radio FM"
         npToastEq.visibility = View.GONE
         npToastStateIcon.setImageResource(R.drawable.ic_play)
         npToastTime.visibility = View.GONE
@@ -3214,13 +3556,15 @@ class MainActivity : AppCompatActivity(), LocationListener {
             else -> "P"
         }
 
-        speedText.text = speedLabel
-        unitText.text = unitLabel
-        speedSource.text = signals.source
-        speedometer.source = signals.source
+        currentSpeedKmh = signals.speedKmh
         speedometer.useMph = mph
-        speedometer.setSpeed(signals.speedKmh)
-        gearText.text = gear
+        speedometer.setSourceLabel(signals.source)
+        speedometer.setSpeed(signals.speedKmh.roundToInt())
+        gearText.text = when (gear) {
+            "D" -> "D · DRIVE"
+            "R" -> "R · REVERSA"
+            else -> "$gear · ESTACIONADO"
+        }
 
         miniSpeed.text = speedLabel
         miniGear.text = gear
@@ -3237,12 +3581,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         }
         vSource.text = signals.source
         vBusChip.text = signals.source
-        vBusChip.setTextColor(
-            ContextCompat.getColor(
-                this,
-                if (signals.source == "CAN" || signals.source == "OBD") R.color.green else R.color.accent_sky
-            )
-        )
+        vBusChip.setTextColor(ContextCompat.getColor(this, R.color.accent_sky))
         vReverse.text = if (signals.reverse) "Sí" else "No"
         vReverse.setTextColor(
             ContextCompat.getColor(
@@ -3256,12 +3595,19 @@ class MainActivity : AppCompatActivity(), LocationListener {
         )
         if (::canStatus.isInitialized) {
             canStatus.text = signals.source
-            canStatus.setTextColor(
-                ContextCompat.getColor(
-                    this,
-                    if (signals.source == "CAN" || signals.source == "OBD") R.color.green else R.color.amber
-                )
-            )
+            canStatus.setTextColor(ContextCompat.getColor(this, R.color.accent_sky))
+        }
+
+        // Odómetro: integra la velocidad GPS por tiempo real. Se acumula en
+        // memoria y se vuelca cada minuto (y al pausar).
+        val now = SystemClock.elapsedRealtime()
+        if (signals.speedKmh > 2f && lastOdometerMs > 0L) {
+            val dtHours = (now - lastOdometerMs).coerceIn(0L, 5_000L) / 3_600_000f
+            odometerPendingKm += signals.speedKmh * dtHours
+        }
+        lastOdometerMs = now
+        if (odometerPendingKm >= 0.05f && now - odometerFlushMs >= 60_000L) {
+            flushOdometer()
         }
 
         if (signals.speedKmh >= 120f) {
@@ -3314,8 +3660,16 @@ class MainActivity : AppCompatActivity(), LocationListener {
         }
         val status = lastBluetooth
         if (status == null) {
-            btStatus.text = "Teléfono sin conectar"
-            btStatus.setTextColor(ContextCompat.getColor(this, R.color.text_muted))
+            // Sin A2DP: el teléfono puede estar enlazado por Wi-Fi Direct.
+            if (hasPhoneLink()) {
+                btStatus.text = "Wi-Fi Direct · conectado"
+                btStatus.setTextColor(
+                    ContextCompat.getColor(this, R.color.accent_teal)
+                )
+            } else {
+                btStatus.text = "Sin teléfono"
+                btStatus.setTextColor(ContextCompat.getColor(this, R.color.text_muted))
+            }
             btBatteryGroup.visibility = View.GONE
             return
         }
@@ -3400,6 +3754,9 @@ class MainActivity : AppCompatActivity(), LocationListener {
         val visible = if (Prefs.showWeather(this)) View.VISIBLE else View.GONE
         weatherTop.visibility = visible
         weatherIcon.visibility = visible
+        if (::weatherCard.isInitialized) {
+            weatherCard.visibility = visible
+        }
     }
 
     private fun renderWeather(state: WeatherRepository.State) {
@@ -3426,6 +3783,39 @@ class MainActivity : AppCompatActivity(), LocationListener {
         miniWeather.text = tempText
         weatherTop.contentDescription = state.text.ifBlank { "Clima" }
         miniWeather.contentDescription = state.text.ifBlank { "Clima" }
+        try {
+            weatherDesc.text = state.text.ifBlank { "Sin datos" }
+            weatherFeels.text = state.feelsLikeC?.let {
+                "Sensación " + String.format(Locale.getDefault(), "%.0f°", it)
+            } ?: ""
+            weatherMaxMin.text = when {
+                state.maxC != null && state.minC != null ->
+                    String.format(Locale.getDefault(), "%.0f° / %.0f°", state.maxC, state.minC)
+                state.maxC != null -> String.format(Locale.getDefault(), "Máx %.0f°", state.maxC)
+                state.minC != null -> String.format(Locale.getDefault(), "Mín %.0f°", state.minC)
+                else -> "-- / --"
+            }
+            weatherHumidity.text = state.humidityPct?.let { "$it %" } ?: "--"
+            weatherWind.text = state.windKmh?.let {
+                String.format(Locale.getDefault(), "%.0f km/h", it)
+            } ?: "--"
+            val updatedText = if (state.updatedAtMs > 0L) {
+                val fmt = SimpleDateFormat("h:mm a", Locale("es", "MX"))
+                "Actualizado " + fmt.format(Date(state.updatedAtMs)).replaceFirstChar { c ->
+                    if (c.isLowerCase()) c.titlecase(Locale("es", "MX")) else c.toString()
+                }
+            } else ""
+            weatherUpdated.text = updatedText
+            try {
+                findViewById<TextView>(R.id.weatherUpdatedGrid).text =
+                    if (state.updatedAtMs > 0L) {
+                        val fmt2 = SimpleDateFormat("h:mm a", Locale("es", "MX"))
+                        fmt2.format(Date(state.updatedAtMs))
+                    } else "--"
+            } catch (_: Exception) {
+            }
+        } catch (_: Exception) {
+        }
     }
 
     private fun toggleClimate(view: TextView) {
@@ -3464,11 +3854,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
             ) != PackageManager.PERMISSION_GRANTED
         ) return
 
-        locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
         if (locationOverlay == null) {
             locationOverlay = MapHelper.addLocation(this, map)
-        } else {
-            locationOverlay?.enableMyLocation()
         }
         // We draw our own road-snapped position marker; the overlay icon would
         // show the raw GPS dot off-road. Disable its display (and its own GPS
@@ -3490,29 +3877,24 @@ class MainActivity : AppCompatActivity(), LocationListener {
                 } catch (_: Exception) {
                 }
                 m.title = ""
-                map.overlays.add(m)
                 positionMarker = m
+                // En mini-mapa (Inicio) no se muestra el marcador verde:
+                // solo queda el badge "Tu ubicación".
+                syncMapPuck(focus == Focus.NAV)
                 updateMapMarkerSprite(lastDisplayBearing, carLightsOn)
             } catch (_: Exception) {
             }
         }
 
-        val provider = when {
-            locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ->
-                LocationManager.GPS_PROVIDER
-            locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) ->
-                LocationManager.NETWORK_PROVIDER
-            else -> null
+        // Un solo motor GPS para toda la pantalla: reglas de rechazo,
+        // suavizado y extrapolación entre fixes. Se mantiene vivo mientras la
+        // Activity exista para que abrir otra app no deje el mapa sin señal.
+        val engine = gpsEngine ?: GpsEngine(this).also { newEngine ->
+            newEngine.onFix = { fix -> runOnUiThread { onGpsFix(fix) } }
+            newEngine.onNoFix = { runOnUiThread { onGpsNoFix() } }
+            gpsEngine = newEngine
         }
-        if (provider != null) {
-            // 500 ms para no perder avances a baja velocidad; los textos de
-            // UI se limitan aparte a ~4 Hz.
-            locationManager.requestLocationUpdates(provider, 500L, 0f, this)
-            locationManager.requestLocationUpdates(
-                LocationManager.NETWORK_PROVIDER, 1000L, 0f, this
-            )
-            locationManager.getLastKnownLocation(provider)?.let { onLocationChanged(it) }
-        }
+        engine.start()
     }
 
     override fun onRequestPermissionsResult(
@@ -3531,58 +3913,85 @@ class MainActivity : AppCompatActivity(), LocationListener {
         }
     }
 
-    override fun onLocationChanged(location: Location) {
-        lastLocation = location
-        val speedKmh = if (location.hasSpeed()) location.speed * 3.6f else 0f
-        if (location.hasSpeed()) {
-            carSignals?.setGpsSpeed(speedKmh)
-        }
+    private fun onGpsFix(fix: GpsFix) {
+        if (isFinishing || isDestroyed) return
+        val wasPredicted = lastGpsFix?.let { it.extrapolated || it.lost } == true
+        lastGpsFix = fix
+        currentSpeedKmh = fix.speedKmh
+        carSignals?.setGpsSpeed(fix.speedKmh)
+        if (!uiVisible) return
+        updateGpsStateChip(fix)
+
+        // Sin señal: se conserva la última posición y la velocidad cae a 0.
+        if (fix.lost) return
+
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastGpsUiMs < 250L) return
+        lastGpsUiMs = now
+
         // Marcador sobre la carretera + seguimiento del vehículo.
         // Con mapa remoto el MapView está oculto y no hace falta.
         // En modo phone-first el teléfono manda posición/progreso; el GPS
         // local no debe competir con él (causaría saltos y rumbo inestable).
-        if (!RemoteMapBridge.active && !PhoneNavBridge.active) {
-            try {
-                val acc = if (location.hasAccuracy()) location.accuracy else 999f
-                val (slat, slon, _) = com.chronosbvrx.ibizadash.nav.RoadSnapper.snapLocal(
-                    location.latitude, location.longitude, speedKmh, acc
-                )
-                positionMarker?.position = GeoPoint(slat, slon)
-                if (location.hasBearing() && speedKmh > 3f) {
-                    updateMapMarkerSprite(location.bearing, carLightsOn)
-                }
-                val now = android.os.SystemClock.elapsedRealtime()
-                // Si el usuario movió el mapa, vuelve a seguir solo.
-                if (mapMode == MapMode.FREE && now - lastUserMapTouchMs > 30_000L) {
-                    mapMode = MapMode.FOLLOWING
-                    updateRecenterVisibility()
-                }
-                if (focus == Focus.NAV) {
-                    val routeBearing = if (routePoints.size >= 2) {
-                        projectOnActiveRoute(location.latitude, location.longitude)
-                            ?.first?.let { routeBearingAt(it) }
-                    } else {
-                        null
-                    }
-                    val heading = routeBearing
-                        ?: if (speedKmh > 12f && location.hasBearing()) location.bearing else null
-                    heading?.let { applyNavigationHeading(it) }
-                }
-                if (mapMode == MapMode.FOLLOWING) {
-                    centerOnPosition(slat, slon, speedKmh, location, now)
-                }
-                updateGpsStateChip(location, now)
-                map.invalidate()
-            } catch (_: Exception) {
+        if (RemoteMapBridge.active || PhoneNavBridge.active) return
+        try {
+            // Al recuperar señal tras una extrapolación, el salto real puede
+            // ser grande: se reinicia el suavizado para no quedarse clavado.
+            if (wasPredicted && !fix.extrapolated) {
+                com.chronosbvrx.ibizadash.nav.RoadSnapper.reset()
             }
+            val (slat, slon, _) = com.chronosbvrx.ibizadash.nav.RoadSnapper.snapLocal(
+                fix.latitude, fix.longitude, fix.speedKmh, fix.accuracyM
+            )
+            positionMarker?.position = GeoPoint(slat, slon)
+            // Fuera de NAV el sprite apunta al rumbo GPS. En NAV manda el
+            // rumbo de la ruta (el mapa se gira con él).
+            if (focus != Focus.NAV && fix.speedKmh > 3f && fix.bearingDeg.isFinite()) {
+                updateMapMarkerSprite(fix.bearingDeg, carLightsOn)
+            }
+            // Si el usuario movió el mapa, vuelve a seguir solo.
+            if (mapMode == MapMode.FREE && now - lastUserMapTouchMs > 30_000L) {
+                mapMode = MapMode.FOLLOWING
+                updateRecenterVisibility()
+            }
+            if (focus == Focus.NAV) {
+                val routeBearing = if (routePoints.size >= 2) {
+                    projectOnActiveRoute(fix.latitude, fix.longitude)
+                        ?.first?.let { routeBearingAt(it) }
+                } else {
+                    null
+                }
+                val heading = routeBearing
+                    ?: if (fix.speedKmh > 12f) fix.bearingDeg else null
+                heading?.let {
+                    updateMapMarkerSprite(it, carLightsOn)
+                    applyNavigationHeading(it)
+                }
+            }
+            if (mapMode == MapMode.FOLLOWING) {
+                centerOnPosition(
+                    slat, slon, fix.speedKmh, fix.bearingDeg, now, fix.extrapolated
+                )
+            }
+            map.invalidate()
+        } catch (_: Exception) {
         }
     }
 
-    override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
-
-    override fun onProviderEnabled(provider: String) = Unit
-
-    override fun onProviderDisabled(provider: String) = Unit
+    private fun onGpsNoFix() {
+        if (isFinishing || isDestroyed) return
+        if (lastGpsFix == null) {
+            currentSpeedKmh = 0f
+            carSignals?.setGpsSpeed(0f)
+        }
+        if (!uiVisible || !::gpsStateChip.isInitialized) return
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastGpsStateUiMs < 500L) return
+        lastGpsStateUiMs = now
+        gpsStateChip.visibility = View.VISIBLE
+        gpsStateChip.text = "GPS buscando…"
+        gpsStateChip.setTextColor(ContextCompat.getColor(this, R.color.amber))
+    }
 
     private fun openPackage(packageName: String): Boolean {
         val intent = packageManager.getLaunchIntentForPackage(packageName) ?: return false
@@ -3623,11 +4032,13 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
     override fun onResume() {
         super.onResume()
+        uiVisible = true
         if (!RemoteMapBridge.active) map.onResume()
         goImmersive()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         applyPrefs()
         setupClock()
+        startViewportTileLoop()
         setActiveDock(focus.dockIndex)
         if (ContextCompat.checkSelfPermission(
                 this,
@@ -3641,13 +4052,14 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
     override fun onPause() {
         super.onPause()
+        uiVisible = false
+        stopViewportTileLoop()
         flushOdometer()
         lastOdometerMs = 0L
         map.onPause()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        if (::locationManager.isInitialized) {
-            locationManager.removeUpdates(this)
-        }
+        // El motor GPS sigue vivo al pausar: si el usuario abre otra app y
+        // vuelve, el mapa no arranca de cero ni pierde la posición.
         locationOverlay?.disableMyLocation()
         if (mediaListenerRegistered) {
             MediaRepository.removeListener(mediaListener)
@@ -3659,6 +4071,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
         flushOdometer()
         uiHandler.removeCallbacks(clockRunnable)
         uiHandler.removeCallbacks(alertHide)
+        gpsEngine?.stop()
+        gpsEngine = null
         carSignals?.stop()
         twClient?.stop()
         avrcpController?.stop()
@@ -3702,53 +4116,167 @@ class MainActivity : AppCompatActivity(), LocationListener {
     }
 
     // ---------------------------------------------------------------------
-    // Continuous canvas: one map, one dock, animated split fractions.
+    // Continuous canvas: one map, one dock, smooth Focus cross-fade.
+    // En Cortex-A7 el split mapa/panel se aplica en un solo salto de layout
+    // (sin mutación por frame) para no forzar el redraw de osmdroid; la
+    // sensación profesional viene del cross-fade + deslizamiento suave de los
+    // paneles y de las pastillas, con el mismo easing que el sheet de ajustes.
     // ---------------------------------------------------------------------
 
+    private fun panelFor(target: Focus): View = when (target) {
+        Focus.COCKPIT -> cockpitPanel
+        Focus.NAV -> navOverlay
+        Focus.MEDIA -> if (radioSource) radioModule else mediaModule
+        Focus.VEHICLE -> vehicleModule
+    }
+
     private fun applyFocus(target: Focus, animate: Boolean = true) {
-        val shown = when (target) {
-            Focus.COCKPIT -> cockpitPanel
-            Focus.NAV -> navOverlay
-            Focus.MEDIA -> mediaModule
-            Focus.VEHICLE -> vehicleModule
+        val oldFocus = focus
+        val oldShown: View? = try {
+            panelFor(oldFocus)
+        } catch (_: Exception) {
+            null
         }
+        val oldWasVisible = oldShown?.visibility == View.VISIBLE
+        val shown = panelFor(target)
         val changed = target != focus
         focus = target
 
+        // Cámara: en NAV el coche se ancla abajo (~68 % del viewport) para
+        // enseñar camino por delante. Fuera de NAV vuelve al centro exacto.
+        applyNavCameraFrame(target == Focus.NAV)
+
+        // Movimiento ligero: la dirección depende del dock (izq/der), el split
+        // se aplica de una vez para no redibujar osmdroid por frame, y solo se
+        // animan alpha/translation (sin capas, bitmaps ni pesos animados).
+        val canAnimate = changed && animate && Motion.enabled()
+        val direction = when {
+            target.dockIndex > oldFocus.dockIndex -> 1f
+            target.dockIndex < oldFocus.dockIndex -> -1f
+            else -> 0f
+        }
+        val sameRightPane = oldFocus != Focus.NAV && target != Focus.NAV
+        val enterDx = (if (sameRightPane) dp(12) else dp(22)).toFloat()
+        val exitDx = enterDx * 0.65f
+        // El cross-fade solo es seguro cuando ambos paneles viven en el mismo
+        // pane y su ancho no cambia (Música <-> Auto). En COCKPIT/NAV el split
+        // cambia y mantener el panel viejo lo estiraría; se oculta de golpe y
+        // el nuevo entra con fade para no deformar la tarjeta.
+        val canCrossFade = oldShown != null && oldShown !== shown && oldWasVisible &&
+            oldFocus != Focus.NAV && target != Focus.NAV &&
+            oldFocus != Focus.COCKPIT && target != Focus.COCKPIT
+
+        // Cancela cualquier animación previa y deja los paneles neutrales.
+        for (view in transitionPanels) {
+            view.animate().cancel()
+            Motion.reset(view)
+        }
+
         cockpitPanel.visibility = if (shown === cockpitPanel) View.VISIBLE else View.GONE
-        // En NAV el mapa ocupa todo el ancho: no hay panel lateral.
         miniHud.visibility = View.GONE
-        mediaModule.visibility = if (shown === mediaModule && !radioSource) View.VISIBLE else View.GONE
-        radioModule.visibility = if (shown === mediaModule && radioSource) View.VISIBLE else View.GONE
+        mediaModule.visibility = if (shown === mediaModule) View.VISIBLE else View.GONE
+        radioModule.visibility = if (shown === radioModule) View.VISIBLE else View.GONE
         vehicleModule.visibility = if (shown === vehicleModule) View.VISIBLE else View.GONE
         navOverlay.visibility = if (target == Focus.NAV) View.VISIBLE else View.GONE
 
-        // La tarjeta de maniobra ocupa la esquina superior; el reloj se oculta.
-        clockBlock.visibility = if (target == Focus.NAV) View.GONE else View.VISIBLE
+        setActiveDock(target.dockIndex, animate = canAnimate)
+        // Pesos del Home 32/36/32 (NAV = mapa 100%, módulos = 25/0/75).
+        setSplit(target)
 
-        navPill.visibility =
-            if (target == Focus.MEDIA || target == Focus.VEHICLE) View.VISIBLE else View.GONE
-        hudPill.visibility =
-            if (target != Focus.COCKPIT) View.VISIBLE else View.GONE
-
-        setActiveDock(target.dockIndex)
-
-        // Transición en fade: el lienzo y el mapa nunca se recrean. Las
-        // capas sí pueden solapar suavemente sus alphas, sin tocar layout.
-        for (view in arrayOf(cockpitPanel, miniHud, mediaModule, vehicleModule, navOverlay)) {
-            view.animate().cancel()
-            view.alpha = 1f
+        // Altura del mini-mapa: widget 130dp en Inicio, completo en NAV,
+        // expandido en Música/Auto (sin la tarjeta de música duplicada).
+        try {
+            val params = miniMapContainer.layoutParams as? LinearLayout.LayoutParams
+            if (params != null) {
+                if (target == Focus.COCKPIT) {
+                    params.height = 0
+                    params.weight = 1f
+                } else {
+                    params.height = ViewGroup.LayoutParams.MATCH_PARENT
+                    params.weight = 0f
+                }
+                miniMapContainer.layoutParams = params
+            }
+            centerPane.visibility = if (target == Focus.COCKPIT) View.VISIBLE else View.GONE
+            rightPane.visibility = if (target == Focus.NAV) View.GONE else View.VISIBLE
+            mediaCard.visibility = if (target == Focus.COCKPIT) View.VISIBLE else View.GONE
+        } catch (_: Exception) {
         }
-        if (changed && animate) {
-            for (view in arrayOf(cockpitPanel, miniHud, mediaModule, vehicleModule, navOverlay)) {
-                if (view.visibility == View.VISIBLE) {
-                    view.animate().alpha(0.55f).setDuration(60L).start()
-                    view.animate().alpha(1f).setDuration(240L).setStartDelay(60L).start()
+
+        // Pastillas sobre el mapa: solo se anima lo que realmente cambia de
+        // visibilidad; las que siguen visibles no parpadean.
+        fun setPill(view: View, show: Boolean) {
+            val wasVisible = view.visibility == View.VISIBLE
+            // cancel() puede ejecutar el endAction anterior; se hace antes de
+            // fijar la visibilidad final para no dejar la pastilla oculta.
+            view.animate().cancel()
+            if (show) {
+                view.visibility = View.VISIBLE
+                if (!wasVisible && canAnimate) {
+                    Motion.fadeIn(view, 220L)
+                } else {
+                    view.alpha = 1f
+                }
+            } else {
+                if (wasVisible && canAnimate) {
+                    Motion.fadeOut(view, 160L) {
+                        view.visibility = View.GONE
+                    }
+                } else {
+                    view.visibility = View.GONE
+                    view.alpha = 1f
                 }
             }
         }
-        // Single measure/layout pass: no per-frame LayoutParams mutation.
-        setSplit(target.fraction)
+        // Reloj oculto en NAV porque la tarjeta de maniobra lo ocupa.
+        setPill(clockBlock, target != Focus.NAV)
+        setPill(navPill, target == Focus.MEDIA || target == Focus.VEHICLE)
+        setPill(hudPill, target != Focus.COCKPIT)
+        // La tarjeta de clima grande es solo de Inicio: en el resto de focos
+        // el pane izquierdo se estrecha y la tarjeta desbordaría.
+        if (::weatherCard.isInitialized) {
+            setPill(weatherCard, target == Focus.COCKPIT && Prefs.showWeather(this))
+        }
+
+        if (canAnimate) {
+            // En Inicio la tarjeta hero sube y se asienta. No se escala para
+            // mantener el texto nítido y no rasterizar la tarjeta.
+            if (target == Focus.COCKPIT) {
+                centerPane.visibility = View.VISIBLE
+                Motion.enter(centerPane, 0f, dp(12).toFloat(), 320L, 40L)
+            }
+            // Cross-fade solo entre paneles del mismo pane y mismo ancho.
+            if (canCrossFade) {
+                oldShown?.visibility = View.VISIBLE
+                oldShown?.bringToFront()
+            }
+            shown.visibility = View.VISIBLE
+            shown.bringToFront()
+            if (direction != 0f) {
+                Motion.enter(
+                    shown,
+                    direction * enterDx,
+                    0f,
+                    280L,
+                    fromAlpha = if (canCrossFade) 0f else 0.22f
+                )
+            } else {
+                Motion.fadeIn(shown, 240L)
+            }
+            if (canCrossFade) {
+                val outgoing = oldShown ?: shown
+                if (outgoing !== shown) {
+                    Motion.exit(outgoing, -direction * exitDx, 0f, 190L) {
+                        outgoing.visibility = View.GONE
+                    }
+                }
+            }
+        } else {
+            Motion.reset(shown)
+            if (target == Focus.COCKPIT) {
+                Motion.reset(centerPane)
+            }
+        }
 
         if (target == Focus.NAV) {
             // Navegación: se vuelve a seguir al coche y se deja de recibir el
@@ -3757,10 +4285,16 @@ class MainActivity : AppCompatActivity(), LocationListener {
             lastUserMapTouchMs = 0L
             if (RemoteMapBridge.active) RemoteMapBridge.stop()
             renderNavOverlay()
-            lastLocation?.let {
-                val spd = if (it.hasSpeed()) it.speed * 3.6f else 0f
+            lastGpsFix?.let {
                 try {
-                    centerOnPosition(it.latitude, it.longitude, spd, it, SystemClock.elapsedRealtime())
+                    centerOnPosition(
+                        it.latitude,
+                        it.longitude,
+                        it.speedKmh,
+                        it.bearingDeg,
+                        SystemClock.elapsedRealtime(),
+                        it.extrapolated
+                    )
                 } catch (_: Exception) {
                 }
             }
@@ -3772,32 +4306,328 @@ class MainActivity : AppCompatActivity(), LocationListener {
                 lastMediaPlaying = null
                 showNowPlayingToast(cur)
             }
+            // Ya con el mapa medido, pide las teselas del encuadre actual.
+            uiHandler.postDelayed({
+                try {
+                    maybeRequestViewportTiles(true)
+                } catch (_: Exception) {
+                }
+            }, 900L)
         } else {
             resetMapBearing()
         }
+        updatePerspective()
         updateRecenterVisibility()
+    }
 
-        if (changed && animate) {
-            shown.alpha = 0f
-            shown.animate()
-                .alpha(1f)
-                .setDuration(280L)
-                .setInterpolator(PathInterpolator(0.2f, 0f, 0f, 1f))
-                .start()
-        } else {
-            shown.alpha = 1f
+    /**
+     * Ajusta el encuadre de navegación. `setMapCenterOffset` desplaza el punto
+     * que cae en el centro del MapView y también el pivote de rotación, así
+     * que el coche queda fijo abajo mientras el mapa gira (heading-up).
+     */
+    private fun applyNavCameraFrame(nav: Boolean) {
+        if (!::map.isInitialized) return
+        try {
+            // El offset lo calcula PerspectiveMapView con el 79 % de altura
+            // (coche bajo, estilo CarPlay) y lo reaplica al cambiar de tamaño.
+            perspectiveMap.navFrameEnabled = nav
+            if (!nav && navZoomApplied) {
+                navZoomApplied = false
+                navZoomBucket = 1
+                navZoomTarget = MapHelper.DEFAULT_ZOOM
+                map.controller.setZoom(MapHelper.DEFAULT_ZOOM)
+            }
+            map.invalidate()
+        } catch (_: Exception) {
         }
     }
 
-    private fun setSplit(fraction: Float) {
-        splitFraction = fraction.coerceIn(0.2f, 1f)
-        val leftParams = leftPane.layoutParams as LinearLayout.LayoutParams
-        leftParams.weight = splitFraction
-        leftPane.layoutParams = leftParams
+    /** Saca puck y coche al frente tras añadir/quitar capas de ruta. */
+    private fun bringPuckToFront() {
+        if (!::map.isInitialized) return
+        try {
+            puckOverlay?.let { puck ->
+                if (map.overlays.contains(puck)) map.overlays.remove(puck)
+                map.overlays.add(puck)
+            }
+            positionMarker?.let { pm ->
+                if (map.overlays.contains(pm)) map.overlays.remove(pm)
+                map.overlays.add(pm)
+            }
+        } catch (_: Exception) {
+        }
+    }
 
-        val rightParams = rightPane.layoutParams as LinearLayout.LayoutParams
-        rightParams.weight = 1f - splitFraction
-        rightPane.layoutParams = rightParams
+    /** Muestra u oculta el puck y las flechas según el foco. */
+    private fun syncMapPuck(nav: Boolean) {
+        if (!::map.isInitialized) return
+        try {
+            val screenSpace = nav && perspectiveActive
+            puckOverlay?.visible = nav && !screenSpace
+            chevronOverlay?.visible = nav && routePoints.size >= 2
+            puckOverlay?.let { puck ->
+                if (nav) {
+                    if (!map.overlays.contains(puck)) map.overlays.add(puck)
+                } else {
+                    map.overlays.remove(puck)
+                }
+            }
+            positionMarker?.let { pm ->
+                if (nav) {
+                    if (!map.overlays.contains(pm)) map.overlays.add(pm)
+                    // En perspectiva el coche lo pinta PerspectiveNavOverlayView.
+                    pm.isEnabled = !screenSpace
+                } else {
+                    map.overlays.remove(pm)
+                    pm.isEnabled = true
+                }
+            }
+            destinationMarker?.isEnabled = !screenSpace
+            if (nav) bringPuckToFront()
+            map.invalidate()
+        } catch (_: Exception) {
+        }
+    }
+
+    /**
+     * Activa/desactiva la perspectiva solo en NAV follow. La base y la ruta
+     * se inclinan; coche, pin y horizonte se dibujan en pantalla. En pan libre
+     * o con el mapa del teléfono se queda plana para no romper el hit-testing.
+     */
+    private fun updatePerspective() {
+        if (!::map.isInitialized || !::perspectiveMap.isInitialized) return
+        val nav = focus == Focus.NAV
+        val active = nav && mapMode == MapMode.FOLLOWING &&
+            !perspectiveTouchDown && !RemoteMapBridge.active
+        perspectiveActive = active
+        perspectiveMap.navFrameEnabled = nav
+        perspectiveMap.pitch = if (active) NAV_PITCH else 0f
+        perspectiveOverlay.visibility = if (active) View.VISIBLE else View.GONE
+        perspectiveBackdrop.visibility = if (active) View.VISIBLE else View.GONE
+        if (active) perspectiveOverlay.invalidate()
+        refTilesOverlay?.isEnabled = !active
+        syncMapPuck(nav)
+        applyMapBaseFilter()
+    }
+
+    private fun applyMapBaseFilter() {
+        if (!::map.isInitialized) return
+        try {
+            map.overlayManager.tilesOverlay.setColorFilter(
+                if (focus == Focus.NAV) navRoadColorFilter else null
+            )
+            map.invalidate()
+        } catch (_: Exception) {
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Zoom dinámico por velocidad (17 urbano · 16 carretera · 15 autopista)
+    // ------------------------------------------------------------------
+
+    /**
+     * Histéresis por bucket para que el zoom no oscile cuando la velocidad
+     * baila alrededor del umbral. z17 solo con enlace activo: el pack offline
+     * llega hasta z16 y sin teléfono el mapa se vería vacío.
+     */
+    private fun updateNavZoomTarget(speedKmh: Float) {
+        if (focus != Focus.NAV) return
+        val link = NavLink.wifiActive()
+        navZoomBucket = when (navZoomBucket) {
+            0 -> if (speedKmh > 32f) 1 else 0
+            2 -> if (speedKmh < 62f) 1 else 2
+            else -> when {
+                speedKmh < 18f -> if (link) 0 else 1
+                speedKmh > 76f -> 2
+                else -> 1
+            }
+        }
+        navZoomTarget = when (navZoomBucket) {
+            0 -> if (link) 17.0 else 16.0
+            1 -> 16.0
+            else -> 15.0
+        }
+    }
+
+    /** Acerca el zoom poco a poco en cada frame de seguimiento. */
+    private fun stepNavZoom() {
+        if (focus != Focus.NAV || mapMode != MapMode.FOLLOWING) return
+        if (!::map.isInitialized) return
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastZoomStepMs < 320L) return
+        val current = try {
+            map.zoomLevelDouble
+        } catch (_: Exception) {
+            return
+        }
+        val delta = navZoomTarget - current
+        if (Math.abs(delta) < 0.08) return
+        // No acercar a z17 si aún no están las teselas: osmdroid no rellena
+        // con z16, así que se verían huecos. Se espera a que el teléfono las
+        // mande (la petición las pide del centro hacia afuera).
+        if (delta > 0 && !navZoomTilesReady(Math.ceil(navZoomTarget).toInt())) return
+        lastZoomStepMs = now
+        navZoomApplied = true
+        try {
+            map.controller.setZoom(current + delta * 0.22)
+        } catch (_: Exception) {
+        }
+    }
+
+    /**
+     * ¿Hay teselas del zoom pedido para el encuadre? Se comprueba como mucho
+     * cada 1.5 s y basta el 85 %: las que faltan en el borde llegan después.
+     */
+    private fun navZoomTilesReady(zoom: Int): Boolean {
+        if (zoom <= 16) return true
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastZoomReadyCheckMs < 1500L) return lastZoomReady
+        lastZoomReadyCheckMs = now
+        lastZoomReady = try {
+            // Se comprueba el encuadre exacto que se verá al entrar en z17.
+            // El prefetch pide un poco más de margen, pero no hace falta
+            // esperar a los bordes para acercar.
+            val range = viewportTileRange(zoom, ZOOM_READY_SHRINK) ?: return false
+            val root = File(
+                getExternalFilesDir(null) ?: filesDir,
+                "osmdroid/tiles/EsriDark/$zoom"
+            )
+            var total = 0
+            var have = 0
+            for (x in range[0]..range[2]) {
+                for (y in range[1]..range[3]) {
+                    total++
+                    if (File(root, "$x/$y.tile").isFile) have++
+                }
+            }
+            total in 1..80 && have * 100 / total >= 85
+        } catch (_: Exception) {
+            false
+        }
+        return lastZoomReady
+    }
+
+    /**
+     * Rango de teselas del encuadre actual. [shrink] recorta el bbox hacia el
+     * centro (1 = todo, 0.62 = lo que se verá al subir un zoom).
+     */
+    private fun viewportTileRange(zoom: Int, shrink: Float): IntArray? {
+        if (!::map.isInitialized || map.width <= 0 || map.height <= 0) return null
+        val box = try {
+            map.boundingBox
+        } catch (_: Exception) {
+            return null
+        }
+        val latC = (box.latNorth + box.latSouth) / 2.0
+        val lonC = (box.lonEast + box.lonWest) / 2.0
+        val halfLat = (box.latNorth - box.latSouth) / 2.0 * shrink
+        val halfLon = (box.lonEast - box.lonWest) / 2.0 * shrink
+        return intArrayOf(
+            MapHelper.lonToTileX(lonC - halfLon, zoom),
+            MapHelper.latToTileY(latC + halfLat, zoom),
+            MapHelper.lonToTileX(lonC + halfLon, zoom),
+            MapHelper.latToTileY(latC - halfLat, zoom)
+        )
+    }
+
+    // ------------------------------------------------------------------
+    // Teselas del viewport: el estéreo pide lo que está viendo
+    // ------------------------------------------------------------------
+
+    private fun startViewportTileLoop() {
+        if (tileReqLoop != null) return
+        val tick = object : Runnable {
+            override fun run() {
+                try {
+                    maybeRequestViewportTiles(false)
+                } catch (_: Exception) {
+                }
+                uiHandler.postDelayed(this, 3000L)
+            }
+        }
+        tileReqLoop = tick
+        uiHandler.postDelayed(tick, 1500L)
+    }
+
+    private fun stopViewportTileLoop() {
+        tileReqLoop?.let { uiHandler.removeCallbacks(it) }
+        tileReqLoop = null
+    }
+
+    /**
+     * Pide al teléfono las teselas visibles (base y etiquetas). Antes solo se
+     * empujaban las del corredor de la ruta: explorar libremente dejaba huecos.
+     * La firma evita repetir el mismo pedido cada 3 s.
+     */
+    private fun maybeRequestViewportTiles(force: Boolean) {
+        if (focus != Focus.NAV || RemoteMapBridge.active) return
+        if (!::map.isInitialized || map.width <= 0 || map.height <= 0) return
+        if (!NavLink.wifiActive()) return
+        val now = SystemClock.elapsedRealtime()
+        if (!force && now - lastTileReqMs < 2500L) return
+        val shown = try {
+            map.zoomLevelDouble.roundToInt().coerceIn(13, 17)
+        } catch (_: Exception) {
+            return
+        }
+        // Si la cámara va a subir de zoom, se prefetchea ya el centro a ese
+        // nivel. Así al acercarse no se ven huecos (osmdroid no rellena con
+        // teselas de z16).
+        val target = Math.ceil(navZoomTarget).toInt().coerceIn(13, 17)
+        val zoom = if (focus == Focus.NAV && target > shown) target else shown
+        val shrink = if (zoom > shown) ZOOM_PREFETCH_SHRINK else 1f
+        val range = viewportTileRange(zoom, shrink) ?: return
+        val x0 = range[0]
+        val y0 = range[1]
+        val x1 = range[2]
+        val y1 = range[3]
+        if (x1 < x0 || y1 < y0) return
+        val count = (x1 - x0 + 1) * (y1 - y0 + 1)
+        if (count <= 0 || count > 64) return
+        val key = "$zoom:$x0:$y0:$x1:$y1"
+        if (!force && key == lastTileReqKey && now - lastTileReqMs < 30_000L) return
+        lastTileReqKey = key
+        lastTileReqMs = now
+        NavLink.sendAsync(
+            org.json.JSONObject()
+                .put("type", "TILE_REQ")
+                .put("layer", "base")
+                .put("z", zoom)
+                .put("x0", x0).put("y0", y0)
+                .put("x1", x1).put("y1", y1)
+        )
+        // Las etiquetas se piden solo para el zoom visible; en el prefetch
+        // llegarían antes de tiempo y gastarían enlace.
+        if (zoom >= 15 && zoom == shown) {
+            NavLink.sendAsync(
+                org.json.JSONObject()
+                    .put("type", "TILE_REQ")
+                    .put("layer", "ref")
+                    .put("z", zoom)
+                    .put("x0", x0).put("y0", y0)
+                    .put("x1", x1).put("y1", y1)
+            )
+        }
+    }
+
+    private fun setSplit(target: Focus) {
+        // Home: mapa grande 40% (útil de verdad) + centro 30% + derecha 30%.
+        // NAV = mapa completo; Música/Auto = mapa 25% + panel 75%.
+        val (lw, cw, rw) = when (target) {
+            Focus.COCKPIT -> Triple(0.40f, 0.30f, 0.30f)
+            Focus.NAV -> Triple(1.00f, 0.0f, 0.0f)
+            Focus.MEDIA, Focus.VEHICLE -> Triple(0.25f, 0.0f, 0.75f)
+        }
+        val lp = leftPane.layoutParams as LinearLayout.LayoutParams
+        lp.weight = lw
+        leftPane.layoutParams = lp
+        val cp = centerPane.layoutParams as LinearLayout.LayoutParams
+        cp.weight = cw
+        centerPane.layoutParams = cp
+        val rp = rightPane.layoutParams as LinearLayout.LayoutParams
+        rp.weight = rw
+        rightPane.layoutParams = rp
+        splitFraction = lw
     }
 
     // ---------------------------------------------------------------------
@@ -3815,6 +4645,15 @@ class MainActivity : AppCompatActivity(), LocationListener {
         if (mapMode != MapMode.FREE) {
             mapMode = MapMode.FREE
             updateRecenterVisibility()
+            updatePerspective()
+            // Exploración libre: pide de inmediato las teselas de lo que se
+            // está viendo (el corredor de ruta no cubre estas zonas).
+            uiHandler.postDelayed({
+                try {
+                    maybeRequestViewportTiles(true)
+                } catch (_: Exception) {
+                }
+            }, 600L)
         }
     }
 
@@ -3825,57 +4664,57 @@ class MainActivity : AppCompatActivity(), LocationListener {
     }
 
     /**
-     * Chip de diagnóstico GPS (satélites, exactitud y edad del segundo fix).
-     * Enmascara un GPS “pegado”: si la precisión supera 40 m o el fix tiene
-     * > 15 s, el chip se tiñe en ámbar y el texto lo declara.
+     * Chip de diagnóstico GPS: distingue fix vivo, estimado y pérdida real.
+     * La edad y los satélites vienen del [GpsEngine], no de un proxy.
      */
-    private fun updateGpsStateChip(location: Location, now: Long) {
+    private fun updateGpsStateChip(fix: GpsFix) {
         if (!::gpsStateChip.isInitialized) return
+        val now = SystemClock.elapsedRealtime()
         if (now - lastGpsStateUiMs < 250L) return
         lastGpsStateUiMs = now
-        val sats = if (location.hasAccuracy()) {
-            // La app no expone satélites sin gnssStatus; la exactitud es el
-            // mejor proxy que queda en Android 8.1 con estos permisos.
-            when {
-                location.accuracy <= 8f -> "buena señal"
-                location.accuracy <= 22f -> "señal media"
-                else -> "señal débil"
-            }
-        } else {
-            "sin precisión"
+        val ageS = (fix.ageMs / 1000L).coerceAtLeast(0L)
+        val label = when {
+            fix.lost -> "GPS sin señal"
+            fix.extrapolated -> "GPS estimado ${ageS}s"
+            fix.accuracyM > 25f -> "GPS impreciso"
+            fix.accuracyM <= 8f -> "GPS en vivo"
+            else -> "GPS bueno"
         }
-        val age = location.time.coerceAtLeast(1L)
-        val ageSeconds = ((System.currentTimeMillis() - age) / 1000L).coerceAtLeast(0L)
-        val stale = ageSeconds > 15L || location.accuracy > 40f
-        val heading = when {
-            stale -> "GPS viejo"
-            location.accuracy > 25f -> "GPS impreciso"
-            else -> "GPS en vivo"
-        }
-        gpsStateChip.text = "$heading · $sats"
+        val sats = if (fix.satellites > 0) "${fix.satellites} sat" else "sin sat"
+        // Solo se muestra cuando hay algo que decir (estimado, impreciso o
+        // perdido). Un chip permanente tapaba el mapa pequeño en AUTO.
+        gpsStateChip.visibility =
+            if (fix.lost || fix.extrapolated || fix.accuracyM > 25f) View.VISIBLE else View.GONE
+        gpsStateChip.text = "$label · $sats"
         gpsStateChip.setTextColor(
             ContextCompat.getColor(
                 this,
-                if (stale) R.color.amber else R.color.accent_sky
+                when {
+                    fix.lost -> R.color.danger
+                    fix.extrapolated || fix.accuracyM > 25f -> R.color.amber
+                    else -> R.color.accent_sky
+                }
             )
         )
     }
 
     /**
      * Centra el mapa en el coche. En navegación se orienta hacia el rumbo
-     * (heading-up) con una animación corta; en el resto, norte arriba y a un
-     * ritmo más relajado para no gastar CPU.
+     * (heading-up); en el resto, norte arriba. Con posición estimada se
+     * actualiza directo (sin animación) para que la cámara no vaya un paso
+     * atrás entre fixes reales.
      */
     private fun centerOnPosition(
         lat: Double,
         lon: Double,
         speedKmh: Float,
-        location: Location,
-        now: Long
+        bearingDeg: Float,
+        now: Long,
+        predicted: Boolean
     ) {
         val target = GeoPoint(lat, lon)
         if (focus == Focus.NAV) {
-            // Rumbo estable desde la geometría de la ruta; el bearing GPS solo
+            // Rumbo estable desde la geometría de la ruta; el rumbo GPS solo
             // se usa cuando no hay ruta proyectable.
             val routeBearing = if (routePoints.size >= 2) {
                 projectOnActiveRoute(lat, lon)?.first?.let { routeBearingAt(it) }
@@ -3883,16 +4722,32 @@ class MainActivity : AppCompatActivity(), LocationListener {
                 null
             }
             val bearing = routeBearing
-                ?: if (speedKmh > 12f && location.hasBearing()) location.bearing else 0f
+                ?: if (speedKmh > 12f && bearingDeg.isFinite()) bearingDeg else 0f
             animateMapBearing(bearing)
-            // Interpola coche y mapa entre fixes.
-            animateFollow(target, speedKmh)
+            updateNavZoomTarget(speedKmh)
+            if (predicted) {
+                followPoint = target
+                try {
+                    positionMarker?.position = target
+                    if (mapMode == MapMode.FOLLOWING) map.controller.setCenter(target)
+                    stepNavZoom()
+                    map.invalidate()
+                } catch (_: Exception) {
+                }
+            } else {
+                animateFollow(target, speedKmh)
+            }
         } else {
             resetMapBearing()
-            // A 60 km/h el coche recorre ~8 m en 500 ms: centrar cada 1.5 s
-            // dejaba la cámara un paso atrás. Ahora cada fix reciente mueve
-            // la cámara, limitado a 600 ms para no encadenar animaciones.
-            if (now - lastFollowCenterMs > 600L) {
+            if (predicted) {
+                followPoint = target
+                try {
+                    positionMarker?.position = target
+                    if (mapMode == MapMode.FOLLOWING) map.controller.setCenter(target)
+                    map.invalidate()
+                } catch (_: Exception) {
+                }
+            } else if (now - lastFollowCenterMs > 600L) {
                 lastFollowCenterMs = now
                 try {
                     followPoint = target
@@ -3922,6 +4777,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             try {
                 positionMarker?.position = target
                 if (mapMode == MapMode.FOLLOWING) map.controller.setCenter(target)
+                stepNavZoom()
                 map.invalidate()
             } catch (_: Exception) {
             }
@@ -3939,6 +4795,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
                 try {
                     positionMarker?.position = p
                     if (mapMode == MapMode.FOLLOWING) map.controller.setCenter(p)
+                    stepNavZoom()
                     map.invalidate()
                 } catch (_: Exception) {
                 }
@@ -4260,10 +5117,10 @@ class MainActivity : AppCompatActivity(), LocationListener {
         // Modo noche y silencio reflejan (y conservan) el estado real.
         val night = Prefs.nightMode(this)
         swNight.isChecked = night
-        nightDim.visibility = if (night) View.VISIBLE else View.GONE
+        // Sin overlay de atenuación con tema nativo.
+        nightDim.visibility = View.GONE
         swNight.setOnCheckedChangeListener { _, checked ->
-            nightDim.visibility = if (checked) View.VISIBLE else View.GONE
-            Prefs.setNightMode(this, checked)
+            applyTheme(checked)
         }
         val audio = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         swMute.isChecked = try {
@@ -4448,28 +5305,56 @@ class MainActivity : AppCompatActivity(), LocationListener {
     }
 
     private fun openQuickSettings() {
+        quickSheetOpen = true
+        // Cancelar primero: un endAction de cierre anterior podría ocultar el
+        // sheet; después se fuerza visible.
+        sheetPanel.animate().cancel()
+        sheetScrim.animate().cancel()
         quickSheet.visibility = View.VISIBLE
-        sheetScrim.alpha = 0f
-        sheetScrim.animate().alpha(1f).setDuration(200L).start()
+        // Evita el flash del primer frame: el panel permanece invisible hasta
+        // que se conoce su ancho y arranca la entrada desde el borde derecho.
+        sheetPanel.alpha = 0f
+        sheetPanel.translationX = dp(24).toFloat()
         refreshLinkStatus()
+        if (!Motion.enabled()) {
+            sheetScrim.alpha = 1f
+            sheetPanel.alpha = 1f
+            sheetPanel.translationX = 0f
+            return
+        }
+        Motion.fadeIn(sheetScrim, 200L)
         sheetPanel.post {
-            sheetPanel.translationX = sheetPanel.width.toFloat() + dp(24)
-            sheetPanel.animate()
-                .translationX(0f)
-                .setDuration(260L)
-                .setInterpolator(PathInterpolator(0.2f, 0f, 0f, 1f))
-                .start()
+            if (!quickSheetOpen || quickSheet.visibility != View.VISIBLE) return@post
+            Motion.enter(
+                sheetPanel,
+                sheetPanel.width.toFloat() + dp(24).toFloat(),
+                0f,
+                260L
+            )
         }
     }
 
     private fun closeQuickSettings() {
+        quickSheetOpen = false
         uiHandler.removeCallbacks(linkStatusRunnable)
-        sheetPanel.animate()
-            .translationX(sheetPanel.width.toFloat() + dp(24))
-            .setDuration(200L)
-            .withEndAction { quickSheet.visibility = View.GONE }
-            .start()
-        sheetScrim.animate().alpha(0f).setDuration(160L).start()
+        sheetPanel.animate().cancel()
+        sheetScrim.animate().cancel()
+        if (!Motion.enabled()) {
+            quickSheet.visibility = View.GONE
+            sheetScrim.alpha = 1f
+            Motion.reset(sheetPanel)
+            return
+        }
+        Motion.exit(
+            sheetPanel,
+            sheetPanel.width.toFloat() + dp(24).toFloat(),
+            0f,
+            200L
+        ) {
+            quickSheet.visibility = View.GONE
+            Motion.reset(sheetPanel)
+        }
+        Motion.fadeOut(sheetScrim, 160L)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

@@ -1,5 +1,10 @@
-# OBD en el Ibiza 6J — velocidad y gasolina
+# OBD en el Ibiza 6J — velocidad y gasolina (histórico)
 
+> **Retirado de la app.** El nivel de gasolina nunca respondió en este coche y
+> el sondeo UDS (`ATZ`) desestabilizaba el ELM327. La velocidad OBD tampoco
+> responde (`010D`): ahora la velocidad sale solo del GPS. Este documento queda
+> como referencia de la investigación.
+>
 > Investigación aplicada al SEAT Ibiza 6J 2010 (2.0 MPI 8V CEKA) con adaptador
 > ELM327/B16. Objetivo: recuperar las lecturas que se perdieron al introducir
 > la máscara de PIDs y explicar de dónde sale el nivel de gasolina.

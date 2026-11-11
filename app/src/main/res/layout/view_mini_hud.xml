@@ -29,7 +29,7 @@
             android:layout_height="15dp"
             android:contentDescription="Navegación"
             android:src="@drawable/ic_nav"
-            android:tint="@color/accent_sky" />
+            android:tint="@color/accent_primary" />
 
         <TextView
             style="@style/Label"
@@ -48,7 +48,7 @@
             android:contentDescription="Volver al cockpit"
             android:padding="10dp"
             android:src="@drawable/ic_chevron_left"
-            android:tint="@color/accent_sky" />
+            android:tint="@color/accent_primary" />
     </LinearLayout>
 
     <LinearLayout
@@ -236,7 +236,7 @@
             android:layout_height="16dp"
             android:contentDescription="Clima"
             android:src="@drawable/ic_weather_sun"
-            android:tint="@color/accent_sky" />
+            android:tint="@color/accent_primary" />
 
         <TextView
             android:id="@+id/miniWeather"
@@ -287,7 +287,7 @@
                     android:layout_gravity="center"
                     android:contentDescription="Destino"
                     android:src="@drawable/ic_nav"
-                    android:tint="@color/accent_sky" />
+                    android:tint="@color/accent_primary" />
             </FrameLayout>
 
             <TextView

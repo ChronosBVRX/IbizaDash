@@ -43,6 +43,8 @@ fun SettingsScreen() {
 
     var dialog by remember { mutableStateOf<Pair<String, String>?>(null) }
     var autoUpdate by remember { mutableStateOf(CompanionPrefs.autoUpdate(context)) }
+    var carBtDialog by remember { mutableStateOf(false) }
+    var carBtName by remember { mutableStateOf(CompanionPrefs.carBtName(context)) }
 
     // Se releen en cada recomposición: son consultas baratas y así reflejan
     // el cambio al volver de los ajustes del sistema.
@@ -144,6 +146,23 @@ fun SettingsScreen() {
             }
         }
 
+        SectionTitle("AUTO")
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = IbizaColors.Surface,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column {
+                SettingRow(
+                    title = "Bluetooth del auto",
+                    subtitle = carBtName.ifBlank {
+                        "Automático · abre el enlace al conectar el receptor"
+                    },
+                    active = true
+                ) { carBtDialog = true }
+            }
+        }
+
         SectionTitle("INFORMACIÓN")
         Surface(
             shape = RoundedCornerShape(12.dp),
@@ -193,6 +212,85 @@ fun SettingsScreen() {
             text = { Text(text, color = IbizaColors.TextSecondary) },
             confirmButton = {
                 TextButton(onClick = { dialog = null }) {
+                    Text("Cerrar", color = IbizaColors.Primary)
+                }
+            },
+            containerColor = IbizaColors.Surface
+        )
+    }
+
+    if (carBtDialog) {
+        val bonded = remember(carBtDialog) {
+            runCatching {
+                val manager = context.getSystemService(android.bluetooth.BluetoothManager::class.java)
+                manager?.adapter?.bondedDevices?.toList().orEmpty()
+            }.getOrDefault(emptyList())
+        }
+        AlertDialog(
+            onDismissRequest = { carBtDialog = false },
+            title = { Text("Bluetooth del auto", color = IbizaColors.TextPrimary) },
+            text = {
+                Column {
+                    Text(
+                        "Solo este equipo abrirá Wi-Fi Direct al conectarse.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = IbizaColors.TextSecondary
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                CompanionPrefs.setCarBtDevice(context, null, null)
+                                carBtName = ""
+                                carBtDialog = false
+                            }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Automático (detectar receptor)",
+                            color = IbizaColors.Primary,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    bonded.forEach { device ->
+                        val name = runCatching { device.name }.getOrNull().orEmpty()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    CompanionPrefs.setCarBtDevice(context, device.address, name)
+                                    carBtName = name.ifBlank { device.address }
+                                    carBtDialog = false
+                                }
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    name.ifBlank { "Sin nombre" },
+                                    color = IbizaColors.TextPrimary
+                                )
+                                Text(
+                                    device.address,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = IbizaColors.TextSecondary
+                                )
+                            }
+                        }
+                    }
+                    if (bonded.isEmpty()) {
+                        Text(
+                            "No hay equipos vinculados o falta el permiso de Bluetooth.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = IbizaColors.Warning
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { carBtDialog = false }) {
                     Text("Cerrar", color = IbizaColors.Primary)
                 }
             },

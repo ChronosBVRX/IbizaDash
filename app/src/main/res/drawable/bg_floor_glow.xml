@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Luz de piso cálida y suave bajo el coche -->
+<!-- Sombra/resplandor bajo el auto según tema (gris día / azul noche) -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
     <gradient
-        android:centerColor="#10E07A5F"
+        android:centerColor="@color/car_glow"
         android:centerX="0.5"
         android:centerY="0.5"
-        android:endColor="#00000000"
+        android:endColor="@android:color/transparent"
         android:gradientRadius="170dp"
-        android:startColor="#2EE07A5F"
+        android:startColor="@color/car_glow"
         android:type="radial" />
 </shape>

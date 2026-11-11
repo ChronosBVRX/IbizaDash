@@ -1,26 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Panel grande: cristal oscuro con borde de luz -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item>
-        <shape>
-            <gradient
-                android:angle="270"
-                android:endColor="#05FFFFFF"
-                android:startColor="#2AFFFFFF" />
-            <corners android:radius="24dp" />
-        </shape>
-    </item>
-    <item
-        android:bottom="1dp"
-        android:left="1dp"
-        android:right="1dp"
-        android:top="1dp">
-        <shape>
-            <gradient
-                android:angle="270"
-                android:endColor="#E60E131B"
-                android:startColor="#F2171E2B" />
-            <corners android:radius="23dp" />
-        </shape>
-    </item>
-</layer-list>
+<!-- Panel grande semántico (día/noche) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="@color/bg_card" />
+    <corners android:radius="24dp" />
+    <stroke android:width="1dp" android:color="@color/stroke_card" />
+</shape>

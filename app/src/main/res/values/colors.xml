@@ -1,5 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- ===== Semánticos Home · MODO DÍA (blanco perlado) ===== -->
+    <color name="bg_screen">#F8FAFC</color>
+    <color name="bg_card">#D9FFFFFF</color>
+    <color name="stroke_card">#FFFFFF</color>
+    <color name="bg_pill">#F1F5F9</color>
+    <!-- Divisor interno de tarjetas: visible en día y noche -->
+    <color name="divider_card">#3D000000</color>
+    <!-- Fondo bajo el mapa inclinado: evita cualquier hueco blanco -->
+    <color name="map_nav_backdrop">#0E1A24</color>
+    <color name="text_primary">#111827</color>
+    <color name="text_secondary">#6B7280</color>
+    <color name="accent_primary">#E06D53</color>
+    <color name="accent_teal">#0D9488</color>
+    <color name="accent_blue">#2563EB</color>
+    <color name="car_glow">#18000000</color>
+    <color name="sheet_bg">#FAFFFFFF</color>
+    <color name="scrim_edge">#CCF8FAFC</color>
+    <color name="scrim_edge_clear">#00F8FAFC</color>
+    <color name="media_scrim_solid">#B3F8FAFC</color>
+    <color name="media_scrim_soft">#66F8FAFC</color>
+
+    <!-- Alias Home (compatibilidad con XML existente) -->
+    <color name="home_bg_day">#FFFFFF</color>
+    <color name="home_card_day">#F4F5F7</color>
+    <color name="home_border_day">#E5E7EB</color>
+    <color name="home_text_day">#111827</color>
+    <color name="home_text2_day">#6B7280</color>
+    <color name="home_accent_day">#2563EB</color>
+
     <!-- Fondos carbón con subtono frío (menos fatiga, menos bleeding) -->
     <color name="obsidian_900">#0B0E14</color>
     <color name="obsidian_800">#0F141C</color>
@@ -25,7 +54,6 @@
     <color name="accent_copper_soft">#26E07A5F</color>
     <color name="accent_cyan">#22D3EE</color>
     <color name="accent_electric">#00D2FF</color>
-    <color name="accent_blue">#3B82F6</color>
 
     <!-- Semántica suavizada, sin colores puros que vibren -->
     <color name="amber">#F59E0B</color>
@@ -38,13 +66,19 @@
     <color name="teal">#14B8A6</color>
     <color name="success">#10B981</color>
 
-    <!-- Tipografía -->
-    <color name="text">#F8FAFC</color>
-    <color name="text_primary">#F8FAFC</color>
-    <color name="text_secondary">#CBD5E1</color>
-    <color name="text_dim">#94A3B8</color>
-    <color name="text_muted">#94A3B8</color>
-    <color name="text_faint">#64748B</color>
+    <!-- Home (alias día = semánticos) -->
+    <color name="home_bg_night">#050508</color>
+    <color name="home_card_night">#111318</color>
+    <color name="home_border_night">#1F242D</color>
+    <color name="home_text_night">#FFFFFF</color>
+    <color name="home_text2_night">#8A94A6</color>
+    <color name="home_accent_night">#E07A5F</color>
+
+    <!-- Tipografía (día: texto oscuro sobre fondo claro) -->
+    <color name="text">#111827</color>
+    <color name="text_dim">#6B7280</color>
+    <color name="text_muted">#6B7280</color>
+    <color name="text_faint">#6B7280</color>
 
     <!-- Bordes especulares: luz cenital arriba, casi invisible abajo -->
     <color name="line">#12FFFFFF</color>

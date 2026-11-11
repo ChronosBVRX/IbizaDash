@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    LEGACY: este layout ya no se infla. La pantalla principal vive en
+    activity_main.xml (columnas izquierda / centro / derecha). Se conserva
+    solo como referencia histórica; no dupliques aquí los cambios del Home.
+-->
 <!-- Cockpit panel: full 45% focus. Shared session state with the mini HUD and modules. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/cockpitPanel"
@@ -41,7 +46,7 @@
                 android:layout_height="14dp"
                 android:contentDescription="Bluetooth"
                 android:src="@drawable/ic_bluetooth"
-                android:tint="@color/accent_sky" />
+                android:tint="@color/accent_primary" />
 
             <TextView
                 android:id="@+id/btStatus"
@@ -62,7 +67,7 @@
                 android:layout_height="12dp"
                 android:layout_marginStart="6dp"
                 android:layout_marginEnd="6dp"
-                android:background="#22FFFFFF"
+                android:background="@color/stroke_card"
                 android:visibility="gone" />
 
             <LinearLayout
@@ -114,108 +119,106 @@
             android:tint="@color/text_muted" />
     </LinearLayout>
 
-    <!-- Escenario integrado: el coche ocupa todo el hero y la velocidad OBD
-         queda superpuesta a la izquierda, sin una tarjeta ni un modal. -->
-    <FrameLayout
+    <!-- Hero estilo mockup: coche grande centrado arriba y tacómetro en arco
+         (VELOCIDAD) debajo, sin dial circular superpuesto al coche. -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_marginTop="4dp"
         android:layout_marginBottom="8dp"
         android:layout_weight="1"
-        android:minHeight="216dp">
-
-        <View
-            android:layout_width="380dp"
-            android:layout_height="150dp"
-            android:layout_gravity="bottom|center_horizontal"
-            android:background="@drawable/bg_floor_glow" />
-
-        <ImageView
-            android:id="@+id/carRender"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:contentDescription="SEAT Ibiza 2010"
-            android:scaleType="fitCenter"
-            android:src="@drawable/ibiza_off" />
-
-        <View
-            android:id="@+id/headlightGlow"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@drawable/bg_headlight_glow"
-            android:visibility="gone" />
+        android:minHeight="216dp"
+        android:orientation="vertical">
 
         <FrameLayout
-            android:layout_width="170dp"
-            android:layout_height="170dp"
-            android:layout_gravity="bottom|center_horizontal"
-            android:layout_marginBottom="10dp"
-            android:background="@drawable/bg_speedometer_halo"
-            android:padding="2dp">
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
 
-            <com.chronosbvrx.ibizadash.ui.SpeedometerView
-                android:id="@+id/speedometer"
+            <View
+                android:layout_width="380dp"
+                android:layout_height="150dp"
+                android:layout_gravity="bottom|center_horizontal"
+                android:background="@drawable/bg_floor_glow" />
+
+            <ImageView
+                android:id="@+id/carRender"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:contentDescription="Velocímetro" />
+                android:contentDescription="SEAT Ibiza 2010"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ibiza_off" />
 
-            <TextView
-                android:id="@+id/speed"
-                android:layout_width="1dp"
-                android:layout_height="1dp"
-                android:alpha="0"
-                android:text="0"
+            <View
+                android:id="@+id/headlightGlow"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_headlight_glow"
                 android:visibility="gone" />
 
             <TextView
-                android:id="@+id/unit"
-                android:layout_width="1dp"
-                android:layout_height="1dp"
-                android:alpha="0"
-                android:text="@string/speed_unit_kmh"
-                android:visibility="gone" />
+                android:id="@+id/gear"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:layout_gravity="top|end"
+                android:layout_marginTop="8dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/bg_gear_active"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="center"
+                android:minWidth="44dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:text="P"
+                android:textColor="@color/text_primary"
+                android:textSize="18sp" />
 
             <TextView
-                android:id="@+id/speedSource"
-                android:layout_width="1dp"
-                android:layout_height="1dp"
-                android:alpha="0"
-                android:text="GPS"
-                android:visibility="gone" />
+                android:id="@+id/cockpitFuel"
+                style="@style/Label"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:layout_gravity="top|end"
+                android:layout_marginTop="50dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/bg_chip_glass"
+                android:gravity="center"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:text="F --"
+                android:textColor="@color/accent_copper" />
         </FrameLayout>
 
-        <TextView
-            android:id="@+id/gear"
-            android:layout_width="wrap_content"
-            android:layout_height="34dp"
-            android:layout_gravity="top|end"
-            android:layout_marginTop="8dp"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/bg_gear_active"
-            android:fontFamily="sans-serif-medium"
-            android:gravity="center"
-            android:minWidth="44dp"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
-            android:text="P"
-            android:textColor="#06121F"
-            android:textSize="18sp" />
+        <com.chronosbvrx.ibizadash.ui.SpeedometerView
+            android:id="@+id/speedometer"
+            android:layout_width="match_parent"
+            android:layout_height="190dp"
+            android:contentDescription="Velocímetro" />
 
         <TextView
-            android:id="@+id/cockpitFuel"
-            style="@style/Label"
-            android:layout_width="wrap_content"
-            android:layout_height="28dp"
-            android:layout_gravity="top|end"
-            android:layout_marginTop="50dp"
-            android:layout_marginEnd="6dp"
-            android:background="@drawable/bg_chip_glass"
-            android:gravity="center"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
-            android:text="F --"
-            android:textColor="@color/accent_copper" />
-    </FrameLayout>
+            android:id="@+id/speed"
+            android:layout_width="1dp"
+            android:layout_height="1dp"
+            android:alpha="0"
+            android:text="0"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/unit"
+            android:layout_width="1dp"
+            android:layout_height="1dp"
+            android:alpha="0"
+            android:text="@string/speed_unit_kmh"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/speedSource"
+            android:layout_width="1dp"
+            android:layout_height="1dp"
+            android:alpha="0"
+            android:text="GPS"
+            android:visibility="gone" />
+    </LinearLayout>
 
     <!-- Floating luxury media card -->
     <LinearLayout
@@ -230,7 +233,7 @@
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="72dp"
+            android:layout_height="56dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
@@ -295,7 +298,7 @@
                         android:layout_height="15dp"
                         android:contentDescription="App de reproducción"
                         android:src="@drawable/ic_bluetooth"
-                        android:tint="@color/accent_sky" />
+                        android:tint="@color/accent_primary" />
 
                     <TextView
                         android:id="@+id/mediaDevice"
@@ -306,7 +309,7 @@
                         android:ellipsize="end"
                         android:maxLines="1"
                         android:text="Teléfono Bluetooth"
-                        android:textColor="@color/accent_sky"
+                        android:textColor="@color/accent_primary"
                         android:textSize="12sp" />
                 </LinearLayout>
             </LinearLayout>
@@ -323,8 +326,8 @@
 
             <ImageButton
                 android:id="@+id/btnPlay"
-                android:layout_width="72dp"
-                android:layout_height="72dp"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
                 android:background="@drawable/bg_play_button"
                 android:contentDescription="Reproducir"
                 android:elevation="6dp"
@@ -362,53 +365,228 @@
             android:textSize="12sp" />
     </LinearLayout>
 
-    <!-- Thermal/electrical health (replaces the fake A/C/FAN/REC controls).
-         Se oculta hasta que haya datos OBD o de luces: sin dato, no se muestra. -->
+    <!-- OBD relevante solo en pantalla principal (Inicio). Detalle completo
+         en el módulo AUTO. Sin datos OBD/luces no se muestra (refreshHealthRow).
+         Toque → abre el módulo del vehículo para ver todo. -->
     <LinearLayout
         android:id="@+id/healthRow"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
+        android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:background="@drawable/bg_insight_card"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
+        android:clickable="true"
+        android:focusable="true"
+        android:orientation="vertical"
         android:paddingStart="12dp"
-        android:paddingEnd="12dp">
+        android:paddingTop="10dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="10dp">
 
-        <FrameLayout
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:background="@drawable/bg_icon_badge">
-
-            <ImageView
-                android:id="@+id/cockpitHealthIcon"
-                android:layout_width="19dp"
-                android:layout_height="19dp"
-                android:layout_gravity="center"
-                android:contentDescription="Salud del vehículo"
-                android:src="@drawable/ic_shield_check"
-                android:tint="@color/green" />
-        </FrameLayout>
-
-        <TextView
-            android:id="@+id/cockpitHealth"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
-            android:layout_weight="1"
-            android:fontFeatureSettings="tnum"
-            android:maxLines="2"
-            android:text="Salud: esperando datos OBD…"
-            android:textColor="@color/text_secondary"
-            android:textSize="13sp" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/headlightState"
-            android:layout_width="wrap_content"
+            <TextView
+                style="@style/Label"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="OBD · MOTOR" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Ver AUTO ›"
+                android:textColor="@color/accent_primary"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:fontFeatureSettings="tnum"
-            android:text="Luces —"
-            android:textColor="@color/text_muted"
-            android:textSize="12sp" />
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="@drawable/bg_icon_badge">
+
+                <ImageView
+                    android:id="@+id/cockpitHealthIcon"
+                    android:layout_width="19dp"
+                    android:layout_height="19dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="Salud del vehículo"
+                    android:src="@drawable/ic_shield_check"
+                    android:tint="@color/green" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/cockpitHealth"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="2"
+                android:text="Salud: esperando datos OBD…"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/headlightState"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:text="Luces —"
+                android:textColor="@color/text_muted"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:baselineAligned="false"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginEnd="3dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_pill"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <TextView
+                    style="@style/Label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="TEMP"
+                    android:textSize="8sp" />
+
+                <TextView
+                    android:id="@+id/obdCockpitTemp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:fontFeatureSettings="tnum"
+                    android:text="--"
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginEnd="3dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_pill"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <TextView
+                    style="@style/Label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="VOLT"
+                    android:textSize="8sp" />
+
+                <TextView
+                    android:id="@+id/obdCockpitVoltage"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:fontFeatureSettings="tnum"
+                    android:text="--"
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginEnd="3dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_pill"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <TextView
+                    style="@style/Label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="RPM"
+                    android:textSize="8sp" />
+
+                <TextView
+                    android:id="@+id/obdCockpitRpm"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:fontFeatureSettings="tnum"
+                    android:text="--"
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginEnd="3dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_pill"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <TextView
+                    style="@style/Label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="NIVEL"
+                    android:textSize="8sp" />
+
+                <TextView
+                    android:id="@+id/obdCockpitFuel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:fontFeatureSettings="tnum"
+                    android:text="--"
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_pill"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <TextView
+                    style="@style/Label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="FALLAS"
+                    android:textSize="8sp" />
+
+                <TextView
+                    android:id="@+id/obdCockpitDtc"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:fontFeatureSettings="tnum"
+                    android:text="--"
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>

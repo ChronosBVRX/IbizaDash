@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Plataforma del auto: óvalo radial suave -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <gradient
+        android:centerColor="@color/car_glow"
+        android:centerX="0.5"
+        android:centerY="0.5"
+        android:endColor="@android:color/transparent"
+        android:gradientRadius="160dp"
+        android:startColor="@color/car_glow"
+        android:type="radial" />
+</shape>

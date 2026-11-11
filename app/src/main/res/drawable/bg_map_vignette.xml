@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Viñeta suave para separar el mapa de las tarjetas flotantes -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
     <gradient
-        android:centerColor="#000B0E14"
+        android:centerColor="@color/scrim_edge_clear"
         android:centerX="0.5"
         android:centerY="0.5"
-        android:endColor="#B30B0E14"
+        android:endColor="@color/scrim_edge"
         android:gradientRadius="420dp"
-        android:startColor="#000B0E14"
+        android:startColor="@color/scrim_edge_clear"
         android:type="radial" />
 </shape>

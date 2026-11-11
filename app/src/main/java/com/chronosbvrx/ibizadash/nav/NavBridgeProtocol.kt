@@ -213,10 +213,16 @@ object NavBridgeProtocol {
             }
 
             // Clima calculado en el teléfono (el estéreo no usa Internet).
+            // Los campos extra son opcionales (compatibilidad con teléfonos viejos).
             "WEATHER" -> WeatherRepository.update(
                 tempC = obj.optDouble("tempC", Double.NaN),
                 code = obj.optInt("code", -1),
-                text = obj.optString("text", "")
+                text = obj.optString("text", ""),
+                maxC = if (obj.has("maxC")) obj.optDouble("maxC", Double.NaN) else null,
+                minC = if (obj.has("minC")) obj.optDouble("minC", Double.NaN) else null,
+                humidityPct = if (obj.has("humidityPct")) obj.optInt("humidityPct", -1).takeIf { it >= 0 } else null,
+                windKmh = if (obj.has("windKmh")) obj.optDouble("windKmh", Double.NaN) else null,
+                feelsLikeC = if (obj.has("feelsLikeC")) obj.optDouble("feelsLikeC", Double.NaN) else null
             )
 
             "MAP_FRAME" -> RemoteMapBridge.onFrame(obj)
@@ -346,7 +352,8 @@ object NavBridgeProtocol {
 
     /**
      * Guarda una tesela en la caché de osmdroid:
-     * files/osmdroid/tiles/EsriDark/{z}/{x}/{y}.tile
+     * files/osmdroid/tiles/EsriDark/{z}/{x}/{y}.tile (base)
+     * files/osmdroid/tiles/EsriDarkRef/{z}/{x}/{y}.tile (etiquetas)
      */
     private fun saveTile(context: Context, obj: JSONObject) {
         try {
@@ -358,9 +365,16 @@ object NavBridgeProtocol {
             val bytes = Base64.decode(b64, Base64.DEFAULT)
             if (bytes.size < 40) return
 
+            // "ref" = capa de referencia (nombres de calles). Los teléfonos
+            // viejos no mandan el campo: se asume base.
+            val folder = if (obj.optString("layer", "base") == "ref") {
+                "EsriDarkRef"
+            } else {
+                "EsriDark"
+            }
             val base = File(
                 context.getExternalFilesDir(null) ?: context.filesDir,
-                "osmdroid/tiles/EsriDark"
+                "osmdroid/tiles/$folder"
             )
             val dir = File(base, "$zoom/$x")
             if (!dir.exists() && !dir.mkdirs()) return

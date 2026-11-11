@@ -3,6 +3,14 @@ package com.chronosbvrx.ibizadash.obd
 import android.os.SystemClock
 import java.util.concurrent.CopyOnWriteArraySet
 
+/**
+ * Telemetría del motor por OBD.
+ *
+ * La velocidad vive en [com.chronosbvrx.ibizadash.car.CarSignals] y sale del
+ * GPS: este Ibiza 6J no entrega `010D`. El nivel de combustible es opcional y
+ * solo se puebla cuando una fuente real lo publica (en demo, 62%); si no,
+ * queda en `null` y la UI muestra `--` en lugar de inventar un porcentaje.
+ */
 data class ObdTelemetry(
     val connected: Boolean = false,
     val demo: Boolean = false,
@@ -13,16 +21,12 @@ data class ObdTelemetry(
     val loadPct: Float? = null,
     val throttlePct: Float? = null,
     val intakeC: Float? = null,
-    val speedKmh: Int? = null,
-    val fuelPct: Float? = null,
-    /** Real fuel level read from the instrument cluster via UDS (DID 0x2206). */
-    val fuelLevelPct: Float? = null,
-    val fuelLevelLiters: Float? = null,
-    val fuelRaw: Int? = null,
-    val fuelSource: String? = null,
+    /** Ajuste de mezcla (PID 0106), no nivel de gasolina. */
     val fuelTrimPct: Float? = null,
     val timingAdvanceDeg: Float? = null,
     val batteryV: Float? = null,
+    /** Nivel de combustible (%) cuando una fuente real lo publique (demo: 62%). */
+    val fuelLevelPct: Float? = null,
     val milOn: Boolean? = null,
     val dtcCount: Int? = null,
     val dtcs: List<String> = emptyList(),
@@ -38,9 +42,9 @@ data class ObdTelemetry(
      */
     val hasLiveData: Boolean
         get() = (connected || demo) && (
-            rpm != null || coolantC != null || speedKmh != null ||
-                loadPct != null || throttlePct != null || intakeC != null ||
-                batteryV != null || fuelPct != null || fuelLevelPct != null
+            rpm != null || coolantC != null ||
+                loadPct != null || throttlePct != null ||
+                intakeC != null || batteryV != null
             )
 
     /** Segundos desde la última publicación de telemetría. */
@@ -51,6 +55,7 @@ data class ObdTelemetry(
 object ObdRepository {
     private val listeners = CopyOnWriteArraySet<(ObdTelemetry) -> Unit>()
 
+    @Volatile
     var current = ObdTelemetry()
         private set
 

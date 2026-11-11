@@ -67,8 +67,11 @@ class App : Application() {
         if (prefs.getBoolean("png_to_tile_v1", false)) return
         var renamed = 0
         try {
-            val root = File(tiles, "EsriDark")
-            if (root.exists()) {
+            // Base y etiquetas usan la misma caché de osmdroid (una carpeta
+            // por nombre de fuente).
+            for (source in arrayOf("EsriDark", "EsriDarkRef")) {
+                val root = File(tiles, source)
+                if (!root.exists()) continue
                 root.walkTopDown()
                     .filter { it.isFile && it.extension.equals("png", ignoreCase = true) }
                     .forEach { png ->

@@ -61,7 +61,7 @@
                 android:background="@drawable/bg_pill"
                 android:fontFamily="sans-serif-medium"
                 android:gravity="center"
-                android:text="BLUETOOTH"
+                android:text="MÚSICA"
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
 
@@ -74,7 +74,7 @@
                 android:fontFamily="sans-serif-medium"
                 android:gravity="center"
                 android:text="RADIO FM"
-                android:textColor="@color/accent_sky"
+                android:textColor="@color/accent_primary"
                 android:textSize="12sp" />
         </LinearLayout>
     </LinearLayout>
@@ -119,7 +119,7 @@
                     android:paddingStart="14dp"
                     android:paddingEnd="14dp"
                     android:text="FM1"
-                    android:textColor="@color/accent_sky"
+                    android:textColor="@color/accent_primary"
                     android:textSize="12sp" />
 
                 <TextView
@@ -246,7 +246,7 @@
                 android:paddingStart="18dp"
                 android:paddingEnd="18dp"
                 android:text="ABRIR RADIO DEL VEHÍCULO"
-                android:textColor="@color/accent_sky"
+                android:textColor="@color/accent_primary"
                 android:textSize="12sp" />
         </LinearLayout>
     </LinearLayout>
@@ -301,12 +301,12 @@
             android:layout_weight="1"
             android:background="@drawable/bg_chip_glass"
             android:drawableStart="@drawable/ic_radio"
-            android:drawableTint="@color/accent_sky"
+            android:drawableTint="@color/accent_primary"
             android:drawablePadding="6dp"
             android:fontFamily="sans-serif-medium"
             android:gravity="center"
             android:text="BANDA"
-            android:textColor="@color/accent_sky"
+            android:textColor="@color/accent_primary"
             android:textSize="12sp" />
 
         <Space

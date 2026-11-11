@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Fondo semántico: día perlado / noche carbón (resuelve por values-night) -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <gradient
-        android:angle="270"
-        android:endColor="#0B0F17"
-        android:startColor="#111A27" />
+    <solid android:color="@color/bg_screen" />
 </shape>

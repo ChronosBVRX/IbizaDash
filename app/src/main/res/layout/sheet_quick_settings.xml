@@ -47,7 +47,7 @@
                     android:layout_gravity="center"
                     android:contentDescription="Ajustes rápidos"
                     android:src="@drawable/ic_settings"
-                    android:tint="@color/accent_sky" />
+                    android:tint="@color/accent_primary" />
             </FrameLayout>
 
             <LinearLayout
@@ -132,7 +132,7 @@
                         android:layout_gravity="center"
                         android:contentDescription="Brillo"
                         android:src="@drawable/ic_brightness"
-                        android:tint="@color/accent_sky" />
+                        android:tint="@color/accent_primary" />
                 </FrameLayout>
 
                 <TextView
@@ -162,8 +162,8 @@
                 android:paddingStart="0dp"
                 android:paddingEnd="0dp"
                 android:progress="80"
-                android:progressTint="@color/accent_sky"
-                android:thumbTint="@color/accent_sky" />
+                android:progressTint="@color/accent_primary"
+                android:thumbTint="@color/accent_primary" />
         </LinearLayout>
 
         <!-- Comfort -->
@@ -239,7 +239,7 @@
                 android:layout_height="1dp"
                 android:layout_marginStart="50dp"
                 android:layout_marginEnd="12dp"
-                android:background="#12FFFFFF" />
+                android:background="@color/stroke_card" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -366,7 +366,7 @@
                 android:layout_height="1dp"
                 android:layout_marginStart="50dp"
                 android:layout_marginEnd="12dp"
-                android:background="#12FFFFFF" />
+                android:background="@color/stroke_card" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -406,7 +406,7 @@
                 android:layout_height="1dp"
                 android:layout_marginStart="50dp"
                 android:layout_marginEnd="12dp"
-                android:background="#12FFFFFF" />
+                android:background="@color/stroke_card" />
 
             <LinearLayout
                 android:id="@+id/rowModules"
@@ -477,7 +477,7 @@
                 android:layout_height="1dp"
                 android:layout_marginStart="50dp"
                 android:layout_marginEnd="12dp"
-                android:background="#12FFFFFF" />
+                android:background="@color/stroke_card" />
 
             <LinearLayout
                 android:id="@+id/rowEq"
@@ -517,7 +517,7 @@
                     android:layout_height="wrap_content"
                     android:fontFamily="sans-serif-medium"
                     android:text="ABRIR"
-                    android:textColor="@color/accent_sky"
+                    android:textColor="@color/accent_primary"
                     android:textSize="11sp" />
             </LinearLayout>
 
@@ -526,7 +526,7 @@
                 android:layout_height="1dp"
                 android:layout_marginStart="50dp"
                 android:layout_marginEnd="12dp"
-                android:background="#12FFFFFF" />
+                android:background="@color/stroke_card" />
 
             <LinearLayout
                 android:id="@+id/rowWifi"
@@ -570,7 +570,7 @@
                     android:maxWidth="150dp"
                     android:maxLines="2"
                     android:text="—"
-                    android:textColor="@color/accent_sky"
+                    android:textColor="@color/accent_primary"
                     android:textSize="11sp" />
             </LinearLayout>
 
@@ -579,7 +579,7 @@
                 android:layout_height="1dp"
                 android:layout_marginStart="50dp"
                 android:layout_marginEnd="12dp"
-                android:background="#12FFFFFF" />
+                android:background="@color/stroke_card" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -627,7 +627,7 @@
                 android:layout_height="1dp"
                 android:layout_marginStart="50dp"
                 android:layout_marginEnd="12dp"
-                android:background="#12FFFFFF" />
+                android:background="@color/stroke_card" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -674,7 +674,7 @@
                 android:layout_height="1dp"
                 android:layout_marginStart="50dp"
                 android:layout_marginEnd="12dp"
-                android:background="#12FFFFFF" />
+                android:background="@color/stroke_card" />
 
             <LinearLayout
                 android:id="@+id/rowHome"
@@ -724,7 +724,7 @@
                 android:layout_height="1dp"
                 android:layout_marginStart="50dp"
                 android:layout_marginEnd="12dp"
-                android:background="#12FFFFFF" />
+                android:background="@color/stroke_card" />
 
             <LinearLayout
                 android:id="@+id/rowOta"

@@ -15,12 +15,6 @@ object Prefs {
     private const val TOTAL_ODOMETER_KM = "total_odometer_km"
     private const val LAST_OIL_CHANGE_KM = "last_oil_change_km"
     private const val LAST_OIL_LEVEL_CHECK_MS = "last_oil_level_check_ms"
-    private const val ESTIMATED_RANGE_KM = "estimated_range_km"
-    private const val FUEL_TANK_L = "fuel_tank_l"
-    private const val FUEL_FULL_RAW = "fuel_full_raw"
-    private const val FUEL_EMPTY_RAW = "fuel_empty_raw"
-    private const val FUEL_UDS_ENABLED = "fuel_uds_enabled"
-    private const val FUEL_UDS_DID = "fuel_uds_did"
     private const val BRIGHTNESS_PCT = "brightness_pct"
     private const val NIGHT_MODE = "night_mode"
     private const val VOICE_ON = "voice_on"
@@ -87,9 +81,9 @@ object Prefs {
         p(context).edit().putInt(BRIGHTNESS_PCT, value.coerceIn(0, 100)).apply()
     }
 
-    /** Atenuación nocturna manual. */
+    /** Atenuación nocturna manual. Tema Home por defecto: noche. */
     fun nightMode(context: Context): Boolean =
-        p(context).getBoolean(NIGHT_MODE, false)
+        p(context).getBoolean(NIGHT_MODE, true)
 
     fun setNightMode(context: Context, value: Boolean) {
         p(context).edit().putBoolean(NIGHT_MODE, value).apply()
@@ -152,60 +146,4 @@ object Prefs {
         p(context).edit().putLong(LAST_OIL_LEVEL_CHECK_MS, System.currentTimeMillis()).apply()
     }
 
-    fun estimatedRangeKm(context: Context): Float =
-        p(context).getFloat(ESTIMATED_RANGE_KM, 520f)
-
-    fun setEstimatedRangeKm(context: Context, km: Float) {
-        p(context).edit().putFloat(ESTIMATED_RANGE_KM, km.coerceAtLeast(0f)).apply()
-    }
-
-    fun addEstimatedRangeKm(context: Context, deltaKm: Float) {
-        setEstimatedRangeKm(context, estimatedRangeKm(context) + deltaKm)
-    }
-
-    fun refillTank(context: Context, km: Float) {
-        setEstimatedRangeKm(context, km)
-    }
-
-    // --- Nivel de combustible real (UDS del cuadro de instrumentos) ---
-
-    /** Capacidad del tanque del Ibiza 6J: 45 litros. */
-    fun fuelTankLiters(context: Context): Float =
-        p(context).getFloat(FUEL_TANK_L, 45f).coerceIn(20f, 90f)
-
-    fun setFuelTankLiters(context: Context, liters: Float) {
-        p(context).edit().putFloat(FUEL_TANK_L, liters.coerceIn(20f, 90f)).apply()
-    }
-
-    /** Valor UDS crudo con el tanque lleno (calibración). Por defecto 45 L. */
-    fun fuelFullRaw(context: Context): Int =
-        p(context).getInt(FUEL_FULL_RAW, 45).coerceIn(1, 255)
-
-    /** Valor UDS crudo con el tanque vacío/reserva (calibración). */
-    fun fuelEmptyRaw(context: Context): Int =
-        p(context).getInt(FUEL_EMPTY_RAW, 0).coerceIn(0, 254)
-
-    fun setFuelCalibration(context: Context, fullRaw: Int, emptyRaw: Int) {
-        val full = fullRaw.coerceIn(1, 255)
-        val empty = emptyRaw.coerceIn(0, 254)
-        p(context).edit()
-            .putInt(FUEL_FULL_RAW, full)
-            .putInt(FUEL_EMPTY_RAW, if (empty >= full) 0 else empty)
-            .apply()
-    }
-
-    fun fuelUdsEnabled(context: Context): Boolean =
-        p(context).getBoolean(FUEL_UDS_ENABLED, true)
-
-    fun setFuelUdsEnabled(context: Context, value: Boolean) {
-        p(context).edit().putBoolean(FUEL_UDS_ENABLED, value).apply()
-    }
-
-    /** DID UDS del nivel de combustible; por defecto 0x2206 (VAG). */
-    fun fuelUdsDid(context: Context): Int =
-        p(context).getInt(FUEL_UDS_DID, 0x2206).coerceIn(0, 0xFFFF)
-
-    fun setFuelUdsDid(context: Context, did: Int) {
-        p(context).edit().putInt(FUEL_UDS_DID, did.coerceIn(0, 0xFFFF)).apply()
-    }
 }

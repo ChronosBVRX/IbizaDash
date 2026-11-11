@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ===== Semánticos Home · MODO NOCHE (carbón profundo) ===== -->
+    <color name="bg_screen">#0B0F15</color>
+    <color name="bg_card">#B318202C</color>
+    <color name="stroke_card">#26FFFFFF</color>
+    <color name="bg_pill">#CC202A38</color>
+    <!-- Divisor interno de tarjetas: visible en día y noche -->
+    <color name="divider_card">#4DFFFFFF</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#8A94A6</color>
+    <color name="accent_primary">#E87A5D</color>
+    <color name="accent_teal">#2DD4BF</color>
+    <color name="accent_blue">#2B70C9</color>
+    <color name="car_glow">#401D63B8</color>
+    <color name="sheet_bg">#F2161B22</color>
+    <color name="scrim_edge">#CC0B0F17</color>
+    <color name="scrim_edge_clear">#000B0F17</color>
+    <color name="media_scrim_solid">#B3151A23</color>
+    <color name="media_scrim_soft">#66151A23</color>
+
+    <!-- Alias Home noche -->
+    <color name="home_bg_night">#0B0F15</color>
+    <color name="home_card_night">#B318202C</color>
+    <color name="home_border_night">#26FFFFFF</color>
+    <color name="home_text_night">#FFFFFF</color>
+    <color name="home_text2_night">#8A94A6</color>
+    <color name="home_accent_night">#E87A5D</color>
+
+    <!-- Tipografía noche -->
+    <color name="text">#FFFFFF</color>
+    <color name="text_dim">#8A94A6</color>
+    <color name="text_muted">#8A94A6</color>
+    <color name="text_faint">#8A94A6</color>
+
+    <!-- Bordes especulares (igual que día: translúcidos) -->
+    <color name="line">#12FFFFFF</color>
+    <color name="glass_border">#12FFFFFF</color>
+    <color name="glass_border_soft">#0AFFFFFF</color>
+    <color name="glass_border_top">#24FFFFFF</color>
+    <color name="glass_border_bottom">#05FFFFFF</color>
+    <color name="glass_surface">#E6151A23</color>
+    <color name="glass_surface_soft">#CC1F2735</color>
+</resources>

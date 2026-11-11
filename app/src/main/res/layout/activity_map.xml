@@ -2,7 +2,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg">
+    android:background="@color/bg_screen">
 
     <org.osmdroid.views.MapView
         android:id="@+id/map"
@@ -53,7 +53,7 @@
                 android:layout_height="18dp"
                 android:contentDescription="Mapa"
                 android:src="@drawable/ic_map"
-                android:tint="@color/accent_sky" />
+                android:tint="@color/accent_primary" />
 
             <LinearLayout
                 android:layout_width="wrap_content"
@@ -94,7 +94,7 @@
             android:layout_height="18dp"
             android:contentDescription="Velocidad"
             android:src="@drawable/ic_nav"
-            android:tint="@color/accent_sky" />
+            android:tint="@color/accent_primary" />
 
         <TextView
             android:id="@+id/speed"
@@ -121,6 +121,6 @@
         android:paddingStart="12dp"
         android:paddingEnd="12dp"
         android:text="GPS"
-        android:textColor="@color/accent_sky"
+        android:textColor="@color/accent_primary"
         android:textSize="11sp" />
 </FrameLayout>

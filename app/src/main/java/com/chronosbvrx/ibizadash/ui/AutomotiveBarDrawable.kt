@@ -11,6 +11,7 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import android.view.animation.DecelerateInterpolator
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
 
 /**
@@ -34,7 +35,9 @@ class AutomotiveBarDrawable(
     private val initialHigh: Int = 0xFF22D3EE.toInt(),
     private val centerBand: Pair<Float, Float>? = null,
     private val zones: List<Zone> = emptyList(),
-    private val markerOnly: Boolean = false
+    private val markerOnly: Boolean = false,
+    /** Contexto para resolver el riel semántico día/noche. */
+    private val uiContext: android.content.Context? = null
 ) : Drawable() {
 
     data class Zone(val from: Float, val to: Float, val color: Int)
@@ -108,12 +111,21 @@ class AutomotiveBarDrawable(
         track.set(left, top, right, bottom)
         val radius = barH / 2f
 
-        // Riel hundido
-        trackPaint.color = 0xFF080B10.toInt()
+        // Riel hundido (semántico: claro en día, oscuro en noche)
+        val ctx = uiContext
+        trackPaint.color = if (ctx != null) {
+            ContextCompat.getColor(ctx, com.chronosbvrx.ibizadash.R.color.bg_pill)
+        } else {
+            0xFF080B10.toInt()
+        }
         canvas.drawRoundRect(track, radius, radius, trackPaint)
         trackPaint.style = Paint.Style.STROKE
         trackPaint.strokeWidth = 1f * density
-        trackPaint.color = 0x0DFFFFFF
+        trackPaint.color = if (ctx != null) {
+            ContextCompat.getColor(ctx, com.chronosbvrx.ibizadash.R.color.stroke_card)
+        } else {
+            0x0DFFFFFF
+        }
         canvas.drawRoundRect(track, radius, radius, trackPaint)
         trackPaint.style = Paint.Style.FILL
 

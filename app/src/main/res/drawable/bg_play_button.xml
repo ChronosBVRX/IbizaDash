@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Play/Pause circular semántico: coral de tema -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="oval">
-    <gradient
-        android:angle="270"
-        android:endColor="#E07A5F"
-        android:startColor="#F4A261" />
+    <solid android:color="@color/accent_primary" />
     <stroke
         android:width="1dp"
-        android:color="#66FFFFFF" />
+        android:color="@color/stroke_card" />
 </shape>

@@ -1,16 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Tarjeta de app semántica (día/noche) -->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
-    android:color="#22FFFFFF">
+    android:color="@color/bg_pill">
     <item>
         <shape>
-            <gradient
-                android:angle="270"
-                android:endColor="#0E1622"
-                android:startColor="#162130" />
+            <solid android:color="@color/bg_card" />
             <corners android:radius="18dp" />
             <stroke
                 android:width="1dp"
-                android:color="#14FFFFFF" />
+                android:color="@color/stroke_card" />
         </shape>
     </item>
 </ripple>

@@ -19,7 +19,6 @@ data class HumanVehicleStatus(
     val headlineSeverity: Severity,
     val thermalMessage: HumanInsight,
     val electricalMessage: HumanInsight,
-    val fuelAutonomyMessage: HumanInsight,
     val maintenanceMessage: HumanInsight,
     val drivingCoachMessage: HumanInsight?
 )
@@ -34,7 +33,6 @@ object HumanCarAssistant {
     fun evaluate(context: Context, state: ObdTelemetry, speedKmh: Int): HumanVehicleStatus {
         val thermal = thermalMessage(state)
         val electrical = electricalMessage(state)
-        val fuel = fuelMessage(state)
         val maintenance = maintenanceMessage(context, state)
         val coach = drivingCoach(state, speedKmh)
 
@@ -64,7 +62,6 @@ object HumanCarAssistant {
             headlineSeverity = headlineSeverity,
             thermalMessage = thermal,
             electricalMessage = electrical,
-            fuelAutonomyMessage = fuel,
             maintenanceMessage = maintenance,
             drivingCoachMessage = coach
         )
@@ -124,29 +121,6 @@ object HumanCarAssistant {
                     "Revisa el regulador del alternador", Severity.WARNING, true
                 )
             }
-        }
-    }
-
-    private fun fuelMessage(state: ObdTelemetry): HumanInsight {
-        // No virtual fuel: the 6J does not report level over generic OBD.
-        val pct = state.fuelPct
-            ?: return HumanInsight(
-                "fuel_na", "Sin lectura de combustible",
-                "Este coche no expone nivel por OBD genérico", Severity.INFO
-            )
-        return when {
-            pct > 25f -> HumanInsight(
-                "fuel_ok", "Combustible al ${pct.toInt()} %",
-                "Nivel suficiente para el trayecto", Severity.GOOD
-            )
-            pct >= 12f -> HumanInsight(
-                "fuel_warn", "Combustible al ${pct.toInt()} % • Recomiendo recargar",
-                "Busca una gasolinera en tu próximo trayecto", Severity.WARNING, true
-            )
-            else -> HumanInsight(
-                "fuel_crit", "Reserva de combustible: ${pct.toInt()} %",
-                "Recarga gasolina lo antes posible", Severity.CRITICAL, true
-            )
         }
     }
 

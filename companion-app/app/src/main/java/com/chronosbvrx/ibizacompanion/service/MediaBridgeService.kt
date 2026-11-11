@@ -68,6 +68,7 @@ class MediaBridgeService : Service() {
     private var selfUpdateJob: Job? = null
     private var wifiClient: WifiBridgeClient? = null
     private var router: BridgeRouter? = null
+    private var carBtWatcher: CarBtWatcher? = null
     @Volatile private var lastTrackKey: String? = null
     @Volatile private var currentController: MediaController? = null
     @Volatile private var lastBringToFrontMs = 0L
@@ -99,6 +100,22 @@ class MediaBridgeService : Service() {
         com.chronosbvrx.ibizacompanion.voice.VoiceSynthesizer.init(this)
         wifiClient?.start()
         startConnectionWatchdog()
+        // Auto → enlace: al conectarse el Bluetooth del auto, la app abre
+        // Wi-Fi Direct sin que el usuario toque nada.
+        carBtWatcher = CarBtWatcher(this) {
+            scope.launch {
+                try {
+                    updateNotification("Auto detectado · conectando…")
+                    wifiClient?.start()
+                    if (router?.isConnected() != true) {
+                        router?.reconnectWifi()
+                        router?.scanPeers()
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "auto-connect: ${e.message}")
+                }
+            }
+        }.also { it.start() }
         job = scope.launch {
             while (isActive) {
                 try {
@@ -296,6 +313,7 @@ class MediaBridgeService : Service() {
                         .setSuppressed(!obj.optBoolean("on", true))
                 }
                 "VOICE_REQ" -> handleVoiceRequest(obj)
+                "TILE_REQ" -> handleTileRequest(obj)
                 "MODULE_META_ACK", "MODULE_END_OK", "MODULE_ERROR" -> {
                     com.chronosbvrx.ibizacompanion.modules.ModuleSender.onReply(obj)
                 }
@@ -361,6 +379,25 @@ class MediaBridgeService : Service() {
             com.chronosbvrx.ibizacompanion.voice.VoiceSynthesizer
                 .handleRequest(this@MediaBridgeService, lang, items)
         }
+    }
+
+    /**
+     * El estéreo pide las teselas del encuadre actual (exploración libre).
+     * Se encolan en TileSender: descargar en el lector del socket retrasaría
+     * rutas, estados y portadas.
+     */
+    private fun handleTileRequest(obj: org.json.JSONObject) {
+        val zoom = obj.optInt("z", 0)
+        if (zoom <= 0) return
+        com.chronosbvrx.ibizacompanion.data.TileSender.enqueueViewportTiles(
+            this,
+            zoom,
+            obj.optInt("x0", 0),
+            obj.optInt("y0", 0),
+            obj.optInt("x1", 0),
+            obj.optInt("y1", 0),
+            obj.optString("layer", "base")
+        )
     }
 
     private fun handleMediaCommand(cmd: String) {        if (cmd.isBlank()) return
@@ -717,6 +754,8 @@ class MediaBridgeService : Service() {
         }
         mapWakeLock = null
         mapStreaming = false
+        carBtWatcher?.stop()
+        carBtWatcher = null
         com.chronosbvrx.ibizacompanion.core.state.CompanionState.update {
             it.copy(serviceRunning = false, wifiConnected = false)
         }

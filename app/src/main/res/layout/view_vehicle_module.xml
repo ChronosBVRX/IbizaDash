@@ -41,7 +41,7 @@
                     android:layout_gravity="center"
                     android:contentDescription="Vehículo"
                     android:src="@drawable/ic_car"
-                    android:tint="@color/accent_sky" />
+                    android:tint="@color/accent_primary" />
             </FrameLayout>
 
             <LinearLayout
@@ -94,7 +94,7 @@
                 android:paddingStart="12dp"
                 android:paddingEnd="12dp"
                 android:text="GPS"
-                android:textColor="@color/accent_sky"
+                android:textColor="@color/accent_primary"
                 android:textSize="11sp" />
         </LinearLayout>
 
@@ -352,101 +352,6 @@
             android:orientation="horizontal">
 
             <LinearLayout
-                android:id="@+id/vHumanFuelCard"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:background="@drawable/bg_insight_card"
-                android:orientation="horizontal">
-
-                <View
-                    android:id="@+id/vHumanFuelBar"
-                    android:layout_width="3dp"
-                    android:layout_height="match_parent"
-                    android:background="@drawable/bg_accent_bar"
-                    android:backgroundTint="@color/green" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingStart="11dp"
-                    android:paddingTop="10dp"
-                    android:paddingEnd="11dp"
-                    android:paddingBottom="10dp">
-
-                    <FrameLayout
-                        android:layout_width="38dp"
-                        android:layout_height="38dp"
-                        android:background="@drawable/bg_icon_badge">
-
-                        <ImageView
-                            android:id="@+id/vHumanFuelIcon"
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:layout_gravity="center"
-                            android:contentDescription="Combustible"
-                            android:src="@drawable/ic_fuel"
-                            android:tint="@color/green" />
-                    </FrameLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="10dp"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/Label"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="COMBUSTIBLE" />
-
-                        <TextView
-                            android:id="@+id/vHumanFuel"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:ellipsize="end"
-                            android:fontFamily="sans-serif-medium"
-                            android:maxLines="2"
-                            android:text="—"
-                            android:textColor="@color/text_primary"
-                            android:textSize="12sp" />
-
-                        <TextView
-                            android:id="@+id/vHumanFuelSub"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
-                            android:ellipsize="end"
-                            android:maxLines="2"
-                            android:text="Sin lectura"
-                            android:textColor="@color/text_muted"
-                            android:textSize="11sp" />
-
-                        <ProgressBar
-                            android:id="@+id/vHumanFuelLevel"
-                            style="?android:attr/progressBarStyleHorizontal"
-                            android:layout_width="match_parent"
-                            android:layout_height="6dp"
-                            android:layout_marginTop="6dp"
-                            android:max="100"
-                            android:progress="0"
-                            android:progressBackgroundTint="#22FFFFFF"
-                            android:progressTint="@color/green"
-                            android:visibility="gone" />
-                    </LinearLayout>
-                </LinearLayout>
-            </LinearLayout>
-
-            <Space
-                android:layout_width="10dp"
-                android:layout_height="match_parent" />
-
-            <LinearLayout
                 android:id="@+id/vHumanMaintenanceCard"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
@@ -596,7 +501,7 @@
                 android:layout_height="16dp"
                 android:contentDescription="Expandir detalles"
                 android:src="@drawable/ic_chevron_down"
-                android:tint="@color/accent_sky" />
+                android:tint="@color/accent_primary" />
 
             <TextView
                 android:id="@+id/vToggleLabel"
@@ -606,7 +511,7 @@
                 android:fontFamily="sans-serif-medium"
                 android:letterSpacing="0.02"
                 android:text="Abrir panel de diagnóstico"
-                android:textColor="@color/accent_sky"
+                android:textColor="@color/accent_primary"
                 android:textSize="11sp" />
         </LinearLayout>
 
@@ -642,7 +547,7 @@
                         android:layout_height="18dp"
                         android:contentDescription="Velocidad"
                         android:src="@drawable/ic_nav"
-                        android:tint="@color/accent_sky" />
+                        android:tint="@color/accent_primary" />
 
                     <LinearLayout
                         android:layout_width="0dp"
@@ -1329,102 +1234,6 @@
                             android:textSize="11sp" />
                     </LinearLayout>
 
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="4dp"
-                        android:layout_weight="1"
-                        android:background="@drawable/bg_insight_card"
-                        android:minHeight="108dp"
-                        android:orientation="vertical"
-                        android:padding="12dp">
-
-                        <TextView
-                            style="@style/Label"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="VELOCIDAD ECU" />
-
-                        <TextView
-                            android:id="@+id/vSpeedObd"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:fontFamily="sans-serif-medium"
-                            android:fontFeatureSettings="tnum"
-                            android:text="--"
-                            android:textColor="@color/text_primary"
-                            android:textSize="24sp" />
-
-                        <TextView
-                            android:id="@+id/vSpeedObdAdv"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:maxLines="2"
-                            android:text="PID 010D de la ECU"
-                            android:textColor="@color/text_muted"
-                            android:textSize="11sp" />
-                    </LinearLayout>
-                </LinearLayout>
-
-                <!-- Nivel de combustible / autonomía -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:background="@drawable/bg_insight_card"
-                    android:gravity="center_vertical"
-                    android:minHeight="84dp"
-                    android:orientation="horizontal"
-                    android:padding="12dp">
-
-                    <FrameLayout
-                        android:layout_width="42dp"
-                        android:layout_height="42dp"
-                        android:background="@drawable/bg_icon_badge">
-
-                        <ImageView
-                            android:layout_width="22dp"
-                            android:layout_height="22dp"
-                            android:layout_gravity="center"
-                            android:contentDescription="@null"
-                            android:src="@drawable/ic_fuel"
-                            android:tint="@color/accent_cyan" />
-                    </FrameLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="11dp"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            style="@style/Label"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="COMBUSTIBLE" />
-
-                        <TextView
-                            android:id="@+id/vFuelEngine"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:fontFamily="sans-serif-medium"
-                            android:fontFeatureSettings="tnum"
-                            android:text="--"
-                            android:textColor="@color/text_primary"
-                            android:textSize="24sp" />
-
-                        <TextView
-                            android:id="@+id/vFuelEngineAdv"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:maxLines="2"
-                            android:text="Nivel UDS del cuadro · 0x2206"
-                            android:textColor="@color/text_muted"
-                            android:textSize="11sp" />
-                    </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
 
@@ -1493,7 +1302,7 @@
                             android:layout_gravity="center"
                             android:contentDescription="@null"
                             android:src="@drawable/ic_battery"
-                            android:tint="@color/accent_sky" />
+                            android:tint="@color/accent_primary" />
                     </FrameLayout>
                 </LinearLayout>
 
@@ -1660,47 +1469,12 @@
                     android:orientation="horizontal">
 
                     <Button
-                        android:id="@+id/btnProbeFuel"
-                        style="@style/VehicleActionButton"
-                        android:layout_width="0dp"
-                        android:layout_weight="1"
-                        android:text="Probar gasolina" />
-
-                    <Space
-                        android:layout_width="8dp"
-                        android:layout_height="match_parent" />
-
-                    <Button
                         android:id="@+id/btnProbeVin"
                         style="@style/VehicleActionButton"
                         android:layout_width="0dp"
                         android:layout_weight="1"
                         android:text="Leer VIN" />
                 </LinearLayout>
-
-                <Button
-                    android:id="@+id/btnFuelUds"
-                    style="@style/VehicleActionButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="48dp"
-                    android:layout_marginTop="6dp"
-                    android:text="Nivel real de combustible · sensores del tablero" />
-
-                <Button
-                    android:id="@+id/btnFuelCal"
-                    style="@style/VehicleActionButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="48dp"
-                    android:layout_marginTop="6dp"
-                    android:text="Calibrar tanque lleno con la última lectura" />
-
-                <Button
-                    android:id="@+id/btnFuelCalEmpty"
-                    style="@style/VehicleActionButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="48dp"
-                    android:layout_marginTop="6dp"
-                    android:text="Calibrar reserva/vacío con la última lectura" />
 
                 <ScrollView
                     android:layout_width="match_parent"

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Portada/placeholder semántico (día/noche) -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="#1F2735" />
-    <corners android:radius="@dimen/radius_art" />
+    <solid android:color="@color/bg_pill" />
+    <corners android:radius="9dp" />
 </shape>

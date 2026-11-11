@@ -12,7 +12,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
   (capturas reales del estéreo y del teléfono, con hojas de contacto).
 - **Paquete del estéreo:** `com.chronosbvrx.ibizadash`
 - **Paquete del teléfono:** `com.chronosbvrx.ibizacompanion`
-- **Versiones actuales:** IbizaDash **1.9.3** (versionCode 33) · IbizaCompanion **1.9.3** (versionCode 27)
+- **Versiones actuales:** IbizaDash **1.10.0** (versionCode 34) · IbizaCompanion **1.9.4** (versionCode 28)
 - **minSdk 23 / targetSdk 33 / compileSdk 36** (estéreo)
 - Hecho con **Views** (sin Compose) en el estéreo para que sea liviano en el Cortex-A7.
 
@@ -29,6 +29,34 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
 - **Coche principal** con variantes de faros apagados/encendidos y **minimapa con 8 ángulos** según el rumbo.
 - **Feedback al tocar:** escala al 97 % durante 90 ms en botones, tabs y dock.
 
+## Pantalla principal (Inicio)
+
+- **Sin "Hoy No Circula".** En la pantalla principal el bloque inferior es **OBD
+  relevante del coche** (temperatura, voltaje, RPM, nivel de combustible y
+  fallas/MIL), solo visible cuando hay datos OBD o de luces; sin dato no se
+  muestra y no se inventan valores. El detalle completo sigue en el módulo
+  **AUTO** (Motor, Eléctrico, Fallas, Consola).
+- **Toque en el bloque OBD →** abre el módulo AUTO. El resto de la pantalla
+  principal (mapa, reloj/fecha, clima, coche, música) no cambia.
+- **Inicio estilo mockup en oscuro:** reloj grande `h:mm` + `AM/PM`; saludo
+  (18sp) y fecha (12sp) en la misma fila, en dos párrafos, para liberar altura
+  del mini-mapa. Tarjeta de clima con temperatura grande, descripción,
+  sensación, máx/mín, humedad, viento y hora de actualizado (la manda el
+  teléfono con Open-Meteo, retrocompatible).
+- **Tarjeta hero central:** header `SEAT IBIZA · 2.0 STYLE`, coche dentro de
+  una sola tarjeta y velocímetro Pro de 230° con degradado turquesa→coral,
+  halo, número central y fuente (OBD/CAN/GPS). Sin óvalos ni logo bitmap.
+- **Conducción 2.5D:** en NAV la base y la ruta se inclinan con una cámara
+  `rotateX(52°)`, el coche queda al 79 % de la altura, el horizonte/niebla se
+  funde sobre el mapa y el coche/pin se dibujan en espacio de pantalla para
+  que no se aplasten. Un toque o pan aplana el mapa para que el hit-testing
+  sea exacto; al recentrar vuelve la perspectiva.
+- **Transiciones entre Inicio, Mapa, Música y Auto:** cross-fade direccional
+  con deslizamiento corto (280 ms entrante, 190 ms saliente), easing
+  `PathInterpolator(0.05, 0.7, 0.1, 1)` y animación ligera de iconos/indicador
+  del dock. Solo `alpha`/`translation`: sin bitmaps, capas ni pesos animados.
+  El split mapa/panel se aplica en un solo salto de layout para no forzar el
+  redraw de osmdroid en el Cortex-A7.
 
 ---
 
@@ -60,7 +88,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
 | Launcher HOME landscape | ✅ |
 | Mapa oscuro con GPS (Esri Dark Gray Canvas) y caché offline | ✅ |
 | Render SEAT Ibiza 2010 verde (3/4 frontal) | ✅ |
-| Velocidad **OBD > CAN > GPS** (OBD expira a los 4 s) | ✅ |
+| Velocidad **solo GPS** con extrapolación y reglas estrictas | ✅ |
 | Unidades km/h / mph | ✅ |
 | Reloj, fecha y clima (clima enviado por el teléfono) | ✅ |
 | Reversa automática (AIDL de `com.tw.service.xt`) | ✅ |
@@ -216,20 +244,29 @@ del sistema y la envía por Wi-Fi Direct como un WAV corto:
 Se activa o desactiva en **Ajustes rápidos → Navegación → Voz de navegación**, donde también
 se ve el peso de la caché y se puede liberar. Las frases se piden una sola vez.
 
-### OBD: velocidad y gasolina
+### OBD: solo motor (sin velocidad ni nivel de gasolina)
 
-La app consulta todos los PIDs aunque la máscara `0100/0120/0140` llegue
-incompleta (en clones ELM327 se perdían `010D` y `012F`). El nivel de gasolina
-se lee del **cuadro UDS** `0x714 → 0x77E`, DID `0x2206` (litros), usando la
-secuencia raw con flow control que funciona en estos adaptadores. Si el cuadro
-no responde, la UI muestra autonomía estimada marcada como tal, nunca un valor
-inventado. Detalle y referencias: [docs/OBD_FUEL_INVESTIGATION.md](docs/OBD_FUEL_INVESTIGATION.md).
+La app consulta los PIDs de motor aunque la máscara `0100/0120/0140` llegue
+incompleta. **No** se leen `010D` (velocidad) ni `012F`/UDS (nivel de
+gasolina): este Ibiza 6J no los entrega y el sondeo UDS del cuadro reiniciaba
+el ELM327 (`ATZ`) cada minuto. La velocidad sale **solo del GPS** y el nivel de
+combustible se retiró de la UI. La mezcla (`0106`) se conserva como dato de
+motor. Investigación histórica: [docs/OBD_FUEL_INVESTIGATION.md](docs/OBD_FUEL_INVESTIGATION.md).
 
 ### Seguimiento y diagnóstico del GPS
 
-El coche se sigue con su propio GPS. Tres descarte comunes de “se queda
-pegado” están corregidos:
+El coche se sigue con su propio GPS. El motor `car/GpsEngine` aplica reglas
+estrictas y mantiene la continuidad:
 
+- Escucha GPS, red y pasivo; pide XTRA/tiempo al arrancar y **no suelta el GPS**
+  al pausar la Activity (solo al destruirla).
+- Rechaza saltos imposibles (>220 km/h implícitos) y fixes con exactitud
+  peor a 80 m si ya hay uno reciente bueno.
+- Suaviza velocidad y rumbo; si el GPS no trae rumbo, lo deriva del movimiento.
+- Si se pierde la señal, **extrapola** la posición con la última velocidad y
+  rumbo durante 20 s (la velocidad decae), y después mantiene la última
+  posición con velocidad 0 y chip **“GPS sin señal”**.
+- La velocidad visible es **solo GPS** (OBD/CAN no se usan).
 - Un solo toque en el mapa **ya no** detiene el seguimiento; solo un arrastre
   de más de 18 px activa el modo libre.
 - El centrado en modo Cockpit pasó de cada 1.5 s a cada fix reciente
@@ -237,9 +274,10 @@ pegado” están corregidos:
 - Con precisión peor que 30 m no se suaviza la posición, para no clavarlo en
   la misma cuadra.
 
-El mapa muestra un chip **GPS en vivo / impreciso / viejo** con la calidad de
-señal. Si el GPS del estéreo falla, la app lo declara en la UI en vez de
-mover el coche.
+El chip **GPS estimado / impreciso / sin señal** solo aparece cuando hay algo
+que advertir; en estado normal se oculta para no tapar el mapa pequeño de AUTO.
+Si el GPS del estéreo falla, la app lo declara en la UI en vez de mover el
+coche con datos inventados.
 
 ### GPS del coche (por defecto)
 
@@ -262,6 +300,28 @@ de 56 dp dentro de un halo, con el morro blanco apuntando al rumbo real. El
 rumbo sale del `bearing` del GPS; si el teléfono no lo publica, se deduce del
 desplazamiento entre fixes y se suaviza. El mini-mapa del Inicio también pinta
 el coche orientado sobre el trazo de la ruta.
+
+### Mapa de navegación en el estéreo
+
+- **Cámara**: en NAV el coche se ancla al ~65 % del alto (`setMapCenterOffset(0, 90dp)`)
+  para enseñar camino por delante; fuera de NAV vuelve al centro. El pivote de rotación
+  usa el mismo offset, así que el coche no se mueve al girar en heading-up.
+- **Zoom por velocidad**: 17 urbano, 16 carretera, 15 autopista, con histéresis para que no
+  oscile. z17 solo se activa con el enlace Wi-Fi activo y **espera a que las teselas estén
+  en disco** (`navZoomTilesReady`): osmdroid no rellena con z16, así que acercarse antes de
+  tiempo dejaría huecos.
+- **Ruta en tres pasadas**: glow cian al 20 %, casing oscuro de 18 px y línea cian de 12 px
+  con extremos redondeados; tramos de tráfico de 14 px encima. Flechas de dirección cada
+  ~120 m (`RouteChevronOverlay`) y pin de destino en cobre (`#E07A5F`).
+- **Puck**: halo y cono de rumbo bajo el sprite de 56 dp (`NavPuckOverlay`). El sprite se
+  dibuja siempre erguido en NAV, porque osmdroid mantiene los marcadores `flat` en pantalla.
+- **Etiquetas**: segunda capa `TilesOverlay` con `World_Dark_Gray_Reference` de Esri
+  (`osmdroid/tiles/EsriDarkRef`). Giran con el mapa en heading-up.
+- **Teselas bajo demanda** (`TILE_REQ`): el estéreo pide al teléfono las teselas del
+  encuadre visible (no solo el corredor de la ruta) y prefetchea el centro al zoom
+  siguiente. Requiere IbizaCompanion con soporte de `TILE_REQ`.
+- **Modo noche**: ya no se invierte el mapa base (Esri Dark Gray ya es oscuro; invertirlo lo
+  volvía gris claro). Sin cuadrícula de carga: si falta una tesela se ve la tarjeta del panel.
 
 ### Tráfico en tiempo real (TomTom)
 

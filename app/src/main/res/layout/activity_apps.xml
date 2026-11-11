@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_screen_gradient"
+    android:background="@drawable/bg_screen"
     android:orientation="vertical">
 
     <LinearLayout
@@ -35,7 +35,7 @@
                 android:layout_gravity="center"
                 android:contentDescription="Aplicaciones"
                 android:src="@drawable/ic_apps"
-                android:tint="@color/accent_sky" />
+                android:tint="@color/accent_primary" />
         </FrameLayout>
 
         <LinearLayout

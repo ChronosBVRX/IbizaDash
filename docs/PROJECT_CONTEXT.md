@@ -76,13 +76,13 @@
 - Carátula: el stack no transfiere arte; si no hay red, placeholder.
 
 ### 3.5 Vehículo / Telemetría
-- Cabecera: VEHÍCULO, SEAT IBIZA 6J, chip OBD y chip fuente GPS/CAN.
+- Cabecera: VEHÍCULO, SEAT IBIZA 6J, chip OBD y chip fuente **GPS**.
 - Resumen: velocidad, marcha, fuente, reversa.
 - TPMS 2×2 (placeholders `—`; sin CAN, oculto).
-- Motor: RPM, carga, acelerador, refrigerante, batería.
-- **Nivel de combustible real por UDS del cuadro** (DID 0x2206, CAN 0x714→0x77E): el motor no responde al PID 2F; sin lectura se muestra “—”, nunca un valor inventado.
+- Motor: RPM, carga, acelerador, refrigerante, batería y mezcla (0106).
+- **Sin nivel de combustible ni velocidad OBD:** este coche no responde `012F`/UDS ni `010D`; la velocidad sale solo del GPS (`car/GpsEngine.kt`).
 - Footer: VIN, DTC/MIL con diccionario específico del **2.0 CEKA**.
-- **OBD-II ELM327** implementado (`obd/Elm327Client.kt`): Bluetooth SPP, ATZ/ATE0/ATL0/ATS0/ATH0/ATSP0, PIDs 010C/0104/0111/010D/0105/010F/012F/0142/0101/03/0902. Hilo propio, sin bloquear UI. Auto-detecta dispositivos emparejados con nombre OBD/ELM/Vgate/V-Link/Superbox/327. Diálogo al tocar el chip OBD. **Modo demo** (`--ez obd_demo true` o el diálogo) genera valores plausibles. **No probado con ELM327 físico.**
+- **OBD-II ELM327** implementado (`obd/Elm327Client.kt`): Bluetooth SPP/BLE, ATZ/ATE0/ATL0/ATS0/ATH0/ATSP0, PIDs 010C/0104/0111/0105/010F/0106/010E/0142/0101/03/0902. Hilo propio, sin bloquear UI. Auto-detecta dispositivos emparejados con nombre OBD/ELM/Vgate/V-Link/Superbox/327. Diálogo al tocar el chip OBD. **Modo demo** (`--ez obd_demo true` o el diálogo) genera valores plausibles.
 - **Diccionario DTC del coche** (`obd/DtcDictionary.kt`): 158 códigos SAE/VAG + 19 códigos de taller de 5 dígitos, explicados para el **Ibiza 6J 2010 2.0 MPI 8V CEKA**; explorador táctil en Vehículo → Fallas.
 - **CAN real:** `persist.can.speed` y `light_recieve` del MCU; en pruebas no llegaron tramas `type=2560..2563` ni `513`.
 
@@ -224,7 +224,7 @@ FrameLayout (obsidian)
 
 **OBD-II:**
 - `obd/Elm327Client.kt`, Bluetooth SPP UUID `00001101-0000-1000-8000-00805F9B34FB`.
-- PIDs: RPM `010C`, carga `0104`, acelerador `0111`, velocidad `010D`, refrigerante `0105`, admisión `010F`, combustible `012F`, batería `0142`, MIL `0101`, DTC `03`, VIN `0902`.
+- PIDs: RPM `010C`, carga `0104`, acelerador `0111`, refrigerante `0105`, admisión `010F`, mezcla `0106`, avance `010E`, batería `0142`, MIL `0101`, DTC `03`, VIN `0902`. Velocidad y nivel de combustible se retiraron (no responden en este coche).
 - Poll: rápido ~350 ms; lento cada 4 ciclos; VIN/DTC al conectar.
 - `ObdRepository` publica `ObdTelemetry`; `MainActivity.renderObd` llena la UI.
 - Demo: `--ez obd_demo true` o el diálogo OBD.

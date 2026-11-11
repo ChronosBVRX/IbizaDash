@@ -84,8 +84,8 @@
                     android:background="@drawable/bg_dock_active"
                     android:fontFamily="sans-serif-medium"
                     android:gravity="center"
-                    android:text="BLUETOOTH"
-                    android:textColor="@color/accent_sky"
+                    android:text="MÚSICA"
+                    android:textColor="@color/accent_primary"
                     android:textSize="11sp" />
 
                 <TextView
@@ -169,7 +169,7 @@
                     android:layout_marginTop="2dp"
                     android:ellipsize="end"
                     android:maxLines="1"
-                    android:text="Bluetooth · Radio FM"
+                    android:text="Música · Radio FM"
                     android:textColor="@color/text_secondary"
                     android:textSize="15sp" />
 
@@ -196,8 +196,8 @@
                         android:layout_width="19dp"
                         android:layout_height="19dp"
                         android:contentDescription="App de reproducción"
-                        android:src="@drawable/ic_bluetooth"
-                        android:tint="@color/accent_sky" />
+                        android:src="@drawable/ic_media"
+                        android:tint="@color/accent_primary" />
 
                     <TextView
                         android:id="@+id/mmDevice"
@@ -207,7 +207,7 @@
                         android:layout_weight="1"
                         android:ellipsize="end"
                         android:maxLines="1"
-                        android:text="Teléfono Bluetooth"
+                        android:text="Música"
                         android:textColor="@color/text_primary"
                         android:textSize="14sp" />
                 </LinearLayout>
@@ -241,8 +241,8 @@
                         android:layout_width="12dp"
                         android:layout_height="12dp"
                         android:contentDescription="Fuente"
-                        android:src="@drawable/ic_bluetooth"
-                        android:tint="@color/accent_sky" />
+                        android:src="@drawable/ic_media"
+                        android:tint="@color/accent_primary" />
 
                     <TextView
                         android:id="@+id/mmSource"
@@ -250,7 +250,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginStart="4dp"
                         android:fontFeatureSettings="tnum"
-                        android:text="BLUETOOTH"
+                        android:text="MÚSICA"
                         android:textColor="@color/text_muted"
                         android:textSize="11sp" />
                 </LinearLayout>
@@ -308,7 +308,7 @@
                     android:paddingStart="18dp"
                     android:paddingEnd="18dp"
                     android:text="ABRIR EN SU APP"
-                    android:textColor="@color/accent_sky"
+                    android:textColor="@color/accent_primary"
                     android:textSize="11sp" />
             </LinearLayout>
         </LinearLayout>

@@ -15,7 +15,6 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
-import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
@@ -23,7 +22,7 @@ import kotlin.math.sin
  *
  * Runs on its own thread, speaks the standard AT/PID protocol and publishes
  * [ObdTelemetry]. Reads RPM, coolant, engine load, throttle, intake temp,
- * speed, fuel level, battery voltage, MIL/DTC and VIN.
+ * mixture trim, timing, battery voltage, MIL/DTC and VIN.
  *
  * A demo mode generates plausible values so the UI can be validated without
  * an adapter (used by `--ez obd_demo true` and the OBD dialog).
@@ -48,12 +47,6 @@ class Elm327Client(private val context: Context) {
 
     private val onceQueue = java.util.concurrent.ConcurrentLinkedQueue<() -> Unit>()
 
-    /** Last UDS fuel read; fuel moves slowly, one read every 30 s is enough. */
-    @Volatile
-    private var lastFuelUdsMs = 0L
-    @Volatile
-    private var lastFuelOkMs = 0L
-
     /** PIDs que la ECU declaró soportar en 0100/0120/0140. */
     private val supportedPids = java.util.Collections.synchronizedSet(HashSet<Int>())
 
@@ -64,8 +57,6 @@ class Elm327Client(private val context: Context) {
      */
     @Volatile
     private var pidMaskTrusted = false
-
-    private data class FuelReading(val raw: Int)
 
     /**
      * Última lectura válida de un PID con su marca de tiempo.
@@ -119,62 +110,6 @@ class Elm327Client(private val context: Context) {
                 }
             } catch (_: Exception) {
                 ObdConsole.info("= No se pudo releer fallas: adaptador sin respuesta")
-            }
-        }
-    }
-
-    /**
-     * Sonda de SOLO LECTURA del PID 012F (nivel de gasolina).
-     * Nunca borra ni configura nada; el resultado se explica en la consola.
-     */
-    fun probeFuel() {
-        if (!isLive()) {
-            ObdConsole.info("= Sin conexión con el adaptador. Enciende el contacto y verifica el OBDII.")
-            return
-        }
-        onceQueue.add {
-            if (ObdRepository.current.demo) {
-                ObdConsole.info("= Modo demo: conecta el adaptador real para probar 012F")
-                return@add
-            }
-            val resp = sendCommand("012F", 2500L)
-            val bytes = payload(resp, "412F")
-            if (bytes != null && bytes.isNotEmpty()) {
-                val pct = bytes[0] * 100f / 255f
-                ObdRepository.publish(ObdRepository.current.copy(fuelPct = pct))
-                ObdConsole.info("= ¡NIVEL REAL! ${pct.roundToInt()} % — tu ECU sí entrega 012F")
-            } else {
-                ObdConsole.info("= 012F → SIN DATOS. Tu ECU no entrega nivel de gasolina.")
-                ObdConsole.info("= El flotador vive en el cuadro (dirección 17); el modo OBD genérico no lo alcanza. Solo VCDS/OBDeleven lo leen.")
-            }
-        }
-    }
-
-    /**
-     * Lee el nivel real de combustible desde el **cuadro de instrumentos**
-     * (UDS, CAN 0x714 → 0x77E, DID 0x2206). El motor no expone el nivel por
-     * OBD-II PID 2F en este coche; el cuadro sí lo tiene.
-     *
-     * Es de solo lectura. Al terminar restaura el adaptador a OBD-II normal.
-     */
-    fun probeFuelUds() {
-        if (!isLive()) {
-            ObdConsole.info("= Sin conexión con el adaptador. Enciende el contacto y verifica el OBDII.")
-            return
-        }
-        onceQueue.add {
-            if (ObdRepository.current.demo) {
-                ObdConsole.info("= Modo demo: desactívalo para leer el nivel real del cuadro")
-                return@add
-            }
-            val did = Prefs.fuelUdsDid(context)
-            ObdConsole.info("= Leyendo nivel UDS DID 0x%04X en el cuadro (0x714)…".format(did))
-            val reading = readFuelUds(log = true)
-            if (reading != null) {
-                publishFuel(reading.raw, "UDS 0x%04X".format(did))
-            } else {
-                ObdConsole.info("= UDS 0x%04X sin respuesta. Escaneando 0x2200–0x2210…".format(did))
-                scanFuelDids()
             }
         }
     }
@@ -268,8 +203,6 @@ class Elm327Client(private val context: Context) {
             val throttle = (12 + 8 * sin(t / 2.2)).toFloat().coerceIn(0f, 100f)
             val coolant = (88 + 2 * sin(t / 12)).toFloat()
             val intake = (31 + 2 * sin(t / 9)).toFloat()
-            val speed = (12 + 10 * sin(t / 5)).toInt().coerceAtLeast(0)
-            val fuel = (62 - t / 120).toFloat().coerceIn(0f, 100f)
             val battery = (14.1 + 0.15 * sin(t / 4)).toFloat()
 
             ObdRepository.publish(
@@ -282,13 +215,8 @@ class Elm327Client(private val context: Context) {
                     loadPct = load,
                     throttlePct = throttle,
                     intakeC = intake,
-                    speedKmh = speed,
-                    fuelPct = fuel,
-                    fuelLevelPct = fuel,
-                    fuelLevelLiters = fuel * 45f / 100f,
-                    fuelRaw = (fuel * 0.9f).toInt(),
-                    fuelSource = "DEMO",
                     batteryV = battery,
+                    fuelLevelPct = 62f,
                     milOn = false,
                     dtcCount = 0,
                     dtcs = emptyList(),
@@ -341,9 +269,9 @@ class Elm327Client(private val context: Context) {
                         throw IOException("OBD link lost")
                     }
                     val now = SystemClock.elapsedRealtime()
-                    // Sondeo ligero: RPM y velocidad cada ciclo; carga y
-                    // acelerador cada 2. En BLE/v1.5, 10 consultas por segundo
-                    // agotan la ECU (NO DATA tras las primeras).
+                    // Sondeo ligero: RPM cada ciclo; carga y acelerador cada 8.
+                    // La velocidad ya no se pide: este coche no responde 010D y
+                    // el velocímetro usa el GPS.
                     val rpm = if (supports(0x0C)) queryValue("010C", "410C") { bytes ->
                         if (bytes.size >= 2) {
                             (((bytes[0] * 256) + bytes[1]) / 4).toFloat()
@@ -358,14 +286,10 @@ class Elm327Client(private val context: Context) {
                     val throttle = if (slowCounter % 8 == 0 && supports(0x11)) queryValue("0111", "4111") { bytes ->
                         if (bytes.isNotEmpty()) bytes[0] * 100f / 255f else null
                     } else null
-                    val speed = if (slowCounter % 2 == 0 && supports(0x0D)) queryValue("010D", "410D") { bytes ->
-                        if (bytes.isNotEmpty()) bytes[0].toFloat() else null
-                    } else null
 
                     fast.put(K_RPM, rpm, now)
                     fast.put(K_LOAD, load, now)
                     fast.put(K_THROTTLE, throttle, now)
-                    fast.put(K_SPEED, speed, now)
 
                     // Bloque lento completo cada 10 ciclos (~10 s con sleep
                     // 1000 ms): puebla el dashboard tras cada reconexión y
@@ -376,9 +300,6 @@ class Elm327Client(private val context: Context) {
                         } else null
                         val intake = if (supports(0x0F)) queryValue("010F", "410F") { bytes ->
                             if (bytes.isNotEmpty()) (bytes[0] - 40).toFloat() else null
-                        } else null
-                        val fuel = if (supports(0x2F)) queryValue("012F", "412F") { bytes ->
-                            if (bytes.isNotEmpty()) bytes[0] * 100f / 255f else null
                         } else null
                         val battery = (if (supports(0x42)) queryValue("0142", "4142") { bytes ->
                             if (bytes.size >= 2) ((bytes[0] * 256) + bytes[1]) / 1000f else null
@@ -391,67 +312,36 @@ class Elm327Client(private val context: Context) {
                         } else null
                         slow.put(K_COOLANT, coolant, now)
                         slow.put(K_INTAKE, intake, now)
-                        slow.put(K_FUEL, fuel, now)
                         slow.put(K_BATTERY, battery, now)
                         slow.put(K_TRIM, fuelTrim, now)
                         slow.put(K_TIMING, timing, now)
-                        // Nivel real del cuadro por UDS (cada 60 s; cambia lento).
-                        val nowFuel = SystemClock.elapsedRealtime()
-                        if (Prefs.fuelUdsEnabled(context) && nowFuel - lastFuelUdsMs > 60_000L) {
-                            lastFuelUdsMs = nowFuel
-                            val reading = readFuelUds(log = false)
-                            val pct = reading?.let { fuelPctFromRaw(it.raw) }
-                            if (reading != null && pct != null) {
-                                lastFuelOkMs = nowFuel
-                                last = last.copy(
-                                    fuelRaw = reading.raw,
-                                    fuelLevelPct = pct,
-                                    fuelLevelLiters = pct * Prefs.fuelTankLiters(context) / 100f,
-                                    fuelSource = "UDS"
-                                )
-                            } else if (last.fuelSource == "UDS" &&
-                                nowFuel - lastFuelOkMs > FUEL_UDS_TTL_MS
-                            ) {
-                                // Sin respuesta durante demasiado tiempo: deja de
-                                // mostrar un nivel viejo.
-                                last = last.copy(
-                                    fuelRaw = null,
-                                    fuelLevelPct = null,
-                                    fuelLevelLiters = null,
-                                    fuelSource = null
-                                )
-                            }
-                        }
                     }
 
                     // Un valor solo sigue visible mientras esté vigente: si la
-                    // ECU deja de contestar, el campo pasa a "sin lectura" y el
-                    // velocímetro puede caer a CAN o GPS.
+                    // ECU deja de contestar, el campo pasa a "sin lectura".
                     last = last.copy(
                         connected = true,
                         rpm = fast.get(K_RPM, now, FAST_TTL_MS)?.toInt(),
                         loadPct = fast.get(K_LOAD, now, FAST_TTL_MS),
                         throttlePct = fast.get(K_THROTTLE, now, FAST_TTL_MS),
-                        speedKmh = fast.get(K_SPEED, now, FAST_TTL_MS)?.toInt(),
                         coolantC = slow.get(K_COOLANT, now, SLOW_TTL_MS),
                         intakeC = slow.get(K_INTAKE, now, SLOW_TTL_MS),
-                        fuelPct = slow.get(K_FUEL, now, SLOW_TTL_MS),
                         fuelTrimPct = slow.get(K_TRIM, now, SLOW_TTL_MS),
                         timingAdvanceDeg = slow.get(K_TIMING, now, SLOW_TTL_MS),
                         batteryV = slow.get(K_BATTERY, now, SLOW_TTL_MS),
                         updatedAtMs = now
                     )
-                    ObdRepository.publish(last)
+                    if (alive(gen)) ObdRepository.publish(last)
                     Log.d(
                         TAG,
-                        "telemetry rpm=${last.rpm} coolant=${last.coolantC} speed=${last.speedKmh} " +
-                            "load=${last.loadPct} throttle=${last.throttlePct} fuel=${last.fuelPct} " +
+                        "telemetry rpm=${last.rpm} coolant=${last.coolantC} " +
+                            "load=${last.loadPct} throttle=${last.throttlePct} " +
                             "trim=${last.fuelTrimPct} timing=${last.timingAdvanceDeg} bat=${last.batteryV}"
                     )
                     // Si la ECU no responde en varios ciclos seguidos (todos
                     // los rápidos null) se fuerza reapertura en vez de quedarse
                     // en NO DATA para siempre.
-                    if (rpm == null && load == null && throttle == null && speed == null) {
+                    if (rpm == null && load == null && throttle == null) {
                         silentCycles++
                         if (silentCycles >= 8) {
                             ObdConsole.info("= La ECU no responde (NO DATA)… reconectando adaptador")
@@ -476,6 +366,9 @@ class Elm327Client(private val context: Context) {
                 Log.w(TAG, "OBD session: ${e.message}")
                 fast.clear()
                 slow.clear()
+                // Una sesión vieja no debe pisar a la nueva ni cerrarle el
+                // socket: stop()/connect() ya cerraron lo suyo.
+                if (!alive(gen)) break
                 val msg = if (e.message?.contains("BLE") == true || e.message?.contains("no-OBD") == true) {
                     e.message ?: "Dispositivo BLE o no-OBD (requiere ELM327 SPP clásico)"
                 } else {
@@ -489,7 +382,7 @@ class Elm327Client(private val context: Context) {
                     Prefs.setObdMac(context, null)
                     connectFailures = 0
                 }
-                if (alive(gen)) Thread.sleep(5000L)
+                Thread.sleep(5000L)
             }
         }
     }
@@ -538,7 +431,7 @@ class Elm327Client(private val context: Context) {
             val retry = sendCommand("0100", 5000L)
             Log.d(TAG, "0100 (retry ATSP0): ${retry.replace("\n", " ").take(120)}")
         }
-        // Discover PIDs 0x21–0x40 (includes fuel level 0x2F) and 0x41–0x60.
+        // Discover PIDs 0x21–0x40 and 0x41–0x60 for diagnostics.
         val pids21 = sendCommand("0120", 2500L)
         Log.d(TAG, "0120: ${pids21.replace("\n", " ").take(120)}")
         val pids41 = sendCommand("0140", 2500L)
@@ -568,9 +461,9 @@ class Elm327Client(private val context: Context) {
      * La máscara 0100/0120/0140 se conserva solo para diagnóstico.
      *
      * En clones ELM327 y en respuestas multi-ECU la máscara llega incompleta:
-     * se observó que 010D (velocidad) y 012F (combustible) desaparecían aunque
-     * la ECU sí respondía. Ocultar lecturas por esa máscara es peor que perder
-     * unos milisegundos en un PID no soportado, así que se consulta todo.
+     * se observó que algunos PIDs desaparecían aunque la ECU sí respondía.
+     * Ocultar lecturas por esa máscara es peor que perder unos milisegundos en
+     * un PID no soportado, así que se consulta todo.
      */
     private fun supports(pid: Int): Boolean = true
 
@@ -933,167 +826,6 @@ class Elm327Client(private val context: Context) {
         }
     }
 
-    // ------------------------------------------------------------------
-    // Nivel de combustible real por UDS (cuadro de instrumentos, 0x714)
-    // ------------------------------------------------------------------
-
-    /**
-     * Petición UDS de solo lectura al cuadro (0x714 → 0x77E):
-     * `22 2206` devuelve el nivel de combustible en **litros** (raw directo,
-     * p. ej. 2C = 44 L). El cuadro del Ibiza 6J es UDS VDO
-     * (`EV_Kombi_UDS_VDD_RM09`); el motor no entrega PID 2F.
-     *
-     * La secuencia raw (`ATCAF0` + `03 22 22 06 55 55 55 55` + flow control)
-     * es la que funciona en estos clones; dejar que el ELM327 auto-formatee
-     * la petición suele devolver NO DATA.
-     */
-    private fun readFuelUds(log: Boolean): FuelReading? {
-        if (!isLive()) return null
-        val did = Prefs.fuelUdsDid(context)
-        val req = "22 %04X".format(did)
-        return try {
-            sendCommand("ATSP6", 700L)
-            sendCommand("ATSH714", 500L)
-            val cra = sendCommand("ATCRA77E", 650L)
-            if (cra.contains("?")) {
-                // Clones sin ATCRA: filtro/máscara manual para 0x77E.
-                sendCommand("ATCF77E", 450L)
-                sendCommand("ATCM7FF", 450L)
-            }
-            // Secuencia UDS VAG probada: frame ISO-TP completo con PCI 0x03,
-            // padding 0x55 y flow control explícito hacia 0x714.
-            sendCommand("ATFCSH714", 450L)
-            sendCommand("ATFCSD300000", 450L)
-            sendCommand("ATFCSM1", 450L)
-            sendCommand("ATAL", 450L)
-            val caf = sendCommand("ATCAF0", 450L)
-            // Un MINI ELM327 v1.5 que no soporte ATCAF0 devuelve "?".
-            // En ese caso el frame raw no se puede enviar: usar auto-formato.
-            if (caf.isNotBlank() && !caf.contains("?")) {
-                val rawFrame = "03 22 %04X 55 55 55 55".format(did)
-                val rawResp = sendCommand(rawFrame, 1800L)
-                if (log) ObdConsole.info("= UDS raw $rawFrame → ${oneLine(rawResp)}")
-                val raw2 = parseUdsFuel(rawResp, did)
-                if (raw2 != null) return FuelReading(raw2)
-            } else if (log) {
-                ObdConsole.info("= Este clon no soporta ATCAF0; probando auto-formato")
-            }
-
-            // Fallback: petición auto-formateada y sesión extendida. Algunos
-            // clones no aceptan ATCAF0 pero sí el formato normal.
-            sendCommand("ATCAF1", 400L)
-            var resp = sendCommand(req, 1800L)
-            if (log) ObdConsole.info("= UDS $req → ${oneLine(resp)}")
-            if (isNegative(resp)) {
-                val session = sendCommand("1003", 1200L)
-                if (log) ObdConsole.info("= UDS 1003 → ${oneLine(session)}")
-                resp = sendCommand(req, 1800L)
-                if (log) ObdConsole.info("= UDS $req (ext) → ${oneLine(resp)}")
-            }
-            val raw = parseUdsFuel(resp, did)
-            if (raw == null && log) {
-                ObdConsole.info("= Sin nivel válido. Respuesta: ${oneLine(resp)}")
-            }
-            raw?.let { FuelReading(it) }
-        } catch (e: Exception) {
-            Log.w(TAG, "UDS fuel: ${e.message}")
-            null
-        } finally {
-            restoreObd()
-        }
-    }
-
-    /** Diagnóstico: prueba DIDs 0x2200–0x2210 y deja ver cuáles responden. */
-    private fun scanFuelDids() {
-        if (!isLive()) return
-        try {
-            sendCommand("ATSP6", 700L)
-            sendCommand("ATSH714", 500L)
-            val cra = sendCommand("ATCRA77E", 650L)
-            if (cra.contains("?")) {
-                sendCommand("ATCF77E", 450L)
-                sendCommand("ATCM7FF", 450L)
-            }
-            sendCommand("1003", 1200L)
-            for (did in 0x2200..0x2210) {
-                val resp = sendCommand("22 %04X".format(did), 900L)
-                val raw = parseUdsFuel(resp, did)
-                if (raw != null) {
-                    ObdConsole.info("= DID 0x%04X → raw=$raw (%s)".format(did, oneLine(resp)))
-                }
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "scan DIDs: ${e.message}")
-        } finally {
-            restoreObd()
-        }
-    }
-
-    private fun publishFuel(raw: Int, source: String) {
-        val pct = fuelPctFromRaw(raw) ?: return
-        val liters = pct * Prefs.fuelTankLiters(context) / 100f
-        ObdRepository.publish(
-            ObdRepository.current.copy(
-                fuelRaw = raw,
-                fuelLevelPct = pct,
-                fuelLevelLiters = liters,
-                fuelSource = source
-            )
-        )
-        ObdConsole.info("= Nivel real: raw=$raw → %.1f L (%.0f %%) · $source".format(liters, pct))
-    }
-
-    /**
-     * DID 0x2206 devuelve el nivel en **litros** en los cuadros VAG UDS
-     * (Octavia/Yeti/Ibiza); el Touareg NF usa medias unidades, por eso la
-     * calibración de tanque lleno/vacío es ajustable.
-     */
-    private fun fuelPctFromRaw(raw: Int): Float? {
-        if (raw < 0 || raw > 255) return null
-        val full = Prefs.fuelFullRaw(context)
-        val empty = Prefs.fuelEmptyRaw(context)
-        val span = full - empty
-        if (span <= 0) return null
-        return ((raw - empty) * 100f / span).coerceIn(0f, 100f)
-    }
-
-    /** Busca `62 <DID>` en la respuesta y devuelve el primer byte de dato. */
-    private fun parseUdsFuel(response: String, did: Int): Int? {
-        val clean = response.uppercase()
-            .replace(" ", "")
-            .replace("\r", "")
-            .replace("\n", "")
-            .replace(">", "")
-        if (clean.contains("7F22")) return null
-        val prefix = "62%04X".format(did)
-        val index = clean.indexOf(prefix)
-        if (index < 0) return null
-        val rest = clean.substring(index + prefix.length)
-        if (rest.length < 2) return null
-        return rest.substring(0, 2).toIntOrNull(16)
-    }
-
-    private fun isNegative(response: String): Boolean {
-        val clean = response.uppercase().replace(" ", "").replace("\r", "").replace("\n", "")
-        return clean.contains("7F22")
-    }
-
-    private fun restoreObd() {
-        sendCommand("ATFCSM0", 350L)
-        sendCommand("ATCAF1", 350L)
-        sendCommand("ATCRA7E8", 450L)
-        sendCommand("ATSH7DF", 400L)
-        // ATZ limpia filtros ATCRA/ATCM left-over del UDS: sin él, un filtro
-        // 0x77E del cuadro dejaba los PIDs del motor en NO DATA.
-        sendCommand("ATZ", 800L)
-        try {
-            Thread.sleep(700L)
-        } catch (_: Exception) {
-        }
-        sendCommand("ATSP6", 500L)
-        sendCommand("ATH0", 300L)
-    }
-
     private fun oneLine(text: String): String = text
         .replace("\r", " ")
         .replace("\n", " ")
@@ -1124,19 +856,14 @@ class Elm327Client(private val context: Context) {
         /** PIDs rápidos: caducan antes para no mostrar valores viejos. */
         private const val FAST_TTL_MS = 10_000L
 
-        /** PIDs lentos (cada 2 ciclos, con posibles timeouts): más margen. */
+        /** PIDs lentos (cada 10 ciclos, con posibles timeouts): más margen. */
         private const val SLOW_TTL_MS = 120_000L
-
-        /** Nivel UDS del cuadro: se relee cada 60 s; 3 min sin respuesta lo borra. */
-        private const val FUEL_UDS_TTL_MS = 180_000L
 
         private const val K_RPM = "rpm"
         private const val K_LOAD = "load"
         private const val K_THROTTLE = "throttle"
-        private const val K_SPEED = "speed"
         private const val K_COOLANT = "coolant"
         private const val K_INTAKE = "intake"
-        private const val K_FUEL = "fuel"
         private const val K_BATTERY = "battery"
         private const val K_TRIM = "trim"
         private const val K_TIMING = "timing"

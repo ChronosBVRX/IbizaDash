@@ -1,183 +1,456 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    IbizaDash continuous canvas.
-    One Activity, one persistent MapView, one Dock. Focus only animates the split
-    fraction (55/45 cockpit, 80/20 navigation, 25/75 module) and toggles layers.
+    IbizaDash Home (3 columnas) + Dock 6.
+    Columnas 40% izq | 30% centro | 30% der. Terminan a la misma altura,
+    con 12dp de aire respecto al dock inferior (76dp + 12dp de margen).
+    Un solo MapView persistente (mini-widget en Inicio, completo en NAV).
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/homeRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/obsidian_900">
+    android:background="@drawable/bg_screen">
 
     <LinearLayout
         android:id="@+id/canvas"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:baselineAligned="false"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:paddingBottom="88dp">
 
-        <!-- LEFT: map never leaves the tree -->
+        <!-- ===== Columna izquierda 40%: tiempo + mini-mapa grande + música ===== -->
         <FrameLayout
             android:id="@+id/leftPane"
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="0.55">
-
-            <org.osmdroid.views.MapView
-                android:id="@+id/map"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent" />
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="@drawable/bg_map_vignette"
-                android:clickable="false"
-                android:focusable="false" />
-
-            <ImageView
-                android:id="@+id/remoteMap"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="@color/obsidian_900"
-                android:contentDescription="Mapa renderizado por el teléfono"
-                android:scaleType="centerCrop"
-                android:visibility="gone" />
-
-            <!-- Flecha de posición local sobre el frame remoto (Fase 2):
-                 el teléfono centra la ventana en el coche, así que la flecha
-                 va fija en el centro y enmascara el salto entre frames. -->
-            <FrameLayout
-                android:id="@+id/remoteArrow"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_gravity="center"
-                android:background="@drawable/bg_play_button"
-                android:visibility="gone">
-
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="Tu posición"
-                    android:src="@drawable/ic_nav"
-                    android:tint="#FFFFFF" />
-            </FrameLayout>
-
-            <!-- Origen del mapa: TELÉFONO (frame remoto) o LOCAL (osmdroid).
-                 Sin esto el cambio de fuente a los 5 s es invisible. -->
-            <TextView
-                android:id="@+id/mapSourceChip"
-                android:layout_width="wrap_content"
-                android:layout_height="26dp"
-                android:layout_gravity="top|end"
-                android:layout_marginTop="20dp"
-                android:layout_marginEnd="16dp"
-                android:background="@drawable/bg_chip_glass"
-                android:fontFamily="sans-serif-medium"
-                android:gravity="center"
-                android:letterSpacing="0.08"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
-                android:text="MAPA LOCAL"
-                android:textColor="@color/text_muted"
-                android:textSize="11sp" />
-
-            <TextView
-                android:id="@+id/gpsStateChip"
-                android:layout_width="wrap_content"
-                android:layout_height="26dp"
-                android:layout_gravity="top|end"
-                android:layout_marginTop="52dp"
-                android:layout_marginEnd="16dp"
-                android:background="@drawable/bg_chip_glass"
-                android:fontFamily="sans-serif-medium"
-                android:gravity="center"
-                android:letterSpacing="0.04"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
-                android:text="GPS en vivo"
-                android:textColor="@color/accent_sky"
-                android:textSize="10sp" />
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="150dp"
-                android:background="@drawable/bg_scrim_top" />
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="200dp"
-                android:layout_gravity="bottom"
-                android:background="@drawable/bg_scrim_bottom" />
+            android:layout_marginBottom="12dp"
+            android:layout_weight="0.40">
 
             <LinearLayout
-                android:id="@+id/clockBlock"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="top|start"
+                android:id="@+id/leftHome"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
                 android:orientation="vertical"
-                android:paddingStart="28dp"
-                android:paddingTop="20dp"
-                android:paddingEnd="28dp">
+                android:paddingStart="16dp"
+                android:paddingTop="16dp"
+                android:paddingEnd="16dp"
+                android:paddingBottom="0dp">
 
-                <TextView
-                    android:id="@+id/clock"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="sans-serif-medium"
-                    android:fontFeatureSettings="tnum"
-                    android:includeFontPadding="false"
-                    android:letterSpacing="0.01"
-                    android:text="--:--"
-                    android:textColor="@color/text_primary"
-                    android:textSize="34sp" />
-
-                <TextView
-                    android:id="@+id/date"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:fontFamily="sans-serif"
-                    android:text=""
-                    android:textColor="@color/text_muted"
-                    android:textSize="11sp" />
-
+                <!-- Hora + saludo/fecha en la misma fila: el mapa gana el
+                     alto que antes ocupaban las dos líneas bajo el reloj. -->
                 <LinearLayout
-                    android:layout_width="wrap_content"
+                    android:id="@+id/clockBlock"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:gravity="center_vertical"
+                    android:gravity="bottom"
                     android:orientation="horizontal">
 
-                    <ImageView
-                        android:id="@+id/weatherIcon"
-                        android:layout_width="16dp"
-                        android:layout_height="16dp"
-                        android:contentDescription="Clima"
-                        android:src="@drawable/ic_weather_sun"
-                        android:tint="@color/accent_sky" />
-
-                    <TextView
-                        android:id="@+id/weatherTop"
+                    <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
-                        android:fontFeatureSettings="tnum"
-                        android:text="--°"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
+                        android:gravity="bottom"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/clock"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif-light"
+                            android:fontFeatureSettings="tnum"
+                            android:includeFontPadding="false"
+                            android:letterSpacing="-0.02"
+                            android:text="--:--"
+                            android:textColor="@color/text_primary"
+                            android:textSize="54sp" />
+
+                        <TextView
+                            android:id="@+id/amPm"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:layout_marginBottom="12dp"
+                            android:fontFamily="sans-serif-medium"
+                            android:text="AM"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="18sp" />
+                    </LinearLayout>
+
+                    <!-- Dos párrafos compactos: saludo y fecha. -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_marginBottom="4dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/greeting"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:ellipsize="end"
+                            android:fontFamily="sans-serif-medium"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:text="Buenos días"
+                            android:textColor="@color/text_primary"
+                            android:textSize="18sp" />
+
+                        <TextView
+                            android:id="@+id/date"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:ellipsize="end"
+                            android:fontFamily="sans-serif"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:text=""
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp" />
+                    </LinearLayout>
                 </LinearLayout>
+
+                <!-- Mini-mapa grande y útil (crece con peso 1) -->
+                <FrameLayout
+                    android:id="@+id/miniMapContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_marginTop="12dp"
+                    android:layout_marginBottom="12dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_card_premium"
+                    android:clipToOutline="true">
+
+                    <View
+                        android:id="@+id/perspectiveBackdrop"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@color/map_nav_backdrop"
+                        android:visibility="gone" />
+
+                    <com.chronosbvrx.ibizadash.ui.PerspectiveMapView
+                        android:id="@+id/map"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+
+                    <ImageView
+                        android:id="@+id/remoteMap"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@color/bg_screen"
+                        android:contentDescription="Mapa renderizado por el teléfono"
+                        android:scaleType="centerCrop"
+                        android:visibility="gone" />
+
+                    <FrameLayout
+                        android:id="@+id/remoteArrow"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/bg_play_button"
+                        android:visibility="gone">
+
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_gravity="center"
+                            android:contentDescription="Tu posición"
+                            android:src="@drawable/ic_nav"
+                            android:tint="#FFFFFF" />
+                    </FrameLayout>
+
+                    <!-- Coche, pin y horizonte en espacio de pantalla: no se
+                         aplastan con la perspectiva de la base. -->
+                    <com.chronosbvrx.ibizadash.ui.PerspectiveNavOverlayView
+                        android:id="@+id/perspectiveOverlay"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/mapSourceChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="26dp"
+                        android:layout_gravity="top|end"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/bg_chip_glass"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:letterSpacing="0.08"
+                        android:paddingStart="10dp"
+                        android:paddingEnd="10dp"
+                        android:text="MAPA LOCAL"
+                        android:textColor="@color/text_muted"
+                        android:textSize="11sp"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/gpsStateChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="26dp"
+                        android:layout_gravity="top|end"
+                        android:layout_marginTop="40dp"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/bg_chip_glass"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:letterSpacing="0.04"
+                        android:paddingStart="10dp"
+                        android:paddingEnd="10dp"
+                        android:text="GPS en vivo"
+                        android:textColor="@color/accent_primary"
+                        android:textSize="10sp"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/mapLocationPill"
+                        android:layout_width="wrap_content"
+                        android:layout_height="24dp"
+                        android:layout_gravity="top|start"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/bg_card_premium"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:paddingStart="10dp"
+                        android:paddingEnd="10dp"
+                        android:text="Tu ubicación"
+                        android:textColor="@color/text_primary"
+                        android:textSize="11sp" />
+                </FrameLayout>
+
+                <!-- Música pegada al mapa (sin hueco) -->
+                <FrameLayout
+                    android:id="@+id/mediaCard"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="0dp"
+                    android:background="@drawable/bg_card_premium"
+                    android:elevation="@dimen/elev_card"
+                    android:padding="12dp">
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="88dp"
+                        android:layout_gravity="top"
+                        android:alpha="0.12"
+                        android:background="@drawable/bg_ambient_coral"
+                        android:clickable="false"
+                        android:focusable="false" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <FrameLayout
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:background="@drawable/bg_media_stage"
+                            android:padding="3dp">
+
+                            <ImageView
+                                android:id="@+id/albumArt"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:background="@drawable/bg_album"
+                                android:clipToOutline="true"
+                                android:contentDescription="@string/media_title"
+                                android:padding="9dp"
+                                android:scaleType="centerInside"
+                                android:src="@drawable/ic_media"
+                                android:tint="@color/text_muted" />
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="10dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <View
+                                    android:layout_width="6dp"
+                                    android:layout_height="6dp"
+                                    android:background="@drawable/bg_dock_indicator" />
+
+                                <TextView
+                                    android:id="@+id/mediaDevice"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="6dp"
+                                    android:layout_weight="1"
+                                    android:ellipsize="end"
+                                    android:maxLines="1"
+                                    android:text="Música"
+                                    android:textColor="@color/accent_primary"
+                                    android:textSize="11sp" />
+
+                                <ImageView
+                                    android:id="@+id/mediaSourceIcon"
+                                    android:layout_width="15dp"
+                                    android:layout_height="15dp"
+                                    android:contentDescription="App de reproducción"
+                                    android:src="@drawable/ic_media"
+                                    android:tint="@color/accent_primary" />
+                            </LinearLayout>
+
+                            <TextView
+                                android:id="@+id/mediaTitle"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:ellipsize="end"
+                                android:maxLines="1"
+                                android:text="@string/media_title"
+                                android:textColor="@color/text_primary"
+                                android:textSize="16sp" />
+
+                            <TextView
+                                android:id="@+id/mediaSubtitle"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="1dp"
+                                android:ellipsize="end"
+                                android:maxLines="1"
+                                android:text="@string/media_subtitle"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <ImageButton
+                            android:id="@+id/btnPrev"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="Anterior"
+                            android:padding="12dp"
+                            android:src="@drawable/ic_prev"
+                            android:tint="@color/text_secondary" />
+
+                        <ImageButton
+                            android:id="@+id/btnPlay"
+                            android:layout_width="52dp"
+                            android:layout_height="52dp"
+                            android:layout_marginStart="4dp"
+                            android:layout_marginEnd="4dp"
+                            android:background="@drawable/bg_play_button"
+                            android:contentDescription="Reproducir"
+                            android:elevation="6dp"
+                            android:padding="13dp"
+                            android:src="@drawable/ic_play"
+                            android:tint="#FFFFFF" />
+
+                        <ImageButton
+                            android:id="@+id/btnNext"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="Siguiente"
+                            android:padding="12dp"
+                            android:src="@drawable/ic_next"
+                            android:tint="@color/text_secondary" />
+                    </LinearLayout>
+
+                    <ProgressBar
+                        android:id="@+id/mediaProgress"
+                        style="?android:attr/progressBarStyleHorizontal"
+                        android:layout_width="match_parent"
+                        android:layout_height="3dp"
+                        android:layout_marginTop="8dp"
+                        android:max="1000"
+                        android:progressDrawable="@drawable/bg_media_progress" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/mediaTime"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:fontFeatureSettings="tnum"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text=""
+                            android:textSize="11sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:gravity="center"
+                        android:orientation="horizontal"
+                        android:visibility="gone">
+
+                        <ImageButton
+                            android:id="@+id/btnPrevCenter"
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="Anterior"
+                            android:padding="12dp"
+                            android:src="@drawable/ic_prev"
+                            android:tint="@color/text_secondary" />
+
+                        <ImageButton
+                            android:id="@+id/btnPlayCenter"
+                            android:layout_width="64dp"
+                            android:layout_height="64dp"
+                            android:layout_marginStart="8dp"
+                            android:layout_marginEnd="8dp"
+                            android:background="@drawable/bg_play_button"
+                            android:contentDescription="Reproducir"
+                            android:elevation="6dp"
+                            android:padding="14dp"
+                            android:src="@drawable/ic_play"
+                            android:tint="#FFFFFF" />
+
+                        <ImageButton
+                            android:id="@+id/btnNextCenter"
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="Siguiente"
+                            android:padding="12dp"
+                            android:src="@drawable/ic_next"
+                            android:tint="@color/text_secondary" />
+                    </LinearLayout>
+                    </LinearLayout>
+                </FrameLayout>
             </LinearLayout>
 
-            <!-- Turn-by-turn pill: visible whenever the cockpit loses focus -->
+            <!-- Turn-by-turn pill -->
             <LinearLayout
                 android:id="@+id/navPill"
                 android:layout_width="wrap_content"
                 android:layout_height="56dp"
                 android:layout_gravity="top|start"
-                android:layout_marginStart="28dp"
-                android:layout_marginTop="124dp"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="200dp"
                 android:background="@drawable/bg_nav_pill"
                 android:clickable="true"
                 android:focusable="true"
@@ -224,7 +497,7 @@
                         android:layout_height="wrap_content"
                         android:fontFamily="sans-serif-medium"
                         android:id="@+id/navPillTitle"
-                    android:text="Sin destino activo"
+                        android:text="Sin destino activo"
                         android:textColor="@color/text_primary"
                         android:textSize="12sp" />
 
@@ -232,19 +505,18 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:id="@+id/navPillSub"
-                    android:text="Toca para ver el mapa"
+                        android:text="Toca para ver el mapa"
                         android:textColor="@color/text_muted"
                         android:textSize="11sp" />
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- Persistent speed capsule for module focus -->
             <LinearLayout
                 android:id="@+id/hudPill"
                 android:layout_width="wrap_content"
                 android:layout_height="54dp"
                 android:layout_gravity="bottom|start"
-                android:layout_marginStart="24dp"
+                android:layout_marginStart="16dp"
                 android:layout_marginBottom="104dp"
                 android:background="@drawable/bg_hud_pill"
                 android:gravity="center_vertical"
@@ -288,29 +560,856 @@
                     android:textColor="#06121F"
                     android:textSize="13sp" />
 
-                <TextView
-                    android:id="@+id/hudPillFuel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
-                    android:fontFamily="sans-serif-medium"
-                    android:text="F --"
-                    android:textColor="@color/accent_cyan"
-                    android:textSize="12sp" />
             </LinearLayout>
 
-            <!-- Vista de navegación a pantalla completa (foco NAV) -->
             <include layout="@layout/view_nav_overlay" />
         </FrameLayout>
 
-        <!-- RIGHT: cockpit, mini HUD or focused module -->
+        <!-- ===== Columna central 30%: tarjeta hero unificada ===== -->
+        <FrameLayout
+            android:id="@+id/centerPane"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginBottom="12dp"
+            android:layout_weight="0.30"
+            android:clipChildren="false"
+            android:clipToPadding="false">
+
+            <LinearLayout
+                android:id="@+id/centerHome"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:orientation="vertical"
+                android:paddingStart="8dp"
+                android:paddingTop="16dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="0dp">
+
+                <!-- Tarjeta hero: header + escenario + divisor + velocímetro -->
+                <LinearLayout
+                    android:id="@+id/heroCockpitCard"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/bg_card_premium"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:elevation="@dimen/elev_card"
+                    android:orientation="vertical">
+
+                    <!-- 1. Header interno -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="16dp"
+                        android:paddingTop="12dp"
+                        android:paddingEnd="16dp"
+                        android:paddingBottom="8dp">
+
+                        <View
+                            android:layout_width="8dp"
+                            android:layout_height="8dp"
+                            android:background="@drawable/bg_hero_dot" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+                            android:ellipsize="end"
+                            android:fontFamily="sans-serif-medium"
+                            android:letterSpacing="0.10"
+                            android:maxLines="1"
+                            android:text="SEAT IBIZA · 2.0 STYLE"
+                            android:textColor="@color/text_primary"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/gear"
+                            android:layout_width="wrap_content"
+                            android:layout_height="28dp"
+                            android:background="@drawable/bg_pill"
+                            android:ellipsize="end"
+                            android:fontFamily="sans-serif-medium"
+                            android:gravity="center"
+                            android:maxLines="1"
+                            android:minWidth="84dp"
+                            android:paddingStart="12dp"
+                            android:paddingEnd="12dp"
+                            android:text="D · DRIVE"
+                            android:textColor="@color/text_primary"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <!-- 2. Escenario del auto: halo radial suave, sin elipses -->
+                    <FrameLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="155dp"
+                        android:clipChildren="false"
+                        android:clipToPadding="false">
+
+                        <View
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:background="@drawable/bg_hero_stage" />
+
+                        <ImageView
+                            android:id="@+id/carRender"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:layout_gravity="center"
+                            android:adjustViewBounds="true"
+                            android:contentDescription="SEAT Ibiza 2010"
+                            android:scaleType="fitCenter"
+                            android:src="@drawable/ibiza_off" />
+
+                        <View
+                            android:id="@+id/headlightGlow"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:background="@drawable/bg_headlight_glow"
+                            android:visibility="gone" />
+                    </FrameLayout>
+
+                    <!-- 3. Divisor sutil entre auto y velocímetro -->
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginStart="24dp"
+                        android:layout_marginEnd="24dp"
+                        android:alpha="0.5"
+                        android:background="@color/divider_card" />
+
+                    <!-- 4. Velocímetro Pro: ocupa el resto de la tarjeta -->
+                    <com.chronosbvrx.ibizadash.ui.ProSpeedometerView
+                        android:id="@+id/speedometer"
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="1"
+                        android:contentDescription="Velocímetro" />
+                </LinearLayout>
+            </LinearLayout>
+        </FrameLayout>
+
+        <!-- ===== Columna derecha 30%: BT + clima + OBD (o módulos) ===== -->
         <FrameLayout
             android:id="@+id/rightPane"
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="0.45">
+            android:layout_marginBottom="12dp"
+            android:layout_weight="0.30">
 
-            <include layout="@layout/view_cockpit" />
+            <LinearLayout
+                android:id="@+id/cockpitPanel"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:paddingStart="8dp"
+                android:paddingTop="8dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="36dp"
+                    android:gravity="center_vertical|end"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:id="@+id/btChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="32dp"
+                        android:background="@drawable/bg_card_premium"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="10dp"
+                        android:paddingEnd="10dp">
+
+                        <ImageView
+                            android:layout_width="14dp"
+                            android:layout_height="14dp"
+                            android:contentDescription="Bluetooth"
+                            android:src="@drawable/ic_bluetooth"
+                            android:tint="@color/accent_primary" />
+
+                        <TextView
+                            android:id="@+id/btStatus"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="6dp"
+                            android:layout_weight="1"
+                            android:ellipsize="end"
+                            android:fontFamily="sans-serif-medium"
+                            android:maxLines="1"
+                            android:text="Teléfono sin conectar"
+                            android:textColor="@color/text_primary"
+                            android:textSize="12sp" />
+
+                        <View
+                            android:id="@+id/btDivider"
+                            android:layout_width="1dp"
+                            android:layout_height="12dp"
+                            android:layout_marginStart="6dp"
+                            android:layout_marginEnd="6dp"
+                            android:background="@color/stroke_card"
+                            android:visibility="gone" />
+
+                        <LinearLayout
+                            android:id="@+id/btBatteryGroup"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <ImageView
+                                android:layout_width="12dp"
+                                android:layout_height="12dp"
+                                android:contentDescription="Batería"
+                                android:src="@drawable/ic_battery"
+                                android:tint="@color/green" />
+
+                            <ProgressBar
+                                android:id="@+id/btBatteryBar"
+                                style="?android:attr/progressBarStyleHorizontal"
+                                android:layout_width="26dp"
+                                android:layout_height="4dp"
+                                android:layout_marginStart="3dp"
+                                android:max="100"
+                                android:progress="87"
+                                android:progressDrawable="@drawable/bg_battery_progress" />
+
+                            <TextView
+                                android:id="@+id/btBattery"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="3dp"
+                                android:fontFeatureSettings="tnum"
+                                android:text="87%"
+                                android:textColor="@color/green"
+                                android:textSize="11sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <ImageButton
+                        android:id="@+id/btnSettings"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="4dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="Ajustes rápidos"
+                        android:padding="10dp"
+                        android:src="@drawable/ic_settings"
+                        android:tint="@color/text_secondary" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/weatherCard"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_marginTop="12dp"
+                    android:layout_marginBottom="12dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_card_premium"
+                    android:elevation="@dimen/elev_card"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/weatherCity"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:fontFamily="sans-serif-medium"
+                            android:text="Tu zona"
+                            android:textColor="@color/text_primary"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:id="@+id/weatherUpdated"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFeatureSettings="tnum"
+                            android:text=""
+                            android:textColor="@color/text_secondary"
+                            android:textSize="11sp"
+                            android:visibility="gone" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <ImageView
+                            android:id="@+id/weatherIcon"
+                            android:layout_width="40dp"
+                            android:layout_height="40dp"
+                            android:contentDescription="Clima"
+                            android:src="@drawable/ic_weather_sun"
+                            android:tint="@color/accent_primary" />
+
+                        <TextView
+                            android:id="@+id/weatherTop"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="10dp"
+                            android:fontFamily="sans-serif-light"
+                            android:fontFeatureSettings="tnum"
+                            android:includeFontPadding="false"
+                            android:text="--°"
+                            android:textColor="@color/text_primary"
+                            android:textSize="52sp" />
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="10dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:id="@+id/weatherDesc"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="sans-serif-medium"
+                                android:maxLines="2"
+                                android:text="Sin datos"
+                                android:textColor="@color/text_primary"
+                                android:textSize="14sp" />
+
+                            <TextView
+                                android:id="@+id/weatherFeels"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text=""
+                                android:textColor="@color/text_secondary"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginTop="12dp"
+                        android:layout_marginBottom="10dp"
+                        android:background="#14FFFFFF" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:baselineAligned="false"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:baselineAligned="false"
+                            android:orientation="horizontal">
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    style="@style/Label"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="MÁX / MÍN" />
+
+                                <TextView
+                                    android:id="@+id/weatherMaxMin"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="2dp"
+                                    android:fontFamily="sans-serif-medium"
+                                    android:fontFeatureSettings="tnum"
+                                    android:text="-- / --"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="14sp" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    style="@style/Label"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="HUMEDAD" />
+
+                                <TextView
+                                    android:id="@+id/weatherHumidity"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="2dp"
+                                    android:fontFamily="sans-serif-medium"
+                                    android:fontFeatureSettings="tnum"
+                                    android:text="--"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="14sp" />
+                            </LinearLayout>
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:baselineAligned="false"
+                            android:orientation="horizontal">
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    style="@style/Label"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="VIENTO" />
+
+                                <TextView
+                                    android:id="@+id/weatherWind"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="2dp"
+                                    android:fontFamily="sans-serif-medium"
+                                    android:fontFeatureSettings="tnum"
+                                    android:text="--"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="14sp" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    style="@style/Label"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="ACTUALIZADO" />
+
+                                <TextView
+                                    android:id="@+id/weatherUpdatedGrid"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="2dp"
+                                    android:fontFamily="sans-serif-medium"
+                                    android:fontFeatureSettings="tnum"
+                                    android:text="--"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="14sp" />
+                            </LinearLayout>
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/healthRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="0dp"
+                    android:background="@drawable/bg_card_premium"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            style="@style/Label"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="OBD · MOTOR" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Ver AUTO ›"
+                            android:textColor="@color/accent_primary"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <FrameLayout
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:background="@drawable/bg_icon_badge">
+
+                            <ImageView
+                                android:id="@+id/cockpitHealthIcon"
+                                android:layout_width="19dp"
+                                android:layout_height="19dp"
+                                android:layout_gravity="center"
+                                android:contentDescription="Salud del vehículo"
+                                android:src="@drawable/ic_shield_check"
+                                android:tint="@color/green" />
+                        </FrameLayout>
+
+                        <TextView
+                            android:id="@+id/cockpitHealth"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:layout_weight="1"
+                            android:fontFeatureSettings="tnum"
+                            android:maxLines="2"
+                            android:text="Salud: esperando datos OBD…"
+                            android:textColor="@color/text_primary"
+                            android:textSize="13sp" />
+
+                        <TextView
+                            android:id="@+id/headlightState"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFeatureSettings="tnum"
+                            android:text="Luces —"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:baselineAligned="false"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="3dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_pill"
+                            android:orientation="vertical"
+                            android:paddingStart="6dp"
+                            android:paddingTop="6dp"
+                            android:paddingEnd="6dp"
+                            android:paddingBottom="6dp">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <ImageView
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
+                                    android:contentDescription="Temperatura"
+                                    android:src="@drawable/ic_thermometer"
+                                    android:tint="@color/accent_teal" />
+
+                                <TextView
+                                    style="@style/Label"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="3dp"
+                                    android:ellipsize="end"
+                                    android:letterSpacing="0.02"
+                                    android:maxLines="1"
+                                    android:text="TEMP"
+                                    android:textSize="8sp" />
+                            </LinearLayout>
+
+                            <TextView
+                                android:id="@+id/obdCockpitTemp"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:fontFamily="sans-serif-medium"
+                                android:fontFeatureSettings="tnum"
+                                android:text="--"
+                                android:textColor="@color/text_primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <ProgressBar
+                                android:id="@+id/obdCockpitTempBar"
+                                style="?android:attr/progressBarStyleHorizontal"
+                                android:layout_width="match_parent"
+                                android:layout_height="4dp"
+                                android:layout_marginTop="3dp"
+                                android:max="100"
+                                android:progress="0"
+                                android:progressDrawable="@drawable/bg_obd_progress" />
+                        </LinearLayout>
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="3dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_pill"
+                            android:orientation="vertical"
+                            android:paddingStart="6dp"
+                            android:paddingTop="6dp"
+                            android:paddingEnd="6dp"
+                            android:paddingBottom="6dp">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <ImageView
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
+                                    android:contentDescription="Voltaje"
+                                    android:src="@drawable/ic_battery"
+                                    android:tint="@color/accent_teal" />
+
+                                <TextView
+                                    style="@style/Label"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="3dp"
+                                    android:ellipsize="end"
+                                    android:letterSpacing="0.02"
+                                    android:maxLines="1"
+                                    android:text="VOLT"
+                                    android:textSize="8sp" />
+                            </LinearLayout>
+
+                            <TextView
+                                android:id="@+id/obdCockpitVoltage"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:fontFamily="sans-serif-medium"
+                                android:fontFeatureSettings="tnum"
+                                android:text="--"
+                                android:textColor="@color/text_primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <ProgressBar
+                                android:id="@+id/obdCockpitVoltageBar"
+                                style="?android:attr/progressBarStyleHorizontal"
+                                android:layout_width="match_parent"
+                                android:layout_height="4dp"
+                                android:layout_marginTop="3dp"
+                                android:max="100"
+                                android:progress="0"
+                                android:progressDrawable="@drawable/bg_obd_progress" />
+                        </LinearLayout>
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="3dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_pill"
+                            android:orientation="vertical"
+                            android:paddingStart="6dp"
+                            android:paddingTop="6dp"
+                            android:paddingEnd="6dp"
+                            android:paddingBottom="6dp">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <ImageView
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
+                                    android:contentDescription="RPM"
+                                    android:src="@drawable/ic_gauge"
+                                    android:tint="@color/accent_teal" />
+
+                                <TextView
+                                    style="@style/Label"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="3dp"
+                                    android:ellipsize="end"
+                                    android:letterSpacing="0.02"
+                                    android:maxLines="1"
+                                    android:text="RPM"
+                                    android:textSize="8sp" />
+                            </LinearLayout>
+
+                            <TextView
+                                android:id="@+id/obdCockpitRpm"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:fontFamily="sans-serif-medium"
+                                android:fontFeatureSettings="tnum"
+                                android:text="--"
+                                android:textColor="@color/text_primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <ProgressBar
+                                android:id="@+id/obdCockpitRpmBar"
+                                style="?android:attr/progressBarStyleHorizontal"
+                                android:layout_width="match_parent"
+                                android:layout_height="4dp"
+                                android:layout_marginTop="3dp"
+                                android:max="100"
+                                android:progress="0"
+                                android:progressDrawable="@drawable/bg_obd_progress" />
+                        </LinearLayout>
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="3dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_pill"
+                            android:orientation="vertical"
+                            android:paddingStart="6dp"
+                            android:paddingTop="6dp"
+                            android:paddingEnd="6dp"
+                            android:paddingBottom="6dp">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <ImageView
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
+                                    android:contentDescription="Nivel de combustible"
+                                    android:src="@drawable/ic_fuel"
+                                    android:tint="@color/accent_teal" />
+
+                                <TextView
+                                    style="@style/Label"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="3dp"
+                                    android:ellipsize="end"
+                                    android:letterSpacing="0.02"
+                                    android:maxLines="1"
+                                    android:text="NIVEL"
+                                    android:textSize="8sp" />
+                            </LinearLayout>
+
+                            <TextView
+                                android:id="@+id/obdCockpitFuel"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:fontFamily="sans-serif-medium"
+                                android:fontFeatureSettings="tnum"
+                                android:text="--"
+                                android:textColor="@color/text_primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <ProgressBar
+                                android:id="@+id/obdCockpitFuelBar"
+                                style="?android:attr/progressBarStyleHorizontal"
+                                android:layout_width="match_parent"
+                                android:layout_height="4dp"
+                                android:layout_marginTop="3dp"
+                                android:max="100"
+                                android:progress="0"
+                                android:progressDrawable="@drawable/bg_obd_progress" />
+                        </LinearLayout>
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_pill"
+                            android:orientation="vertical"
+                            android:paddingStart="6dp"
+                            android:paddingTop="6dp"
+                            android:paddingEnd="6dp"
+                            android:paddingBottom="6dp">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <ImageView
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
+                                    android:contentDescription="Fallas"
+                                    android:src="@drawable/ic_shield_check"
+                                    android:tint="@color/accent_teal" />
+
+                                <TextView
+                                    style="@style/Label"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="3dp"
+                                    android:ellipsize="end"
+                                    android:letterSpacing="0.02"
+                                    android:maxLines="1"
+                                    android:text="FALLAS"
+                                    android:textSize="8sp" />
+                            </LinearLayout>
+
+                            <TextView
+                                android:id="@+id/obdCockpitDtc"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="3dp"
+                                android:fontFamily="sans-serif-medium"
+                                android:fontFeatureSettings="tnum"
+                                android:text="--"
+                                android:textColor="@color/text_primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <ProgressBar
+                                android:id="@+id/obdCockpitDtcBar"
+                                style="?android:attr/progressBarStyleHorizontal"
+                                android:layout_width="match_parent"
+                                android:layout_height="4dp"
+                                android:layout_marginTop="3dp"
+                                android:max="100"
+                                android:progress="0"
+                                android:progressDrawable="@drawable/bg_obd_progress" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
 
             <include layout="@layout/view_mini_hud" />
 
@@ -421,7 +1520,7 @@
                 android:layout_marginTop="2dp"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:text="Bluetooth · Radio FM"
+                android:text="Música · Radio FM"
                 android:textColor="@color/text_muted"
                 android:textSize="11sp" />
         </LinearLayout>
@@ -442,7 +1541,7 @@
             android:layout_marginEnd="8dp"
             android:contentDescription="Estado de reproducción"
             android:src="@drawable/ic_pause"
-            android:tint="@color/accent_sky" />
+            android:tint="@color/accent_primary" />
 
         <TextView
             android:id="@+id/npToastTime"
@@ -506,7 +1605,7 @@
 
     <include layout="@layout/sheet_quick_settings" />
 
-    <!-- Floating dock island -->
+    <!-- Dock inferior: 9 accesos equitativos (space-around) -->
     <LinearLayout
         android:id="@+id/dock"
         android:layout_width="match_parent"
@@ -515,7 +1614,7 @@
         android:layout_marginStart="@dimen/screen_margin"
         android:layout_marginEnd="@dimen/screen_margin"
         android:layout_marginBottom="12dp"
-        android:background="@drawable/bg_dock_island"
+        android:background="@drawable/bg_card_premium"
         android:elevation="@dimen/elev_dock"
         android:gravity="center_vertical"
         android:orientation="horizontal"

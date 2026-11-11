@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.IbizaDash" parent="Theme.AppCompat.NoActionBar">
-        <item name="android:windowBackground">@color/obsidian_900</item>
+        <item name="android:windowBackground">@color/bg_screen</item>
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowContentOverlay">@null</item>
         <item name="android:statusBarColor">@android:color/transparent</item>

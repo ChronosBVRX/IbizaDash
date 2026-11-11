@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sombra de piso bajo las llantas (funde el recorte del PNG sin manchar) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <gradient
+        android:centerColor="#33000000"
+        android:centerX="0.5"
+        android:centerY="0.5"
+        android:endColor="#00000000"
+        android:gradientRadius="140dp"
+        android:startColor="#33000000"
+        android:type="radial" />
+</shape>
