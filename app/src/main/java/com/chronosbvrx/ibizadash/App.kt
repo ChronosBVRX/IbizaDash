@@ -10,10 +10,16 @@ import com.chronosbvrx.ibizadash.media.BluetoothMediaReceiver
 import com.chronosbvrx.ibizadash.music.OfflineMusicCatalog
 import org.osmdroid.config.Configuration
 import java.io.File
+import java.io.PrintWriter
+import java.io.StringWriter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class App : Application() {
     override fun onCreate() {
         super.onCreate()
+        installCrashLogger()
         val prefs = getSharedPreferences("osmdroid", MODE_PRIVATE)
         Configuration.getInstance().load(this, prefs)
         Configuration.getInstance().userAgentValue = packageName
@@ -58,6 +64,51 @@ class App : Application() {
                     ComponentName(this, com.chronosbvrx.ibizadash.nav.NavNotificationListenerService::class.java)
                 )
             } catch (_: Exception) {
+            }
+        }
+    }
+
+    /**
+     * Deja la última excepción no capturada en
+     * files/crash_last.txt (interno y externo de la app) para poder
+     * diagnosticar reinicios del launcher sin depender de logcat.
+     */
+    private fun installCrashLogger() {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                val stack = StringWriter().also { writer ->
+                    throwable.printStackTrace(PrintWriter(writer))
+                }.toString()
+                val version = try {
+                    @Suppress("DEPRECATION")
+                    packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
+                } catch (_: Exception) {
+                    "?"
+                }
+                val text = buildString {
+                    append("IbizaDash crash\n")
+                    append("version: ").append(version).append('\n')
+                    append("time: ").append(
+                        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+                    ).append('\n')
+                    append("thread: ").append(thread.name).append("\n\n")
+                    append(stack)
+                }
+                for (dir in listOfNotNull(getExternalFilesDir(null), filesDir)) {
+                    try {
+                        File(dir, "crash_last.txt").writeText(text)
+                    } catch (_: Exception) {
+                    }
+                }
+                Log.e("CrashLogger", text)
+            } catch (_: Exception) {
+            }
+            if (previous != null) {
+                previous.uncaughtException(thread, throwable)
+            } else {
+                android.os.Process.killProcess(android.os.Process.myPid())
+                kotlin.system.exitProcess(10)
             }
         }
     }

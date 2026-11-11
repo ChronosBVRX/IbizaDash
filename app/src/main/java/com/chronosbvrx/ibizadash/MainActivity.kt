@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -165,6 +166,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var miniMapContainer: View
     private lateinit var homeRoot: View
     private var nightTheme = true
+    private var themeRecreateScheduled = false
     private companion object {
         const val THEME_DOCK_INDEX = 5
         const val BTN_THEME_TOGGLE_ID = 9007
@@ -2911,6 +2913,7 @@ class MainActivity : AppCompatActivity() {
      * Al cambiar el modo, la Activity se recrea y se re-ejecuta onCreate.
      */
     private fun applyTheme(isNightMode: Boolean) {
+        val changed = nightTheme != isNightMode
         nightTheme = isNightMode
         try {
             Prefs.setNightMode(this, isNightMode)
@@ -2925,6 +2928,30 @@ class MainActivity : AppCompatActivity() {
             AppCompatDelegate.setDefaultNightMode(mode)
         }
         applyThemeBits()
+        // `uiMode` se maneja en el manifest para que los cambios de día/noche
+        // del estéreo no recrea el launcher. Cuando el cambio lo pide el
+        // usuario, se recrea UNA sola vez para reinflar los recursos.
+        if (changed && !themeRecreateScheduled) {
+            themeRecreateScheduled = true
+            uiHandler.post {
+                themeRecreateScheduled = false
+                if (!isFinishing && !isDestroyed) recreate()
+            }
+        }
+    }
+
+    /**
+     * El estéreo puede cambiar el uiMode por las luces del coche. Ese cambio
+     * NO debe destruir/recrear la Activity (producía el ciclo abre/cierra).
+     * El tema lo manda la preferencia del usuario; aquí solo se refrescan los
+     * bits que no dependen de recursos.
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        try {
+            applyThemeBits()
+        } catch (_: Exception) {
+        }
     }
 
     /** Bits no cubiertos por recursos: mapa, velocímetro, faros, dock y switch. */
