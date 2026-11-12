@@ -1,13 +1,19 @@
-package com.chronosbvrx.ibizacompanion.data
+﻿package com.chronosbvrx.ibizacompanion.data
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Color
 import android.util.Base64
 import android.util.Log
 import com.chronosbvrx.ibizacompanion.AudioCoexistence
 import com.chronosbvrx.ibizacompanion.BridgeLink
+import com.chronosbvrx.ibizacompanion.map.MapStyleCatalog
+import com.chronosbvrx.ibizacompanion.map.PhoneMapStyle
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -18,15 +24,17 @@ import kotlin.math.max
 import kotlin.math.tan
 
 /**
- * Envía al estéreo las teselas Esri Dark del corredor de una ruta.
+ * EnvÃ­a al estÃ©reo las teselas del estilo elegido.
  *
  * Fuente de cada tesela, en orden:
- *  1. Pack offline del teléfono (`offline-tiles/{z}/{x}/{y}.png`).
- *  2. Caché de osmdroid del teléfono.
- *  3. Descarga online (Esri World Dark Gray).
+ *  1. Pack offline del telÃ©fono (`offline-tiles/{z}/{x}/{y}.png`, solo Esri).
+ *  2. CachÃ© de osmdroid del telÃ©fono (`osmdroid/tiles/<style>/{z}/{x}/{y}.tile`).
+ *  3. Descarga online del proveedor del estilo.
  *
- * Por el tamaño (cientos de KB) sólo tiene sentido sobre Wi-Fi; si el enlace
+ * Por el tamaÃ±o (cientos de KB) sÃ³lo tiene sentido sobre Wi-Fi; si el enlace
  * Wi-Fi se cae, la transferencia se detiene en lugar de saturar Bluetooth.
+ * El ritmo lo decide [AudioCoexistence]: 250 KB/s sin mÃºsica, 60 KB/s con
+ * mÃºsica (para no ahogar el A2DP del chip de 2,4 GHz).
  */
 object TileSender {
     private const val TAG = "TileSender"
@@ -36,7 +44,7 @@ object TileSender {
     private const val LAYER_BASE = "base"
     private const val LAYER_REF = "ref"
 
-    /** Peticiones del viewport: pequeñas, para no ahogar el enlace. */
+    /** Peticiones del viewport: pequeÃ±as, para no ahogar el enlace. */
     private const val VIEWPORT_MAX_BASE = 36
     private const val VIEWPORT_MAX_REF = 20
     private const val VIEWPORT_MAX_BYTES_BASE = 2L * 1024L * 1024L
@@ -47,7 +55,7 @@ object TileSender {
 
     /**
      * Cola de un solo hilo: base y etiquetas del mismo encuadre se mandan en
-     * orden, sin dos ráfagas simultáneas compitiendo con el A2DP.
+     * orden, sin dos rÃ¡fagas simultÃ¡neas compitiendo con el A2DP.
      */
     private val viewportQueue = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
         Thread(r, "TileViewport").apply { isDaemon = true }
@@ -58,8 +66,6 @@ object TileSender {
 
     @Volatile
     private var lastViewportAtMs = 0L
-    // El enlace se comparte con el audio A2DP. El ritmo lo decide
-    // AudioCoexistence (60 KB/s con música, 250 KB/s en silencio).
 
     private val http = OkHttpClient.Builder()
         .connectTimeout(8, TimeUnit.SECONDS)
@@ -76,38 +82,185 @@ object TileSender {
     private data class TileKey(val zoom: Int, val x: Int, val y: Int)
 
     /**
-     * Descarga/selecciona y envía las teselas. Bloqueante: llamar desde IO.
-     * [onProgress] recibe (procesadas, total).
+     * Corredor de una ruta. Por defecto z14 (visiÃ³n general), z15 (centros y
+     * anillo) y z16 (calle). `extraZooms` permite pedir z15â€“z17 desde el botÃ³n
+     * "Descargar zona" sin duplicar cÃ³digo.
      */
     fun sendRouteTiles(
         context: Context,
         encodedPolyline: String,
+        styleId: String = MapStyleCatalog.current(context).id,
+        zooms: IntArray = intArrayOf(14, 15, 16),
         onProgress: (sent: Int, total: Int) -> Unit = { _, _ -> }
     ): Result {
+        val style = MapStyleCatalog.byId(styleId.ifBlank { MapStyleCatalog.current(context).id })
         val points = decodePolyline(encodedPolyline)
         if (points.size < 2) return Result(0, 0, 0, 0)
         if (!BridgeLink.isWifiActive()) {
-            Log.w(TAG, "sin Wi-Fi activo; no se envían teselas")
+            Log.w(TAG, "sin Wi-Fi activo; no se envÃ­an teselas")
             return Result(0, 0, 0, 0)
         }
+        val tiles = corridorTiles(points, zooms)
+        val result = transfer(context, tiles, style, LAYER_BASE, MAX_BYTES, onProgress)
+        try {
+            BridgeLink.send(
+                JSONObject()
+                    .put("type", "TILE_STATS")
+                    .put("style", style.id)
+                    .put("sent", result.sent)
+                    .put("total", result.total)
+            )
+        } catch (_: Exception) {
+        }
+        Log.i(TAG, "ruta ${style.id}: enviadas=${result.sent}/${result.total} bytes=${result.bytes}")
+        return result
+    }
 
-        val tiles = corridorTiles(points)
-        val total = tiles.size
+    /**
+     * Zona alrededor de la ubicaciÃ³n actual (o de un punto) en z15â€“z17.
+     * Pensada para el botÃ³n "Descargar zona": deja el mapa listo sin ruta.
+     */
+    fun sendAreaTiles(
+        context: Context,
+        lat: Double,
+        lon: Double,
+        styleId: String = MapStyleCatalog.current(context).id,
+        radiusKm: Double = 2.5,
+        zooms: IntArray = intArrayOf(15, 16, 17),
+        onProgress: (sent: Int, total: Int) -> Unit = { _, _ -> }
+    ): Result {
+        val style = MapStyleCatalog.byId(styleId.ifBlank { MapStyleCatalog.current(context).id })
+        if (!BridgeLink.isWifiActive()) return Result(0, 0, 0, 0)
+        val tiles = LinkedHashSet<TileKey>()
+        val dLat = radiusKm / 111.0
+        val dLon = radiusKm / (111.0 * cos(Math.toRadians(lat)).coerceAtLeast(0.2))
+        for (z in zooms) {
+            if (z !in 13..18) continue
+            val x0 = lonToTileX(lon - dLon, z)
+            val x1 = lonToTileX(lon + dLon, z)
+            val y0 = latToTileY(lat + dLat, z)
+            val y1 = latToTileY(lat - dLat, z)
+            tiles.addAll(bboxTiles(z, x0, y0, x1, y1, MAX_TILES))
+        }
+        if (tiles.isEmpty()) return Result(0, 0, 0, 0)
+        val result = transfer(
+            context,
+            tiles.toList().take(MAX_TILES),
+            style,
+            LAYER_BASE,
+            MAX_BYTES,
+            onProgress
+        )
+        try {
+            BridgeLink.send(
+                JSONObject()
+                    .put("type", "TILE_STATS")
+                    .put("style", style.id)
+                    .put("sent", result.sent)
+                    .put("total", result.total)
+            )
+        } catch (_: Exception) {
+        }
+        Log.i(TAG, "zona ${style.id}: enviadas=${result.sent}/${result.total} bytes=${result.bytes}")
+        return result
+    }
+
+    /**
+     * Teselas del encuadre que estÃ¡ viendo el estÃ©reo (TILE_REQ).
+     *
+     * Se piden al vuelo, con tope de cantidad y de bytes, y solo para el
+     * zoom actual. `ref` es la capa de nombres de calles (solo Esri).
+     */
+    fun sendViewportTiles(
+        context: Context,
+        zoom: Int,
+        x0: Int,
+        y0: Int,
+        x1: Int,
+        y1: Int,
+        layer: String,
+        styleId: String,
+        onProgress: (sent: Int, total: Int) -> Unit = { _, _ -> }
+    ): Result {
+        val style = MapStyleCatalog.byId(styleId.ifBlank { MapStyleCatalog.current(context).id })
+        if (!BridgeLink.isWifiActive()) return Result(0, 0, 0, 0)
+        if (zoom !in 13..18) return Result(0, 0, 0, 0)
+        val isRef = layer == LAYER_REF
+        if (isRef && !style.supportsRef) return Result(0, 0, 0, 0)
+        val cap = if (isRef) VIEWPORT_MAX_REF else VIEWPORT_MAX_BASE
+        val byteCap = if (isRef) VIEWPORT_MAX_BYTES_REF else VIEWPORT_MAX_BYTES_BASE
+        val tiles = bboxTiles(zoom, x0, y0, x1, y1, cap)
+        if (tiles.isEmpty()) return Result(0, 0, 0, 0)
+        if (!viewportBusy.compareAndSet(false, true)) {
+            Log.i(TAG, "viewport $layer ocupado; se descarta este pedido")
+            return Result(0, 0, 0, 0)
+        }
+        try {
+            return transfer(context, tiles, style, layer, byteCap, onProgress)
+        } finally {
+            viewportBusy.set(false)
+        }
+    }
+
+    /**
+     * Encola un TILE_REQ sin bloquear el lector del socket. Descarta pedidos
+     * idÃ©nticos repetidos (el estÃ©reo reintenta cada pocos segundos).
+     */
+    fun enqueueViewportTiles(
+        context: Context,
+        zoom: Int,
+        x0: Int,
+        y0: Int,
+        x1: Int,
+        y1: Int,
+        layer: String,
+        styleId: String
+    ) {
+        val style = MapStyleCatalog.byId(styleId.ifBlank { MapStyleCatalog.current(context).id })
+        // Un estilo sin capa `ref` no debe gastar enlace en etiquetas.
+        if (layer == LAYER_REF && !style.supportsRef) return
+        val key = "${style.id}:$layer:$zoom:$x0:$y0:$x1:$y1"
+        val now = System.currentTimeMillis()
+        if (key == lastViewportKey && now - lastViewportAtMs < 15_000L) return
+        lastViewportKey = key
+        lastViewportAtMs = now
+        val app = context.applicationContext
+        viewportQueue.execute {
+            try {
+                sendViewportTiles(app, zoom, x0, y0, x1, y1, layer, style.id)
+            } catch (e: Exception) {
+                Log.w(TAG, "viewport: ${e.message}")
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Transferencia
+    // ------------------------------------------------------------------
+
+    private fun transfer(
+        context: Context,
+        tiles: List<TileKey>,
+        style: PhoneMapStyle,
+        layer: String,
+        byteCap: Long,
+        onProgress: (sent: Int, total: Int) -> Unit
+    ): Result {
         var sent = 0
         var failed = 0
         var bytes = 0L
-
+        val total = tiles.size
         for ((index, tile) in tiles.withIndex()) {
             if (!BridgeLink.isWifiActive()) {
                 Log.w(TAG, "Wi-Fi perdido tras $sent teselas")
                 break
             }
-            // Con música sonando no se descarga online (riega más Wi-Fi y
-            // corta el A2DP): solo se envían teselas locales; las faltantes
-            // se completan en la próxima ruta sin música.
+            // Con mÃºsica sonando no se descarga online (riega mÃ¡s Wi-Fi y
+            // corta el A2DP): solo se envÃ­an teselas locales.
             val musicPlaying = AudioCoexistence.isMusicPlaying(context)
-            val png = readLocalTile(context, tile, LAYER_BASE)
-                ?: if (musicPlaying) null else downloadTile(tile, LAYER_BASE)
+            val raw = readLocalTile(context, tile, style, layer)
+                ?: if (musicPlaying) null else downloadTile(tile, style, layer)
+            val png = if (raw != null) optimizePng(raw, style) else null
             if (png == null || png.size < 40) {
                 failed++
                 onProgress(index + 1, total)
@@ -115,7 +268,8 @@ object TileSender {
             }
             val msg = JSONObject()
                 .put("type", "TILE_BATCH")
-                .put("layer", LAYER_BASE)
+                .put("layer", layer)
+                .put("style", style.id)
                 .put("zoom", tile.zoom)
                 .put("x", tile.x)
                 .put("y", tile.y)
@@ -127,122 +281,131 @@ object TileSender {
                 failed++
             }
             onProgress(index + 1, total)
-            if (bytes > MAX_BYTES) {
-                Log.i(TAG, "tope de bytes alcanzado ($bytes)")
-                break
-            }
+            if (bytes > byteCap) break
             // Ritmo suave: deja aire al audio Bluetooth aunque el enlace sea 2,4 GHz.
             pace(context, png.size)
         }
-
-        try {
-            BridgeLink.send(
-                JSONObject()
-                    .put("type", "TILE_STATS")
-                    .put("sent", sent)
-                    .put("total", total)
-            )
-        } catch (_: Exception) {
-        }
-        Log.i(TAG, "teselas enviadas=$sent/$total fallidas=$failed bytes=$bytes")
         return Result(sent, total, failed, bytes)
     }
 
-    /**
-     * Teselas del encuadre que está viendo el estéreo (TILE_REQ).
-     *
-     * Se piden al vuelo, con tope de cantidad y de bytes, y solo para el
-     * zoom actual. `ref` es la capa de nombres de calles (PNG transparente).
-     * Bloqueante: llamar desde IO.
-     */
-    fun sendViewportTiles(
-        context: Context,
-        zoom: Int,
-        x0: Int,
-        y0: Int,
-        x1: Int,
-        y1: Int,
-        layer: String,
-        onProgress: (sent: Int, total: Int) -> Unit = { _, _ -> }
-    ): Result {
-        if (!BridgeLink.isWifiActive()) return Result(0, 0, 0, 0)
-        if (zoom !in 13..18) return Result(0, 0, 0, 0)
-        val isRef = layer == LAYER_REF
-        val cap = if (isRef) VIEWPORT_MAX_REF else VIEWPORT_MAX_BASE
-        val byteCap = if (isRef) VIEWPORT_MAX_BYTES_REF else VIEWPORT_MAX_BYTES_BASE
-        val tiles = bboxTiles(zoom, x0, y0, x1, y1, cap)
-        if (tiles.isEmpty()) return Result(0, 0, 0, 0)
-        if (!viewportBusy.compareAndSet(false, true)) {
-            Log.i(TAG, "viewport $layer ocupado; se descarta este pedido")
-            return Result(0, 0, 0, 0)
-        }
-        var sent = 0
-        var failed = 0
-        var bytes = 0L
+    private fun pace(context: Context, bytes: Int) {
+        val ms = AudioCoexistence.paceMs(context, bytes.toLong())
+        if (ms <= 0L) return
         try {
-            for ((index, tile) in tiles.withIndex()) {
-                if (!BridgeLink.isWifiActive()) break
-                val musicPlaying = AudioCoexistence.isMusicPlaying(context)
-                val png = readLocalTile(context, tile, layer)
-                    ?: if (musicPlaying) null else downloadTile(tile, layer)
-                if (png == null || png.size < 40) {
-                    failed++
-                    onProgress(index + 1, tiles.size)
-                    continue
-                }
-                val msg = JSONObject()
-                    .put("type", "TILE_BATCH")
-                    .put("layer", layer)
-                    .put("zoom", tile.zoom)
-                    .put("x", tile.x)
-                    .put("y", tile.y)
-                    .put("pngBase64", Base64.encodeToString(png, Base64.NO_WRAP))
-                if (BridgeLink.send(msg)) {
-                    sent++
-                    bytes += png.size
-                } else {
-                    failed++
-                }
-                onProgress(index + 1, tiles.size)
-                if (bytes > byteCap) break
-                pace(context, png.size)
-            }
-        } finally {
-            viewportBusy.set(false)
+            Thread.sleep(ms)
+        } catch (_: InterruptedException) {
         }
-        Log.i(TAG, "viewport $layer z$zoom ${tiles.size} teselas: ok=$sent fallidas=$failed bytes=$bytes")
-        return Result(sent, tiles.size, failed, bytes)
     }
 
     /**
-     * Encola un TILE_REQ sin bloquear el lector del socket. Descarta pedidos
-     * idénticos repetidos (el estéreo reintenta cada pocos segundos).
+     * Quita el canal alfa cuando la tesela base es opaca. Los PNG de los
+     * proveedores suelen ser RGBA aunque no usen transparencia; re-codificar
+     * a RGB reduce el payload sin tocar la nitidez (no se usa JPEG, que
+     * ensuciarÃ­a el texto de las calles).
+     *
+     * Solo se intenta con archivos grandes para no gastar CPU en cada tesela.
      */
-    fun enqueueViewportTiles(
-        context: Context,
-        zoom: Int,
-        x0: Int,
-        y0: Int,
-        x1: Int,
-        y1: Int,
-        layer: String
-    ) {
-        val key = "$layer:$zoom:$x0:$y0:$x1:$y1"
-        val now = System.currentTimeMillis()
-        if (key == lastViewportKey && now - lastViewportAtMs < 15_000L) return
-        lastViewportKey = key
-        lastViewportAtMs = now
-        val app = context.applicationContext
-        viewportQueue.execute {
+    private fun optimizePng(bytes: ByteArray, style: PhoneMapStyle): ByteArray {
+        if (!style.opaqueBase || bytes.size < 24_000) return bytes
+        if (bytes.size < 26) return bytes
+        // Firma PNG + color type del IHDR (offset 25): 6 = RGBA.
+        if ((bytes[0].toInt() and 0xFF) != 0x89 ||
+            (bytes[1].toInt() and 0xFF) != 0x50
+        ) return bytes
+        val colorType = bytes[25].toInt() and 0xFF
+        if (colorType != 6) return bytes
+        var bmp: Bitmap? = null
+        var rgb: Bitmap? = null
+        return try {
+            bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return bytes
+            // Muestreo de alfa: no hace falta recorrer 65 536 pÃ­xeles.
+            val stepX = (bmp.width / 16).coerceAtLeast(1)
+            val stepY = (bmp.height / 16).coerceAtLeast(1)
+            var y = 0
+            while (y < bmp.height) {
+                var x = 0
+                while (x < bmp.width) {
+                    if (Color.alpha(bmp.getPixel(x, y)) < 250) return bytes
+                    x += stepX
+                }
+                y += stepY
+            }
+            rgb = bmp.copy(Bitmap.Config.RGB_565, false) ?: return bytes
+            val out = ByteArrayOutputStream()
+            rgb.compress(Bitmap.CompressFormat.PNG, 100, out)
+            val result = out.toByteArray()
+            if (result.size in 1 until bytes.size) result else bytes
+        } catch (_: Exception) {
+            bytes
+        } finally {
             try {
-                sendViewportTiles(app, zoom, x0, y0, x1, y1, layer)
-            } catch (e: Exception) {
-                Log.w(TAG, "viewport: ${e.message}")
+                bmp?.recycle()
+            } catch (_: Exception) {
+            }
+            try {
+                rgb?.recycle()
+            } catch (_: Exception) {
             }
         }
     }
 
-    /** Caja del viewport → teselas, ordenadas desde el centro hacia afuera. */
+    // ------------------------------------------------------------------
+    // ConstrucciÃ³n del corredor
+    // ------------------------------------------------------------------
+
+    private fun corridorTiles(points: List<Pair<Double, Double>>, zooms: IntArray): List<TileKey> {
+        val wanted = zooms.toSet()
+        val overview = LinkedHashSet<TileKey>()
+        val centers = LinkedHashSet<TileKey>()
+        val street = LinkedHashSet<TileKey>()
+        val street17 = LinkedHashSet<TileKey>()
+        val ring = LinkedHashSet<TileKey>()
+
+        val step = max(1, points.size / 350)
+        val streetStep = max(1, points.size / 90)
+        var i = 0
+        while (i < points.size) {
+            val (lat, lon) = points[i]
+            if (14 in wanted) {
+                overview.add(TileKey(14, lonToTileX(lon, 14), latToTileY(lat, 14)))
+            }
+            val x15 = lonToTileX(lon, 15)
+            val y15 = latToTileY(lat, 15)
+            if (15 in wanted) {
+                centers.add(TileKey(15, x15, y15))
+                if (ring.size < MAX_TILES) {
+                    for (dx in -1..1) {
+                        for (dy in -1..1) {
+                            if (dx == 0 && dy == 0) continue
+                            ring.add(TileKey(15, clampTile(x15 + dx, 15), clampTile(y15 + dy, 15)))
+                        }
+                    }
+                }
+            }
+            if (16 in wanted) {
+                street.add(TileKey(16, lonToTileX(lon, 16), latToTileY(lat, 16)))
+            }
+            i += step
+        }
+        if (17 in wanted) {
+            var j = 0
+            while (j < points.size) {
+                val (lat, lon) = points[j]
+                street17.add(TileKey(17, lonToTileX(lon, 17), latToTileY(lat, 17)))
+                j += streetStep
+            }
+        }
+
+        val out = LinkedHashSet<TileKey>()
+        out.addAll(overview)
+        out.addAll(centers)
+        out.addAll(street)
+        out.addAll(street17)
+        out.addAll(ring)
+        return out.take(MAX_TILES)
+    }
+
+    /** Caja del viewport â†’ teselas, ordenadas desde el centro hacia afuera. */
     private fun bboxTiles(
         zoom: Int,
         x0: Int,
@@ -274,56 +437,6 @@ object TileSender {
         return out
     }
 
-    /** Duerme lo justo para el ritmo permitido (máx. 400 ms con música). */
-    private fun pace(context: Context, bytes: Int) {
-        val ms = AudioCoexistence.paceMs(context, bytes.toLong())
-        if (ms <= 0L) return
-        try {
-            Thread.sleep(ms)
-        } catch (_: InterruptedException) {
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // Construcción del corredor
-    // ------------------------------------------------------------------
-
-    private fun corridorTiles(points: List<Pair<Double, Double>>): List<TileKey> {
-        val overview = LinkedHashSet<TileKey>()
-        val centers = LinkedHashSet<TileKey>()
-        val street = LinkedHashSet<TileKey>()
-        val ring = LinkedHashSet<TileKey>()
-
-        val step = max(1, points.size / 350)
-        var i = 0
-        while (i < points.size) {
-            val (lat, lon) = points[i]
-            overview.add(TileKey(14, lonToTileX(lon, 14), latToTileY(lat, 14)))
-            val x = lonToTileX(lon, 15)
-            val y = latToTileY(lat, 15)
-            centers.add(TileKey(15, x, y))
-            // El estéreo pinta su mapa local a z16; sin estas teselas la
-            // calle se vería vacía fuera del paquete offline.
-            street.add(TileKey(16, lonToTileX(lon, 16), latToTileY(lat, 16)))
-            if (ring.size < MAX_TILES) {
-                for (dx in -1..1) {
-                    for (dy in -1..1) {
-                        if (dx == 0 && dy == 0) continue
-                        ring.add(TileKey(15, clampTile(x + dx, 15), clampTile(y + dy, 15)))
-                    }
-                }
-            }
-            i += step
-        }
-
-        val out = LinkedHashSet<TileKey>()
-        out.addAll(overview)
-        out.addAll(centers)
-        out.addAll(street)
-        out.addAll(ring)
-        return out.take(MAX_TILES)
-    }
-
     private fun clampTile(value: Int, zoom: Int): Int {
         val max = (1 shl zoom) - 1
         return value.coerceIn(0, max)
@@ -345,12 +458,16 @@ object TileSender {
     // Origen de las teselas
     // ------------------------------------------------------------------
 
-    private fun readLocalTile(context: Context, tile: TileKey, layer: String): ByteArray? {
+    private fun readLocalTile(
+        context: Context,
+        tile: TileKey,
+        style: PhoneMapStyle,
+        layer: String
+    ): ByteArray? {
         val ext = context.getExternalFilesDir(null)
-        val cacheDir = if (layer == LAYER_REF) "EsriDarkRef" else "EsriDark"
         val candidates = ArrayList<File>(6)
-        // El pack offline solo trae el mapa base.
-        if (layer != LAYER_REF) {
+        // El pack offline solo trae el mapa base de Esri.
+        if (layer != LAYER_REF && style.id == MapStyleCatalog.ESRI_DARK.id) {
             if (ext != null) {
                 candidates.add(File(ext, "offline-tiles/${tile.zoom}/${tile.x}/${tile.y}.png"))
             }
@@ -359,9 +476,10 @@ object TileSender {
             )
         }
         // osmdroid 6 guarda ".tile"; los packs antiguos, ".png".
+        val folder = if (layer == LAYER_REF) "${style.folder}Ref" else style.folder
         val roots = ArrayList<File>(2)
-        if (ext != null) roots.add(File(ext, "osmdroid/tiles/$cacheDir"))
-        roots.add(File(context.filesDir, "osmdroid/tiles/$cacheDir"))
+        if (ext != null) roots.add(File(ext, "osmdroid/tiles/$folder"))
+        roots.add(File(context.filesDir, "osmdroid/tiles/$folder"))
         for (root in roots) {
             candidates.add(File(root, "${tile.zoom}/${tile.x}/${tile.y}.tile"))
             candidates.add(File(root, "${tile.zoom}/${tile.x}/${tile.y}.png"))
@@ -378,19 +496,12 @@ object TileSender {
         return null
     }
 
-    /**
-     * Esri usa /tile/{z}/{y}/{x}; el nombre local de osmdroid es {z}/{x}/{y}.tile.
-     * La capa `ref` son las etiquetas (nombres de calles y POIs).
-     */
-    private fun downloadTile(tile: TileKey, layer: String): ByteArray? {
-        val service = if (layer == LAYER_REF) {
-            "Canvas/World_Dark_Gray_Reference"
-        } else {
-            "Canvas/World_Dark_Gray_Base"
-        }
-        val url = "https://server.arcgisonline.com/ArcGIS/rest/services/" +
-            "$service/MapServer/tile/" +
-            "${tile.zoom}/${tile.y}/${tile.x}"
+    private fun downloadTile(
+        tile: TileKey,
+        style: PhoneMapStyle,
+        layer: String
+    ): ByteArray? {
+        val url = style.url(layer, tile.zoom, tile.x, tile.y)
         return try {
             val request = Request.Builder()
                 .url(url)
@@ -411,7 +522,7 @@ object TileSender {
     }
 
     // ------------------------------------------------------------------
-    // Polilínea (formato Google/OSRM)
+    // PolilÃ­nea (formato Google/OSRM)
     // ------------------------------------------------------------------
 
     private fun decodePolyline(encoded: String): List<Pair<Double, Double>> {

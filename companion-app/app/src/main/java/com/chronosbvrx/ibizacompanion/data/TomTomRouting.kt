@@ -154,6 +154,12 @@ object TomTomRouting {
                 val lat = point?.optDouble("latitude", 0.0) ?: 0.0
                 val lon = point?.optDouble("longitude", 0.0) ?: 0.0
                 val (type, modifier) = mapManeuver(ins.optString("maneuver", ""))
+                val street = ins.optString("street", "").trim()
+                val routeNumbers = ins.optJSONArray("routeNumbers")?.let { numbers ->
+                    (0 until numbers.length())
+                        .mapNotNull { idx -> numbers.optString(idx, "").takeIf { it.isNotBlank() } }
+                        .joinToString(" / ")
+                }.orEmpty()
                 steps.add(
                     JSONObject()
                         .put("lat", lat)
@@ -162,6 +168,8 @@ object TomTomRouting {
                         .put("maneuver", type)
                         .put("modifier", modifier)
                         .put("distanceMeters", ins.optInt("routeOffsetInMeters", 0))
+                        .put("name", street)
+                        .put("ref", routeNumbers)
                 )
             }
         }

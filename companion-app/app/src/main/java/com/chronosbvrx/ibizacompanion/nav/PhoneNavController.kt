@@ -208,6 +208,13 @@ object PhoneNavController {
             .put("snappedLon", snapshot.snappedLon)
             .put("bearing", snapshot.bearing.toDouble())
             .put("speedKmh", snapshot.speedKmh.toDouble())
+            .put("nextName", snapshot.nextName)
+            .put("nextRef", snapshot.nextRef)
+            .put("nextLat", snapshot.nextLat)
+            .put("nextLon", snapshot.nextLon)
+            .put("nextIcon", snapshot.nextIcon)
+            .put("thenName", snapshot.thenName ?: JSONObject.NULL)
+            .put("thenIcon", snapshot.thenIcon ?: JSONObject.NULL)
         sender.execute {
             BridgeLink.send(json)
         }

@@ -7,22 +7,28 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PointF
 import android.graphics.RadialGradient
+import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import android.util.AttributeSet
 import android.view.View
+import androidx.core.content.ContextCompat
+import com.chronosbvrx.ibizadash.nav.ManeuverIcon
 import org.osmdroid.api.IGeoPoint
 
 /**
  * Capa de pantalla del modo conducción.
  *
- * Dibuja fuera de la matriz 3D del [PerspectiveMapView]:
- *  - banda de horizonte/neblina en la parte superior,
- *  - pin de destino sin aplastar,
- *  - coche, cono y halo en espacio de pantalla.
+ * Dibuja fuera de la matriz 3D del [PerspectiveMapView], así que nada de esto
+ * se aplasta:
+ *  - banda de horizonte/neblina,
+ *  - pin de destino,
+ *  - globo de la próxima calle + escudo de carretera,
+ *  - coche 3D con micro-rotación y su sombra integrada.
  *
- * Son shaders y drawables ya cargados; no crea bitmaps por frame ni capas
- * hardware. La base y la ruta siguen dentro del MapView inclinado.
+ * Todos los `Paint`, `Path` y `RectF` son propiedades: `draw()` no crea
+ * objetos. Como máximo se pintan tres etiquetas (badge de maniobra, globo de
+ * calle y escudo).
  */
 class PerspectiveNavOverlayView @JvmOverloads constructor(
     context: Context,
@@ -39,6 +45,7 @@ class PerspectiveNavOverlayView @JvmOverloads constructor(
 
     private var map: PerspectiveMapView? = null
     private var carProvider: (() -> Drawable?)? = null
+    private var car3dProvider: (() -> Drawable?)? = null
     private var destProvider: (() -> Drawable?)? = null
     private var destPointProvider: (() -> IGeoPoint?)? = null
 
@@ -68,6 +75,72 @@ class PerspectiveNavOverlayView @JvmOverloads constructor(
     }
     private val destScr = PointF()
 
+    // --- Globo de calle y escudo (cero alocaciones en draw) ---
+    private val bubbleFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFF7FBFF.toInt()
+        style = Paint.Style.FILL
+    }
+    private val bubbleStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF00E5FF.toInt()
+        style = Paint.Style.STROKE
+        strokeWidth = 2f * density
+    }
+    private val bubbleText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF15212B.toInt()
+        textSize = 15f * density
+        typeface = android.graphics.Typeface.create(
+            android.graphics.Typeface.DEFAULT,
+            android.graphics.Typeface.BOLD
+        )
+    }
+    private val bubblePath = Path()
+    private val bubbleRect = RectF()
+    private val tailPath = Path()
+
+    private val shieldFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFFFFFF.toInt()
+        style = Paint.Style.FILL
+    }
+    private val shieldStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF1B2330.toInt()
+        style = Paint.Style.STROKE
+        strokeWidth = 1.5f * density
+    }
+    private val shieldText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF14212B.toInt()
+        textSize = 12f * density
+        typeface = android.graphics.Typeface.create(
+            android.graphics.Typeface.DEFAULT,
+            android.graphics.Typeface.BOLD
+        )
+        textAlign = Paint.Align.CENTER
+    }
+    private val shieldPath = Path()
+    private val shieldRect = RectF()
+
+    private val badgeFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xE612151A.toInt()
+        style = Paint.Style.FILL
+    }
+    private val badgeStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF00E5FF.toInt()
+        style = Paint.Style.STROKE
+        strokeWidth = 2.5f * density
+    }
+    private val badgeRadius = 20f * density
+    private val badgeIcons: Array<Drawable?> = ManeuverIcon.values().map { icon ->
+        ContextCompat.getDrawable(context, icon.resId)?.mutate()?.apply {
+            setTint(0xFFFFFFFF.toInt())
+        }
+    }.toTypedArray()
+
+    private var calloutName: String = ""
+    private var calloutRef: String = ""
+    private var calloutPoint: IGeoPoint? = null
+    private var calloutIcon: ManeuverIcon? = null
+    private var calloutKey: String = ""
+    private var carTiltDeg: Float = 0f
+
     init {
         setWillNotDraw(false)
         isClickable = false
@@ -78,13 +151,56 @@ class PerspectiveNavOverlayView @JvmOverloads constructor(
     fun bind(
         mapView: PerspectiveMapView,
         car: () -> Drawable?,
+        car3d: () -> Drawable?,
         destination: () -> Drawable?,
         destinationPoint: () -> IGeoPoint?
     ) {
         map = mapView
         carProvider = car
+        car3dProvider = car3d
         destProvider = destination
         destPointProvider = destinationPoint
+        invalidate()
+    }
+
+    /** Actualiza el globo/escudo. Solo invalida si cambió la maniobra. */
+    fun setCallout(
+        name: String?,
+        ref: String?,
+        icon: ManeuverIcon?,
+        lat: Double,
+        lon: Double
+    ) {
+        val safeName = name?.trim().orEmpty().let {
+            if (it.length > 26) it.take(25) + "…" else it
+        }
+        val safeRef = ref?.trim().orEmpty()
+        val key = "$safeName|$safeRef|${icon?.name}|$lat|$lon"
+        if (key == calloutKey) return
+        calloutKey = key
+        calloutName = safeName
+        calloutRef = safeRef
+        calloutIcon = icon
+        calloutPoint = if (lat == 0.0 && lon == 0.0) null else
+            org.osmdroid.util.GeoPoint(lat, lon)
+        invalidate()
+    }
+
+    fun clearCallout() {
+        if (calloutKey.isEmpty()) return
+        calloutKey = ""
+        calloutName = ""
+        calloutRef = ""
+        calloutPoint = null
+        calloutIcon = null
+        invalidate()
+    }
+
+    /** Micro-rotación del coche en curvas (±12°). */
+    fun setCarTilt(deg: Float) {
+        val clamped = deg.coerceIn(-12f, 12f)
+        if (Math.abs(clamped - carTiltDeg) < 0.05f) return
+        carTiltDeg = clamped
         invalidate()
     }
 
@@ -103,11 +219,10 @@ class PerspectiveNavOverlayView @JvmOverloads constructor(
 
         // El pin va primero: si entra en la banda de neblina, esta lo funde.
         drawDestination(canvas, map)
+        drawCallout(canvas, map, w, h)
         drawCar(canvas, map, w, h)
 
         // Horizonte encima de todo lo lejano; el coche está al 79 %, no se tapa.
-        // Si por el aspect ratio el borde del mapa cae dentro de la vista, la
-        // niebla lo cubre para que nunca se vea el corte del trapecio.
         val mapTop = map.perspectiveTopY()
         val horizonH = when {
             mapTop <= h * 0.10f -> h * horizonFraction
@@ -116,8 +231,6 @@ class PerspectiveNavOverlayView @JvmOverloads constructor(
         }.coerceIn(h * 0.12f, h * 0.34f)
         ensureHorizonShader(horizonH)
         canvas.drawRect(0f, 0f, w, horizonH, horizonPaint)
-        // Sin línea de horizonte: el degradado termina en alpha 0 sobre el
-        // propio mapa, así no se ve un corte ni un borde duro.
     }
 
     private fun ensureHorizonShader(horizonH: Float) {
@@ -149,26 +262,133 @@ class PerspectiveNavOverlayView @JvmOverloads constructor(
         drawable.draw(canvas)
     }
 
+    /**
+     * Badge de maniobra + globo de la próxima calle + escudo de carretera.
+     * Se dibuja pegado al vértice del giro, en espacio de pantalla, para que
+     * el `rotateX` no deforme el texto.
+     */
+    private fun drawCallout(canvas: Canvas, map: PerspectiveMapView, w: Float, h: Float) {
+        val point = calloutPoint ?: return
+        if (!map.perspectiveScreenPoint(point, destScr)) return
+        val x = destScr.x
+        val y = destScr.y
+        if (x < -160f || x > w + 160f || y < -100f || y > h + 100f) return
+
+        // 1) Badge blanco con el ícono de la maniobra (la "flecha" única).
+        canvas.drawCircle(x, y, badgeRadius, badgeFill)
+        canvas.drawCircle(x, y, badgeRadius, badgeStroke)
+        val icon = calloutIcon?.let { badgeIcons[it.ordinal] }
+        if (icon != null) {
+            val s = (24f * density).toInt()
+            icon.setBounds(
+                (x - s / 2f).toInt(),
+                (y - s / 2f).toInt(),
+                (x + s / 2f).toInt(),
+                (y + s / 2f).toInt()
+            )
+            icon.draw(canvas)
+        }
+
+        // 2) Globo de la calle, a un lado del badge para no tapar la ruta.
+        if (calloutName.isNotBlank()) {
+            val padH = 12f * density
+            val padV = 8f * density
+            val textW = bubbleText.measureText(calloutName)
+            val textH = bubbleText.descent() - bubbleText.ascent()
+            val bw = textW + padH * 2f
+            val bh = textH + padV * 2f
+            val gap = badgeRadius + 8f * density
+            var bx = x + gap
+            var tailOnRight = false
+            if (bx + bw > w - 10f * density) {
+                bx = x - gap - bw
+                tailOnRight = true
+            }
+            if (bx < 10f * density) bx = 10f * density
+            var by = y - bh / 2f
+            by = by.coerceIn(6f * density, (h - bh - 6f * density).coerceAtLeast(6f * density))
+
+            bubbleRect.set(bx, by, bx + bw, by + bh)
+            bubblePath.rewind()
+            bubblePath.addRoundRect(bubbleRect, 12f * density, 12f * density, Path.Direction.CW)
+
+            // Cola: triángulo que apunta al badge.
+            val tipY = y.coerceIn(by + 10f * density, by + bh - 10f * density)
+            val baseHalf = 6f * density
+            tailPath.rewind()
+            if (tailOnRight) {
+                tailPath.moveTo(bx + bw, tipY - baseHalf)
+                tailPath.lineTo(x - badgeRadius - 3f * density, y)
+                tailPath.lineTo(bx + bw, tipY + baseHalf)
+            } else {
+                tailPath.moveTo(bx, tipY - baseHalf)
+                tailPath.lineTo(x + badgeRadius + 3f * density, y)
+                tailPath.lineTo(bx, tipY + baseHalf)
+            }
+            tailPath.close()
+
+            canvas.drawPath(tailPath, bubbleFill)
+            canvas.drawPath(bubblePath, bubbleFill)
+            canvas.drawPath(bubblePath, bubbleStroke)
+            val baseline = by + (bh - textH) / 2f - bubbleText.ascent()
+            canvas.drawText(calloutName, bx + padH, baseline, bubbleText)
+        }
+
+        // 3) Escudo de carretera (ej. "48D"), pegado al badge.
+        if (calloutRef.isNotBlank()) {
+            val padH = 8f * density
+            val sw = shieldText.measureText(calloutRef) + padH * 2f
+            val sh = 20f * density
+            val sx = (x - sw / 2f).coerceIn(8f * density, (w - sw - 8f * density).coerceAtLeast(8f * density))
+            val sy = y + badgeRadius + 7f * density
+            if (sy + sh < h - 8f * density) {
+                shieldRect.set(sx, sy, sx + sw, sy + sh)
+                shieldPath.rewind()
+                shieldPath.addRoundRect(shieldRect, 6f * density, 6f * density, Path.Direction.CW)
+                canvas.drawPath(shieldPath, shieldFill)
+                canvas.drawPath(shieldPath, shieldStroke)
+                val baseline = sy + (sh - (shieldText.descent() - shieldText.ascent())) / 2f -
+                    shieldText.ascent()
+                canvas.drawText(calloutRef, sx + sw / 2f, baseline, shieldText)
+            }
+        }
+    }
+
     private fun drawCar(canvas: Canvas, map: PerspectiveMapView, w: Float, h: Float) {
         val cx = w / 2f
         val cy = map.carScreenY()
 
-        // Cono de avance en el suelo, detrás del sprite.
+        val sprite = car3dProvider?.invoke()
+        if (sprite != null) {
+            // Asset 3D con sombra integrada: sin cono ni halo extra.
+            val cw = 112f * density
+            val ratio = sprite.intrinsicHeight / sprite.intrinsicWidth.coerceAtLeast(1)
+            val ch = cw * ratio
+            canvas.save()
+            canvas.rotate(carTiltDeg, cx, cy)
+            sprite.setBounds(
+                (cx - cw / 2f).toInt(),
+                (cy - ch * 0.72f).toInt(),
+                (cx + cw / 2f).toInt(),
+                (cy + ch * 0.28f).toInt()
+            )
+            sprite.draw(canvas)
+            canvas.restore()
+            return
+        }
+
+        // Respaldo: puck clásico (cono + halo + sprite del marcador).
         canvas.save()
         canvas.translate(cx, cy)
         canvas.drawPath(conePath, conePaint)
         canvas.restore()
 
-        // Halo elíptico bajo el chasis.
         canvas.save()
         canvas.translate(cx, cy + carLift)
         canvas.scale(1f, 0.55f)
         canvas.drawCircle(0f, 0f, haloRadius, haloPaint)
         canvas.restore()
 
-        // Sprite isométrico erecto: no entra en la matriz 3D del mapa.
-        // Se compensa el overscan del suelo y se agranda un poco para que el
-        // coche tenga presencia tipo CarPlay sin tapar la ruta.
         val car = carProvider?.invoke() ?: return
         val scale = (map.overscan * 1.18f).coerceIn(1.25f, 1.8f)
         val cw = (car.intrinsicWidth * scale).toInt().coerceAtLeast(1)

@@ -10,6 +10,7 @@ object CompanionPrefs {
     private const val KEY_MODULE_MANIFEST = "module_manifest_url"
     private const val KEY_CAR_BT_MAC = "car_bt_mac"
     private const val KEY_CAR_BT_NAME = "car_bt_name"
+    private const val KEY_MAP_STYLE = "map_style"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -70,5 +71,13 @@ object CompanionPrefs {
             .putString(KEY_CAR_BT_MAC, mac.orEmpty().trim())
             .putString(KEY_CAR_BT_NAME, name.orEmpty().trim())
             .apply()
+    }
+
+    /** Estilo raster elegido para pre-descargar y enviar al estéreo. */
+    fun mapStyle(context: Context): String =
+        prefs(context).getString(KEY_MAP_STYLE, "esri_dark") ?: "esri_dark"
+
+    fun setMapStyle(context: Context, id: String) {
+        prefs(context).edit().putString(KEY_MAP_STYLE, id).apply()
     }
 }

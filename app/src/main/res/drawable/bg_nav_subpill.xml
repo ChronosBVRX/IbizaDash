@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sub-píldora "Luego ..." acoplada a la tarjeta de maniobra. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#08423E" />
+    <corners android:radius="14dp" />
+</shape>

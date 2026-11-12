@@ -2,12 +2,11 @@ package com.chronosbvrx.ibizadash.map
 
 import android.content.Context
 import android.graphics.Color
+import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.MapTileProviderBase
 import org.osmdroid.tileprovider.MapTileProviderBasic
 import org.osmdroid.tileprovider.modules.TileWriter
-import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.util.GeoPoint
-import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.CopyrightOverlay
 import org.osmdroid.views.overlay.TilesOverlay
@@ -15,57 +14,7 @@ import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 
 /**
- * Mapa oscuro gratuito de Esri (World Dark Gray Canvas).
- * No requiere API key. Formato de tile: /tile/{z}/{y}/{x}
- */
-class EsriDarkTileSource : OnlineTileSourceBase(
-    "EsriDark",
-    0,
-    19,
-    256,
-    "",
-    arrayOf(
-        "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/"
-    )
-) {
-    override fun getTileURLString(pMapTileIndex: Long): String {
-        val z = MapTileIndex.getZoom(pMapTileIndex)
-        val x = MapTileIndex.getX(pMapTileIndex)
-        val y = MapTileIndex.getY(pMapTileIndex)
-        return getBaseUrl() + z + "/" + y + "/" + x
-    }
-
-    override fun getCopyrightNotice(): String =
-        "Esri, HERE, Garmin, © OpenStreetMap contributors"
-}
-
-/**
- * Capa de referencia de Esri: nombres de calles, colonias y POIs principales
- * en PNG transparente. Se dibuja ENCIMA del mapa base y DEBAJO de la ruta.
- * El teléfono es quien descarga estas teselas y las manda como `layer:"ref"`.
- */
-class EsriDarkRefTileSource : OnlineTileSourceBase(
-    "EsriDarkRef",
-    0,
-    19,
-    256,
-    "",
-    arrayOf(
-        "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/"
-    )
-) {
-    override fun getTileURLString(pMapTileIndex: Long): String {
-        val z = MapTileIndex.getZoom(pMapTileIndex)
-        val x = MapTileIndex.getX(pMapTileIndex)
-        val y = MapTileIndex.getY(pMapTileIndex)
-        return getBaseUrl() + z + "/" + y + "/" + x
-    }
-
-    override fun getCopyrightNotice(): String = ""
-}
-
-/**
- * TilesOverlay con acceso a su caché en memoria. MapTileBridge lo usa para
+ * Capa de teselas con acceso a su caché en memoria. MapTileBridge la usa para
  * forzar la relectura del disco cuando el teléfono acaba de mandar teselas.
  */
 class CacheAwareTilesOverlay(
@@ -84,20 +33,37 @@ object MapHelper {
     val MORELIA = GeoPoint(19.7060, -101.1950)
     val DEFAULT_ZOOM = 16.0
 
-    fun configure(context: Context, map: MapView) {
-        val source = EsriDarkTileSource()
+    private var currentStyle: MapStyle? = null
+    private val refOverlays =
+        java.util.WeakHashMap<MapView, CacheAwareTilesOverlay>()
+
+    /**
+     * Presupuesto de RAM del mapa. El estéreo tiene 2 GB y el Cortex-A7 no
+     * aguanta el caché por defecto de osmdroid (40 teselas + overshoot).
+     * 16 + 2 mantiene el encuadre de 1280×720 sin crecer de más.
+     */
+    fun configureRamCaps() {
+        try {
+            val cfg = Configuration.getInstance()
+            cfg.setCacheMapTileCount(16)
+            cfg.setCacheMapTileOvershoot(2)
+            cfg.setTileFileSystemCacheMaxBytes(320L * 1024L * 1024L)
+            cfg.setTileFileSystemCacheTrimBytes(280L * 1024L * 1024L)
+        } catch (_: Exception) {
+        }
+    }
+
+    fun configure(
+        context: Context,
+        map: MapView,
+        style: MapStyle = MapStyles.current(context)
+    ): CacheAwareTilesOverlay? {
+        configureRamCaps()
+        currentStyle = style
         // En Android 10+ osmdroid usa por defecto una caché SQL e ignora el
         // árbol de teselas. El módulo offline y el teléfono escriben archivos,
         // así que se fuerza el proveedor de sistema de archivos.
-        val provider = MapTileProviderBasic(
-            context,
-            source,
-            TileWriter()
-        )
-        map.setTileProvider(provider)
-        map.setTileSource(source)
-        // El estéreo no descarga mapas: usa la caché y las teselas que el
-        // teléfono envía por Wi-Fi Direct (TILE_BATCH).
+        installBaseProvider(context, map, style)
         map.setUseDataConnection(false)
         map.setMultiTouchControls(true)
         map.setBuiltInZoomControls(false)
@@ -108,25 +74,9 @@ object MapHelper {
 
         // Sin cuadrícula de "cargando": si falta una tesela se ve la tarjeta
         // del panel, no un tablero gris que parece un fallo de la app.
-        try {
-            map.overlayManager.tilesOverlay.setLoadingBackgroundColor(Color.TRANSPARENT)
-            map.overlayManager.tilesOverlay.setLoadingLineColor(Color.TRANSPARENT)
-        } catch (_: Exception) {
-        }
+        clearLoadingGrid(map)
 
-        // Etiquetas ligeras encima del base. Comparten caché de disco por
-        // nombre de fuente (osmdroid/tiles/EsriDarkRef). La ruta y el puck se
-        // añaden después, así que quedan por encima.
-        try {
-            val refSource = EsriDarkRefTileSource()
-            val refProvider = MapTileProviderBasic(context, refSource, TileWriter())
-            val refOverlay = CacheAwareTilesOverlay(refProvider, context)
-            refOverlay.setUseDataConnection(false)
-            refOverlay.setLoadingBackgroundColor(Color.TRANSPARENT)
-            refOverlay.setLoadingLineColor(Color.TRANSPARENT)
-            map.overlays.add(refOverlay)
-        } catch (_: Exception) {
-        }
+        installRefLayer(context, map, style)
 
         map.overlays.add(
             CopyrightOverlay(context).apply {
@@ -138,6 +88,63 @@ object MapHelper {
                 setCopyrightNotice("Esri, HERE, Garmin, © OpenStreetMap contributors")
             }
         )
+        return refOverlays[map]
+    }
+
+    /**
+     * Cambia el estilo activo sin tocar la ruta, los pines ni el puck.
+     * Devuelve la capa de etiquetas (o null si el estilo las trae incrustadas).
+     */
+    fun applyStyle(context: Context, map: MapView, style: MapStyle): CacheAwareTilesOverlay? {
+        currentStyle = style
+        installBaseProvider(context, map, style)
+        clearLoadingGrid(map)
+        installRefLayer(context, map, style)
+        map.setUseDataConnection(false)
+        map.invalidate()
+        return refOverlays[map]
+    }
+
+    private fun installBaseProvider(context: Context, map: MapView, style: MapStyle) {
+        val source = StyledTileSource(style, StyledTileSource.Layer.BASE)
+        val provider = MapTileProviderBasic(context, source, TileWriter())
+        map.setTileProvider(provider)
+        map.setTileSource(source)
+        map.setUseDataConnection(false)
+    }
+
+    private fun installRefLayer(context: Context, map: MapView, style: MapStyle) {
+        refOverlays.remove(map)?.let { old ->
+            try {
+                old.onDetach(map)
+            } catch (_: Exception) {
+            }
+            try {
+                map.overlays.remove(old)
+            } catch (_: Exception) {
+            }
+        }
+        if (!style.hasRef) return
+        try {
+            val source = StyledTileSource(style, StyledTileSource.Layer.REF)
+            val provider = MapTileProviderBasic(context, source, TileWriter())
+            val overlay = CacheAwareTilesOverlay(provider, context)
+            overlay.setUseDataConnection(false)
+            overlay.setLoadingBackgroundColor(Color.TRANSPARENT)
+            overlay.setLoadingLineColor(Color.TRANSPARENT)
+            // Debajo del copyright, la ruta y el puck; encima de la base.
+            map.overlays.add(0, overlay)
+            refOverlays[map] = overlay
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun clearLoadingGrid(map: MapView) {
+        try {
+            map.overlayManager.tilesOverlay.setLoadingBackgroundColor(Color.TRANSPARENT)
+            map.overlayManager.tilesOverlay.setLoadingLineColor(Color.TRANSPARENT)
+        } catch (_: Exception) {
+        }
     }
 
     fun addLocation(context: Context, map: MapView): MyLocationNewOverlay {
@@ -160,6 +167,8 @@ object MapHelper {
         } catch (_: Exception) {
         }
     }
+
+    fun activeStyle(): MapStyle? = currentStyle
 
     // ------------------------------------------------------------------
     // Teselas del viewport (TILE_REQ)

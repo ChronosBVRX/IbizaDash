@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Vista de navegación (Fase A): se muestra sobre el mapa cuando el foco es NAV.
-    La tarjeta superior resume la maniobra; el resto del mapa queda libre para
-    tocarlo (arrastrar para explorar) sin bloquear gestos.
+    HUD de navegación 2.5D.
+    - Tarjeta de maniobra verde petróleo con sub-píldora "Luego".
+    - Botones circulares translúcidos a la derecha (brújula, mapa, voz).
+    - Píldoras inferiores: resumen del viaje y "Centrar".
+    El mapa queda libre para arrastrar; esta capa no bloquea gestos fuera de
+    sus hijos clicables.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/navOverlay"
@@ -13,15 +16,15 @@
     <!-- Tarjeta de maniobra -->
     <LinearLayout
         android:id="@+id/navCard"
-        android:layout_width="600dp"
+        android:layout_width="560dp"
         android:layout_height="wrap_content"
         android:layout_gravity="top|start"
         android:layout_marginStart="20dp"
         android:layout_marginTop="16dp"
-        android:background="@drawable/bg_sheet"
+        android:background="@drawable/bg_nav_card"
         android:elevation="18dp"
         android:orientation="vertical"
-        android:paddingStart="16dp"
+        android:paddingStart="14dp"
         android:paddingTop="12dp"
         android:paddingEnd="12dp"
         android:paddingBottom="10dp">
@@ -33,19 +36,18 @@
             android:orientation="horizontal">
 
             <FrameLayout
-                android:id="@+id/navCardIconBadge"
                 android:layout_width="64dp"
                 android:layout_height="64dp"
-                android:background="@drawable/bg_play_button">
+                android:background="@drawable/bg_nav_badge">
 
                 <ImageView
                     android:id="@+id/navCardIcon"
-                    android:layout_width="34dp"
-                    android:layout_height="34dp"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
                     android:layout_gravity="center"
                     android:contentDescription="Maniobra"
                     android:src="@drawable/ic_mav_straight"
-                    android:tint="#FFFFFF" />
+                    android:tint="#0D5C56" />
             </FrameLayout>
 
             <TextView
@@ -56,15 +58,15 @@
                 android:fontFamily="sans-serif-medium"
                 android:fontFeatureSettings="tnum"
                 android:includeFontPadding="false"
-                android:minWidth="96dp"
+                android:minWidth="90dp"
                 android:text="--"
-                android:textColor="@color/text_primary"
-                android:textSize="38sp" />
+                android:textColor="#FFFFFF"
+                android:textSize="36sp" />
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
+                android:layout_marginStart="10dp"
                 android:layout_weight="1"
                 android:orientation="vertical">
 
@@ -76,25 +78,26 @@
                     android:fontFamily="sans-serif-medium"
                     android:maxLines="2"
                     android:text="Sin destino activo"
-                    android:textColor="@color/text_primary"
-                    android:textSize="18sp" />
+                    android:textColor="#FFFFFF"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
 
                 <TextView
-                    android:id="@+id/navCardThen"
+                    android:id="@+id/navCardRemaining"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="1dp"
-                    android:ellipsize="end"
+                    android:layout_marginTop="2dp"
+                    android:fontFeatureSettings="tnum"
                     android:maxLines="1"
-                    android:text="Planifica una ruta desde IbizaCompanion"
-                    android:textColor="@color/text_muted"
-                    android:textSize="12sp" />
+                    android:text=""
+                    android:textColor="#B9D9D4"
+                    android:textSize="11sp" />
             </LinearLayout>
 
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="10dp"
+                android:layout_marginStart="8dp"
                 android:gravity="end"
                 android:orientation="vertical">
 
@@ -105,30 +108,20 @@
                     android:fontFamily="sans-serif-medium"
                     android:fontFeatureSettings="tnum"
                     android:text=""
-                    android:textColor="@color/accent_primary"
+                    android:textColor="#9FF3EA"
                     android:textSize="20sp"
                     android:visibility="gone" />
 
-                <TextView
-                    android:id="@+id/navCardRemaining"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFeatureSettings="tnum"
-                    android:text=""
-                    android:textColor="@color/text_muted"
-                    android:textSize="11sp" />
+                <ImageButton
+                    android:id="@+id/navExit"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Salir de la navegación"
+                    android:padding="10dp"
+                    android:src="@drawable/ic_close"
+                    android:tint="#B9D9D4" />
             </LinearLayout>
-
-            <ImageButton
-                android:id="@+id/navExit"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginStart="4dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Salir de la navegación"
-                android:padding="12dp"
-                android:src="@drawable/ic_close"
-                android:tint="@color/text_muted" />
         </LinearLayout>
 
         <ProgressBar
@@ -136,14 +129,14 @@
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="match_parent"
             android:layout_height="4dp"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="10dp"
             android:max="1000"
             android:progressDrawable="@drawable/bg_media_progress" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="8dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
@@ -155,16 +148,16 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:text=""
-                android:textColor="@color/text_faint"
+                android:textColor="#9CC7C2"
                 android:textSize="11sp" />
 
             <TextView
                 android:id="@+id/navCardTraffic"
                 android:layout_width="wrap_content"
-                android:layout_height="40dp"
+                android:layout_height="34dp"
                 android:layout_marginEnd="8dp"
                 android:background="@drawable/bg_status_pill"
-                android:backgroundTint="#22F59E0B"
+                android:backgroundTint="#33F59E0B"
                 android:fontFamily="sans-serif-medium"
                 android:gravity="center"
                 android:letterSpacing="0.06"
@@ -178,39 +171,157 @@
             <TextView
                 android:id="@+id/navFinish"
                 android:layout_width="wrap_content"
-                android:layout_height="40dp"
+                android:layout_height="34dp"
                 android:background="@drawable/bg_action_pill"
                 android:fontFamily="sans-serif-medium"
                 android:gravity="center"
                 android:letterSpacing="0.06"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
                 android:text="FINALIZAR"
                 android:textColor="@color/danger"
                 android:textSize="11sp"
                 android:visibility="gone" />
         </LinearLayout>
+
+        <!-- Sub-píldora "Luego [ícono]" -->
+        <LinearLayout
+            android:id="@+id/navCardThenRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_nav_subpill"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="10dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="6dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/navCardThenIcon"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:contentDescription="Siguiente maniobra"
+                android:src="@drawable/ic_mav_straight"
+                android:tint="#FFFFFF" />
+
+            <TextView
+                android:id="@+id/navCardThen"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:text=""
+                android:textColor="#E6FFFB"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Botones circulares del HUD -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical|end"
+        android:layout_marginEnd="16dp"
+        android:orientation="vertical">
+
+        <ImageButton
+            android:id="@+id/btnCompass"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_nav_fab"
+            android:contentDescription="Brújula: norte o rumbo arriba"
+            android:padding="12dp"
+            android:src="@drawable/ic_compass"
+            android:tint="#FFFFFF" />
+
+        <ImageButton
+            android:id="@+id/btnMapStyle"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_nav_fab"
+            android:contentDescription="Selector de mapa"
+            android:padding="12dp"
+            android:src="@drawable/ic_layers"
+            android:tint="#FFFFFF" />
+
+        <ImageButton
+            android:id="@+id/btnVoice"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_nav_fab"
+            android:contentDescription="Silenciar voz de navegación"
+            android:padding="12dp"
+            android:src="@drawable/ic_volume"
+            android:tint="#FFFFFF" />
+    </LinearLayout>
+
+    <!-- Resumen del viaje -->
+    <LinearLayout
+        android:id="@+id/navSummaryPill"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:layout_marginStart="20dp"
+        android:layout_marginBottom="104dp"
+        android:background="@drawable/bg_nav_summary"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="10dp">
+
+        <TextView
+            android:id="@+id/navSummaryText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-medium"
+            android:fontFeatureSettings="tnum"
+            android:text=""
+            android:textColor="#FFFFFF"
+            android:textSize="12sp" />
     </LinearLayout>
 
     <!-- Recentrar: aparece cuando el usuario mueve el mapa -->
-    <FrameLayout
+    <LinearLayout
         android:id="@+id/btnRecenter"
-        android:layout_width="56dp"
-        android:layout_height="56dp"
+        android:layout_width="wrap_content"
+        android:layout_height="44dp"
         android:layout_gravity="bottom|end"
         android:layout_marginEnd="24dp"
         android:layout_marginBottom="104dp"
-        android:background="@drawable/bg_play_button"
+        android:background="@drawable/bg_nav_summary"
+        android:clickable="true"
         android:contentDescription="Centrar en el vehículo"
         android:elevation="14dp"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="14dp"
+        android:paddingEnd="16dp"
         android:visibility="gone">
 
         <ImageView
-            android:layout_width="26dp"
-            android:layout_height="26dp"
-            android:layout_gravity="center"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
             android:contentDescription="Centrar"
             android:src="@drawable/ic_nav"
-            android:tint="#FFFFFF" />
-    </FrameLayout>
+            android:tint="#00E5FF" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:fontFamily="sans-serif-medium"
+            android:text="Centrar"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp" />
+    </LinearLayout>
 </FrameLayout>

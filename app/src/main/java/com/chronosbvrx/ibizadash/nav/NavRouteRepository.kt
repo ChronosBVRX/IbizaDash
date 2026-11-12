@@ -8,7 +8,11 @@ data class NavStep(
     val instruction: String,
     val maneuver: String? = null,
     val modifier: String? = null,
-    val distanceMeters: Int = 0
+    val distanceMeters: Int = 0,
+    /** Nombre de la calle de la maniobra (OSRM `name` / TomTom `street`). */
+    val name: String = "",
+    /** Escudo / número de carretera (OSRM `ref` / TomTom `routeNumbers`). */
+    val ref: String = ""
 )
 
 /** Tramo con retraso, en fracción 0..1 del recorrido total. */

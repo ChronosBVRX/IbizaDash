@@ -37,5 +37,13 @@ data class PhoneNavSnapshot(
     val snappedLon: Double,
     val bearing: Float,
     val speedKmh: Float,
-    val remainingM: Int
+    val remainingM: Int,
+    /** Datos de la próxima maniobra para los globos/escudos del estéreo. */
+    val nextName: String = "",
+    val nextRef: String = "",
+    val nextLat: Double = 0.0,
+    val nextLon: Double = 0.0,
+    val nextIcon: String = "",
+    val thenName: String? = null,
+    val thenIcon: String? = null
 )

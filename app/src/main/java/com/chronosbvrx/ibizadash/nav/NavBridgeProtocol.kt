@@ -78,7 +78,7 @@ object NavBridgeProtocol {
                 if (answer != null) reply(answer)
             }
 
-            "ROUTE_SET" -> {
+            "ROUTE_SET", "ROUTE_DATA" -> {
                 Log.i(
                     TAG,
                     "ROUTE_SET destino=${obj.optString("destinationName")} " +
@@ -95,7 +95,9 @@ object NavBridgeProtocol {
                             instruction = s.optString("instruction", ""),
                             maneuver = s.optString("maneuver", "").takeIf { it.isNotBlank() },
                             modifier = s.optString("modifier", "").takeIf { it.isNotBlank() },
-                            distanceMeters = s.optInt("distanceMeters", 0)
+                            distanceMeters = s.optInt("distanceMeters", 0),
+                            name = s.optString("name", ""),
+                            ref = s.optString("ref", "")
                         )
                     )
                 }
@@ -207,7 +209,18 @@ object NavBridgeProtocol {
                     snappedLat = obj.optDouble("snappedLat", lat),
                     snappedLon = obj.optDouble("snappedLon", lon),
                     bearing = obj.optDouble("bearing", 0.0).toFloat(),
-                    speedKmh = obj.optDouble("speedKmh", 0.0).toFloat()
+                    speedKmh = obj.optDouble("speedKmh", 0.0).toFloat(),
+                    nextName = obj.optString("nextName", ""),
+                    nextRef = obj.optString("nextRef", ""),
+                    nextLat = obj.optDouble("nextLat", 0.0),
+                    nextLon = obj.optDouble("nextLon", 0.0),
+                    nextIcon = runCatching {
+                        ManeuverIcon.valueOf(obj.optString("nextIcon", ""))
+                    }.getOrNull(),
+                    thenName = obj.optString("thenName", "").takeIf { it.isNotBlank() },
+                    thenIcon = runCatching {
+                        ManeuverIcon.valueOf(obj.optString("thenIcon", ""))
+                    }.getOrNull()
                 )
                 PhoneNavBridge.onState(context, state)
             }
@@ -367,11 +380,16 @@ object NavBridgeProtocol {
 
             // "ref" = capa de referencia (nombres de calles). Los teléfonos
             // viejos no mandan el campo: se asume base.
-            val folder = if (obj.optString("layer", "base") == "ref") {
-                "EsriDarkRef"
-            } else {
-                "EsriDark"
-            }
+            // `style` elige la subcarpeta del estilo (EsriDark, CartoDark,
+            // WazeNight). Si falta, se usa Esri para no romper clientes viejos.
+            val style = com.chronosbvrx.ibizadash.map.MapStyles.byId(
+                obj.optString("style", "")
+            )
+            val wantsRef = obj.optString("layer", "base") == "ref"
+            // Un estilo sin capa de etiquetas no debe escribir PNG `ref` en su
+            // carpeta base: se descarta el mensaje.
+            if (wantsRef && !style.hasRef) return
+            val folder = if (wantsRef) "${style.folder}Ref" else style.folder
             val base = File(
                 context.getExternalFilesDir(null) ?: context.filesDir,
                 "osmdroid/tiles/$folder"

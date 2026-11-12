@@ -320,7 +320,11 @@ object RouteNavigator {
                 lat = loc.latitude, lon = loc.longitude,
                 snappedLat = snapped.first, snappedLon = snapped.second,
                 bearing = if (loc.hasBearing()) loc.bearing else 0f,
-                speedKmh = speedKmh
+                speedKmh = speedKmh,
+                nextName = route.destinationName,
+                nextLat = endLat,
+                nextLon = endLon,
+                nextIcon = ManeuverIcon.ARRIVE
             )
             NavStateRepository.publish(st)
             keepLegacyPill(route, null, remaining.toInt(), remaining.toInt(), etaMin)
@@ -330,15 +334,20 @@ object RouteNavigator {
         val step = route.steps[nextIdx]
         // "Then" preview: the following step with a different instruction.
         var thenText: String? = null
+        var thenName: String? = null
+        var thenIcon: ManeuverIcon? = null
         for (j in nextIdx + 1 until route.steps.size) {
             val s2 = route.steps[j]
             if (s2.instruction.isNotBlank() && s2.instruction != step.instruction) {
                 thenText = "luego ${s2.instruction}"
+                thenName = s2.name.ifBlank { s2.instruction }
+                thenIcon = maneuverIconFor(s2.maneuver ?: "", s2.modifier ?: "")
                 break
             }
         }
+        val icon = maneuverIconFor(step.maneuver ?: "", step.modifier ?: "")
         val st = NavState(
-            icon = maneuverIconFor(step.maneuver ?: "", step.modifier ?: ""),
+            icon = icon,
             distText = fmtDist(nextDist.toInt()),
             actionText = step.instruction.ifBlank { "Continúa" },
             thenText = thenText,
@@ -351,7 +360,14 @@ object RouteNavigator {
             lat = loc.latitude, lon = loc.longitude,
             snappedLat = snapped.first, snappedLon = snapped.second,
             bearing = if (loc.hasBearing()) loc.bearing else 0f,
-            speedKmh = speedKmh
+            speedKmh = speedKmh,
+            nextName = step.name.ifBlank { step.instruction },
+            nextRef = step.ref,
+            nextLat = step.lat,
+            nextLon = step.lon,
+            nextIcon = icon,
+            thenName = thenName,
+            thenIcon = thenIcon
         )
         NavStateRepository.publish(st)
         keepLegacyPill(route, step.instruction.ifBlank { "Continúa" }, nextDist.toInt(), remaining.toInt(), etaMin)
@@ -409,7 +425,11 @@ object RouteNavigator {
             lat = loc.latitude, lon = loc.longitude,
             snappedLat = loc.latitude, snappedLon = loc.longitude,
             bearing = 0f,
-            speedKmh = 0f
+            speedKmh = 0f,
+            nextName = route.destinationName,
+            nextLat = loc.latitude,
+            nextLon = loc.longitude,
+            nextIcon = ManeuverIcon.ARRIVE
         )
         NavStateRepository.publish(st)
         NavRepository.publish("Has llegado", route.destinationName, null)

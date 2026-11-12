@@ -17,9 +17,11 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -38,9 +40,12 @@ import androidx.core.content.ContextCompat
 import com.chronosbvrx.ibizacompanion.BridgeLink
 import com.chronosbvrx.ibizacompanion.core.design.theme.IbizaColors
 import com.chronosbvrx.ibizacompanion.core.state.CompanionState
+import com.chronosbvrx.ibizacompanion.data.CompanionPrefs
 import com.chronosbvrx.ibizacompanion.data.PlaceResult
 import com.chronosbvrx.ibizacompanion.data.PlaceSearch
+import com.chronosbvrx.ibizacompanion.data.TileSender
 import com.chronosbvrx.ibizacompanion.map.MapFrameSender
+import com.chronosbvrx.ibizacompanion.map.MapStyleCatalog
 import com.chronosbvrx.ibizacompanion.nav.PhoneNavController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -79,13 +84,51 @@ private const val MAP_HTML = """
 <script src="leaflet.js"></script>
 <script>
   var map = L.map('map', { zoomControl:false, attributionControl:true }).setView([19.7060,-101.1950], 15);
-  var tiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 19,
-    attribution: 'Esri, HERE, Garmin, © OpenStreetMap'
-  });
-  tiles.on('tileload', function(e){ console.log('tileload ' + e.tile.src); });
-  tiles.on('tileerror', function(e){ console.log('tileerror ' + e.tile.src); });
-  tiles.addTo(map);
+  var STYLES = {
+    esri_dark: {
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      attr: 'Esri, HERE, Garmin, © OpenStreetMap',
+      max: 16
+    },
+    carto_dark: {
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      attr: 'Esri, HERE, Garmin, © OpenStreetMap',
+      filter: 'saturate(1.15) hue-rotate(-18deg) brightness(1.08) contrast(1.1)',
+      max: 16
+    },
+    waze_night: {
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      attr: 'Esri, HERE, Garmin, © OpenStreetMap',
+      filter: 'saturate(1.15) hue-rotate(-8deg) brightness(1.02)',
+      max: 16
+    }
+  };
+  var tiles = null;
+  // Cambia el estilo base sin recrear el mapa (la misma paleta que el estéreo).
+  function setStyle(id) {
+    var s = STYLES[id] || STYLES.esri_dark;
+    if (tiles) map.removeLayer(tiles);
+    tiles = L.tileLayer(s.url, {
+      maxZoom: 19,
+      maxNativeZoom: s.max || 19,
+      attribution: s.attr
+    });
+    tiles.on('tileload', function(e){ console.log('tileload ' + e.tile.src); });
+    tiles.on('tileerror', function(e){ console.log('tileerror ' + e.tile.src); });
+    tiles.addTo(map);
+    if (tiles.getContainer()) {
+      tiles.getContainer().style.filter = s.filter || 'none';
+    }
+    if (offlineBase && id === 'esri_dark') {
+      if (!map.hasLayer(offline)) { offline.addTo(map); }
+      offline.bringToFront();
+    } else if (offlineBase && map.hasLayer(offline)) {
+      map.removeLayer(offline);
+    }
+    if (routeLine) routeLine.bringToFront();
+    if (me) me.bringToFront();
+    console.log('style ' + id);
+  }
   // Offline-first layer: file:// PNG tree pushed by scripts/build_offline_pack.py.
   // If local tiles miss repeatedly, it removes itself and the online layer shows.
   var offlineBase = null, offlineMisses = 0, offlineHits = 0;
@@ -157,6 +200,7 @@ private const val MAP_HTML = """
     if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
   }
   function center(lat, lon) { map.setView([lat, lon], 16); map.invalidateSize(); }
+  setStyle('esri_dark');
 </script>
 </body>
 </html>
@@ -187,6 +231,7 @@ fun NavigationScreen() {
     var currentBearing by remember { mutableStateOf(0f) }
     var centeredOnce by remember { mutableStateOf(false) }
     var hasFix by remember { mutableStateOf(false) }
+    var mapStyleId by remember { mutableStateOf(CompanionPrefs.mapStyle(context)) }
 
     val hasLocationPermission = ContextCompat.checkSelfPermission(
         context, Manifest.permission.ACCESS_FINE_LOCATION
@@ -329,9 +374,10 @@ fun NavigationScreen() {
         status = "Preparando mapa del recorrido…"
         scope.launch {
             val result = withContext(Dispatchers.IO) {
-                com.chronosbvrx.ibizacompanion.data.TileSender.sendRouteTiles(
+                TileSender.sendRouteTiles(
                     context,
-                    preview.encodedPolyline
+                    preview.encodedPolyline,
+                    mapStyleId
                 ) { sent, total ->
                     if (sent == total || sent % 8 == 0) {
                         mainHandler.post {
@@ -345,7 +391,63 @@ fun NavigationScreen() {
             status = when {
                 result.total == 0 -> "Sin Wi-Fi activo: no se envió el mapa"
                 result.sent == 0 -> "No se pudo descargar el mapa del recorrido"
-                else -> "Mapa enviado: ${result.sent}/${result.total} teselas"
+                else -> "Mapa ${MapStyleCatalog.byId(mapStyleId).label}: " +
+                    "${result.sent}/${result.total} teselas"
+            }
+        }
+    }
+
+    /**
+     * Descarga z15–z17 del estilo elegido: corredor de la ruta activa si hay
+     * una, o un radio de 2.5 km alrededor de la posición actual.
+     */
+    fun downloadZone() {
+        if (sendingTiles) return
+        if (!BridgeLink.isWifiActive()) {
+            status = "Conecta por Wi-Fi Direct para descargar el mapa"
+            return
+        }
+        sendingTiles = true
+        tileProgress = "0/0"
+        status = "Descargando zona z15–z17…"
+        val polyline = appState.routePolyline
+        val fromRoute = appState.routeActive && polyline.isNotBlank()
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                val progress: (Int, Int) -> Unit = { sent, total ->
+                    if (sent == total || sent % 8 == 0) {
+                        mainHandler.post {
+                            tileProgress = "$sent/$total"
+                            status = "Descargando $sent/$total…"
+                        }
+                    }
+                }
+                if (fromRoute) {
+                    TileSender.sendRouteTiles(
+                        context,
+                        polyline,
+                        mapStyleId,
+                        intArrayOf(15, 16, 17),
+                        progress
+                    )
+                } else {
+                    TileSender.sendAreaTiles(
+                        context,
+                        currentLat,
+                        currentLon,
+                        mapStyleId,
+                        2.5,
+                        intArrayOf(15, 16, 17),
+                        progress
+                    )
+                }
+            }
+            sendingTiles = false
+            status = when {
+                result.total == 0 -> "Sin Wi-Fi activo: no se descargó nada"
+                result.sent == 0 -> "No se pudo descargar la zona"
+                else -> "Zona lista: ${result.sent}/${result.total} teselas " +
+                    "(${MapStyleCatalog.byId(mapStyleId).label})"
             }
         }
     }
@@ -485,6 +587,12 @@ fun NavigationScreen() {
             }
         }
 
+        LaunchedEffect(webView, mapReady, mapStyleId) {
+            if (mapReady) {
+                webView?.evaluateJavascript("setStyle('$mapStyleId')", null)
+            }
+        }
+
         LaunchedEffect(webView, mapReady, appState.wifiConnected, appState.routeActive) {
             val view = webView
             if (view != null && mapReady && appState.wifiConnected && appState.routeActive) {
@@ -576,6 +684,56 @@ fun NavigationScreen() {
                     cursorColor = IbizaColors.Primary
                 )
             )
+            Spacer(Modifier.height(8.dp))
+            // Estilo de mapa: el mismo id viaja al estéreo en TILE_REQ.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                MapStyleCatalog.ALL.forEach { style ->
+                    FilterChip(
+                        selected = style.id == mapStyleId,
+                        onClick = {
+                            mapStyleId = style.id
+                            MapStyleCatalog.select(context, style)
+                            webView?.evaluateJavascript("setStyle('${style.id}')", null)
+                            status = "Mapa: ${style.label}"
+                        },
+                        label = { Text(style.label, maxLines = 1) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = IbizaColors.Primary,
+                            selectedLabelColor = IbizaColors.Background,
+                            labelColor = IbizaColors.TextSecondary,
+                            containerColor = IbizaColors.SurfaceElevated
+                        )
+                    )
+                }
+                AssistChip(
+                    onClick = { downloadZone() },
+                    enabled = !sendingTiles,
+                    label = {
+                        Text(
+                            if (sendingTiles) "Descargando $tileProgress" else "Descargar zona z15–17",
+                            maxLines = 1
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = IbizaColors.Primary
+                        )
+                    },
+                    colors = AssistChipDefaults.assistChipColors(
+                        labelColor = IbizaColors.Primary,
+                        containerColor = IbizaColors.SurfaceElevated
+                    )
+                )
+            }
             if (results.isNotEmpty()) {
                 Spacer(Modifier.height(6.dp))
                 TextButton(onClick = { showSheet = true }) {
@@ -722,8 +880,28 @@ fun NavigationScreen() {
                             color = IbizaColors.TextSecondary
                         )
                     }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { downloadZone() },
+                        enabled = !sendingTiles,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = IbizaColors.Primary
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            if (sendingTiles) "Descargando $tileProgress"
+                            else "Descargar zona z15–17 (${MapStyleCatalog.byId(mapStyleId).label})",
+                            color = IbizaColors.Primary
+                        )
+                    }
                     Text(
-                        "Teselas z14–z15 por Wi-Fi Direct (offline en el estéreo).",
+                        "Teselas z14–z16 en el corredor · z15–z17 con \"Descargar zona\".",
                         style = MaterialTheme.typography.labelSmall,
                         color = IbizaColors.TextSecondary
                     )

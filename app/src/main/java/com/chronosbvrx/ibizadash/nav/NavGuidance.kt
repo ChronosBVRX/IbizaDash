@@ -40,7 +40,19 @@ data class NavState(
     val snappedLat: Double,
     val snappedLon: Double,
     val bearing: Float,
-    val speedKmh: Float
+    val speedKmh: Float,
+    /**
+     * Datos de la próxima maniobra para los globos y escudos del HUD 2.5D.
+     * `nextName` es el nombre de la calle del `step`, `nextRef` el escudo
+     * (ej. "48D") y `nextLat/nextLon` el vértice exacto del giro.
+     */
+    val nextName: String = "",
+    val nextRef: String = "",
+    val nextLat: Double = 0.0,
+    val nextLon: Double = 0.0,
+    val nextIcon: ManeuverIcon? = null,
+    val thenName: String? = null,
+    val thenIcon: ManeuverIcon? = null
 )
 
 object NavStateRepository {

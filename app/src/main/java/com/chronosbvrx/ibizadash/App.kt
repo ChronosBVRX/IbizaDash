@@ -31,6 +31,9 @@ class App : Application() {
         Configuration.getInstance().osmdroidBasePath = base
         Configuration.getInstance().osmdroidTileCache = tiles
 
+        // Caché en RAM estricta para el A7: 16 teselas + 2 de overshoot.
+        com.chronosbvrx.ibizadash.map.MapHelper.configureRamCaps()
+
         // osmdroid 6.1 guarda la caché como "<z>/<x>/<y>.tile". Los módulos y
         // el teléfono enviaban ".png", así que el mapa no las encontraba.
         migrateTileExtensions(tiles)

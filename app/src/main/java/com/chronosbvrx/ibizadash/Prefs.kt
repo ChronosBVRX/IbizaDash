@@ -20,6 +20,8 @@ object Prefs {
     private const val VOICE_ON = "voice_on"
     private const val P2P_5GHZ = "p2p_5ghz"
     private const val NAV_GPS_SOURCE = "nav_gps_source"
+    private const val MAP_STYLE = "map_style"
+    private const val NAV_NORTH_UP = "nav_north_up"
 
     private fun p(context: Context) =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -122,6 +124,22 @@ object Prefs {
             .edit()
             .putString(NAV_GPS_SOURCE, if (value) "phone" else "car")
             .apply()
+    }
+
+    /** Estilo raster activo (`esri_dark`, `carto_dark`, `waze_night`). */
+    fun mapStyle(context: Context): String =
+        p(context).getString(MAP_STYLE, "esri_dark") ?: "esri_dark"
+
+    fun setMapStyle(context: Context, id: String) {
+        p(context).edit().putString(MAP_STYLE, id).apply()
+    }
+
+    /** Brújula: norte arriba fijo en vez de rumbo arriba. */
+    fun navNorthUp(context: Context): Boolean =
+        p(context).getBoolean(NAV_NORTH_UP, false)
+
+    fun setNavNorthUp(context: Context, value: Boolean) {
+        p(context).edit().putBoolean(NAV_NORTH_UP, value).apply()
     }
 
     fun totalOdometerKm(context: Context): Float =

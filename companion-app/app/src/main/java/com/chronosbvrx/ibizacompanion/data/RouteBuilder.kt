@@ -89,6 +89,7 @@ object RouteBuilder {
                 val lat = loc?.optDouble(1, 0.0) ?: 0.0
                 val lon = loc?.optDouble(0, 0.0) ?: 0.0
                 val name = s.optString("name", "")
+                val ref = s.optString("ref", "")
                 val type = man?.optString("type", "") ?: ""
                 val modifier = man?.optString("modifier", "") ?: ""
                 val instruction = humanInstruction(type, modifier, name)
@@ -99,6 +100,8 @@ object RouteBuilder {
                     put("maneuver", type)
                     put("modifier", modifier)
                     put("distanceMeters", s.optInt("distance", 0))
+                    put("name", name)
+                    put("ref", ref)
                 })
             }
         }

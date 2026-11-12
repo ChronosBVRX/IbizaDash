@@ -12,7 +12,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
   (capturas reales del estéreo y del teléfono, con hojas de contacto).
 - **Paquete del estéreo:** `com.chronosbvrx.ibizadash`
 - **Paquete del teléfono:** `com.chronosbvrx.ibizacompanion`
-- **Versiones actuales:** IbizaDash **1.10.2** (versionCode 36) · IbizaCompanion **1.9.4** (versionCode 28)
+- **Versiones actuales:** IbizaDash **1.11.0** (versionCode 37) · IbizaCompanion **1.10.0** (versionCode 29)
 - **minSdk 23 / targetSdk 33 / compileSdk 36** (estéreo)
 - Hecho con **Views** (sin Compose) en el estéreo para que sea liviano en el Cortex-A7.
 
@@ -306,13 +306,22 @@ el coche orientado sobre el trazo de la ruta.
 - **Cámara**: en NAV el coche se ancla al ~65 % del alto (`setMapCenterOffset(0, 90dp)`)
   para enseñar camino por delante; fuera de NAV vuelve al centro. El pivote de rotación
   usa el mismo offset, así que el coche no se mueve al girar en heading-up.
-- **Zoom por velocidad**: 17 urbano, 16 carretera, 15 autopista, con histéresis para que no
-  oscile. z17 solo se activa con el enlace Wi-Fi activo y **espera a que las teselas estén
-  en disco** (`navZoomTilesReady`): osmdroid no rellena con z16, así que acercarse antes de
-  tiempo dejaría huecos.
-- **Ruta en tres pasadas**: glow cian al 20 %, casing oscuro de 18 px y línea cian de 12 px
-  con extremos redondeados; tramos de tráfico de 14 px encima. Flechas de dirección cada
-  ~120 m (`RouteChevronOverlay`) y pin de destino en cobre (`#E07A5F`).
+- **Zoom por velocidad**: 16 urbano, 16 carretera y 15 autopista, con histéresis para que no
+  oscile. Esri no tiene z17 en muchas zonas de México (devuelve “Map data not yet available”),
+  así que los estilos limitan a **z16**; el teléfono puede cachear z15–z17 para otros estilos.
+- **Ruta en dos pasadas**: casing azul petróleo (`#004C70`, 18 dp) y línea cian (`#00E5FF`,
+  12 dp) con extremos redondeados; tramos de tráfico de 14 dp encima. Sin glow ni flechas
+  repetidas: una sola insignia con el ícono de la próxima maniobra y **globos de calle +
+  escudos viales** (`step.name` / `step.ref`) dibujados en espacio de pantalla, sin
+  aplastarse por el `rotateX`.
+- **Coche 3D**: sprite verde de 128×128 (64 KB) con vista trasera, sombra integrada y
+  micro-rotación ±12° en curvas. Sustituye al puck/cono en 2.5D; en NAV plano se conserva el
+  puck clásico.
+- **Estilos de mapa**: `Esri Dark`, `Slate Dark` y `Waze Night` (los tres sobre Esri Dark Gray,
+  con paletas y capas de etiquetas propias). Selector en el HUD con teselas/MB cacheados por
+  estilo; el teléfono pre-descarga el estilo elegido y cada uno vive en su carpeta.
+- **RAM**: teselas base en `RGB_565`, caché de 16 teselas (+2), sin capa `ref` en 2.5D y
+  `Path`/`Paint` reutilizados en los overlays.
 - **Puck**: halo y cono de rumbo bajo el sprite de 56 dp (`NavPuckOverlay`). El sprite se
   dibuja siempre erguido en NAV, porque osmdroid mantiene los marcadores `flat` en pantalla.
 - **Etiquetas**: segunda capa `TilesOverlay` con `World_Dark_Gray_Reference` de Esri

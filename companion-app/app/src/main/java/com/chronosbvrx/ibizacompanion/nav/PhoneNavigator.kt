@@ -43,7 +43,9 @@ class PhoneNavigator(
         val lon: Double,
         val instruction: String,
         val maneuver: String,
-        val modifier: String
+        val modifier: String,
+        val name: String,
+        val ref: String
     )
 
     private val appContext = context.applicationContext
@@ -78,7 +80,9 @@ class PhoneNavigator(
             lon = lon,
             instruction = s.optString("instruction", ""),
             maneuver = s.optString("maneuver", ""),
-            modifier = s.optString("modifier", "")
+            modifier = s.optString("modifier", ""),
+            name = s.optString("name", ""),
+            ref = s.optString("ref", "")
         )
     }
 
@@ -292,7 +296,11 @@ class PhoneNavigator(
                 snappedLon = loc.longitude,
                 bearing = 0f,
                 speedKmh = 0f,
-                remainingM = 0
+                remainingM = 0,
+                nextName = route.destinationName,
+                nextLat = loc.latitude,
+                nextLon = loc.longitude,
+                nextIcon = "ARRIVE"
             )
             onState(snapshot)
             stop()
@@ -347,20 +355,29 @@ class PhoneNavigator(
                 snappedLon = snapped.second,
                 bearing = if (loc.hasBearing()) loc.bearing else 0f,
                 speedKmh = speedKmh,
-                remainingM = remaining.toInt()
+                remainingM = remaining.toInt(),
+                nextName = route.destinationName,
+                nextLat = endLat,
+                nextLon = endLon,
+                nextIcon = "ARRIVE"
             )
         } else {
             val step = steps[nextIdx]
             var thenText: String? = null
+            var thenName: String? = null
+            var thenIcon: String? = null
             for (j in nextIdx + 1 until steps.size) {
                 val s2 = steps[j]
                 if (s2.instruction.isNotBlank() && s2.instruction != step.instruction) {
                     thenText = "luego ${s2.instruction}"
+                    thenName = s2.name.ifBlank { s2.instruction }
+                    thenIcon = maneuverIconFor(s2.maneuver, s2.modifier)
                     break
                 }
             }
+            val icon = maneuverIconFor(step.maneuver, step.modifier)
             PhoneNavSnapshot(
-                icon = maneuverIconFor(step.maneuver, step.modifier),
+                icon = icon,
                 distText = fmtDist(nextDist.toInt()),
                 actionText = step.instruction.ifBlank { "Continúa" },
                 thenText = thenText,
@@ -376,7 +393,14 @@ class PhoneNavigator(
                 snappedLon = snapped.second,
                 bearing = if (loc.hasBearing()) loc.bearing else 0f,
                 speedKmh = speedKmh,
-                remainingM = remaining.toInt()
+                remainingM = remaining.toInt(),
+                nextName = step.name.ifBlank { step.instruction },
+                nextRef = step.ref,
+                nextLat = step.lat,
+                nextLon = step.lon,
+                nextIcon = icon,
+                thenName = thenName,
+                thenIcon = thenIcon
             )
         }
         onState(snapshot)

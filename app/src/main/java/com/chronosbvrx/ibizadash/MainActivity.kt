@@ -14,8 +14,6 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.ColorMatrix
-import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.drawable.BitmapDrawable
@@ -40,6 +38,8 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.RadioButton
+import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
@@ -63,7 +63,9 @@ import com.chronosbvrx.ibizadash.bluetooth.BluetoothStatus
 import com.chronosbvrx.ibizadash.bluetooth.BluetoothStatusClient
 import com.chronosbvrx.ibizadash.map.CacheAwareTilesOverlay
 import com.chronosbvrx.ibizadash.map.MapHelper
-import com.chronosbvrx.ibizadash.map.RouteChevronOverlay
+import com.chronosbvrx.ibizadash.map.MapStyle
+import com.chronosbvrx.ibizadash.map.MapStyles
+import com.chronosbvrx.ibizadash.map.RouteLineOverlay
 import com.chronosbvrx.ibizadash.media.MediaKeys
 import com.chronosbvrx.ibizadash.media.MediaRepository
 import com.chronosbvrx.ibizadash.media.NowPlaying
@@ -218,11 +220,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var navCardDist: TextView
     private lateinit var navCardAction: TextView
     private lateinit var navCardThen: TextView
+    private lateinit var navCardThenRow: View
+    private lateinit var navCardThenIcon: ImageView
     private lateinit var navCardEta: TextView
     private lateinit var navCardRemaining: TextView
     private lateinit var navCardDest: TextView
     private lateinit var navCardTraffic: TextView
     private lateinit var navCardProgress: ProgressBar
+    private lateinit var navSummaryPill: View
+    private lateinit var navSummaryText: TextView
+    private lateinit var btnCompass: ImageButton
+    private lateinit var btnMapStyle: ImageButton
+    private lateinit var btnVoice: ImageButton
     private lateinit var navFinish: View
     private lateinit var navExit: View
     private lateinit var btnRecenter: View
@@ -347,22 +356,6 @@ class MainActivity : AppCompatActivity() {
     private val timeFormat = SimpleDateFormat("h:mm", Locale.getDefault())
     private val dateFormat = SimpleDateFormat("EEEE d MMMM", Locale("es", "MX"))
 
-    /** Tinte azul petróleo + contraste para las teselas base en NAV. */
-    private val navRoadColorFilter by lazy {
-        val contrast = 1.24f
-        val translate = (0.5f - 0.5f * contrast) * 255f
-        ColorMatrixColorFilter(
-            ColorMatrix(
-                floatArrayOf(
-                    contrast * 0.92f, 0f, 0f, 0f, translate - 4f,
-                    0f, contrast * 1.00f, 0f, 0f, translate + 2f,
-                    0f, 0f, contrast * 1.12f, 0f, translate + 12f,
-                    0f, 0f, 0f, 1f, 0f
-                )
-            )
-        )
-    }
-
     private val perspectiveReenable = Runnable {
         if (!perspectiveTouchDown) updatePerspective()
     }
@@ -382,14 +375,14 @@ class MainActivity : AppCompatActivity() {
     // punto de corte, el rumbo de la carretera y el progreso.
     private var routePoints: List<GeoPoint> = emptyList()
     private var routeCum = DoubleArray(0)
-    private var routePolyline: Polyline? = null
-    private var routeCasing: Polyline? = null
-    private var routeGlow: Polyline? = null
-    private var chevronOverlay: RouteChevronOverlay? = null
+    private var routeLineOverlay: RouteLineOverlay? = null
     private var puckOverlay: NavPuckOverlay? = null
     private var destIcon: BitmapDrawable? = null
+    private var navCar3d: android.graphics.drawable.Drawable? = null
     private var destinationMarker: org.osmdroid.views.overlay.Marker? = null
     private val routeTrafficOverlays = mutableListOf<RouteTrafficOverlay>()
+    private var currentMapStyle: MapStyle = MapStyles.ESRI_DARK
+    private var navNorthUp = false
 
     // Perspectiva de conducción (solo NAV follow).
     private lateinit var perspectiveMap: PerspectiveMapView
@@ -500,11 +493,17 @@ class MainActivity : AppCompatActivity() {
     private var lastDisplayBearing = 0f
     private var bearingAnimator: android.animation.ValueAnimator? = null
     private var lastNavState: NavState? = null
+    private var calloutKey = ""
 
     /** Waze-style maneuver banner + mini strip + tarjeta de navegación. */
     private fun renderNavState(state: NavState?) {
         lastNavState = state
         if (state == null) {
+            calloutKey = ""
+            try {
+                perspectiveOverlay.clearCallout()
+            } catch (_: Exception) {
+            }
             miniMavStrip.visibility = View.GONE
             lastMapBearing = 0f
             resetMapBearing()
@@ -563,12 +562,43 @@ class MainActivity : AppCompatActivity() {
             }
         }
         updateRouteDisplay(state)
+        updateStreetCallout(state)
         renderNavOverlay()
         com.chronosbvrx.ibizadash.nav.VoiceGuidance.onState(
             this,
             state,
             NavRouteRepository.current
         )
+    }
+
+    /**
+     * Globos vectoriales de calle + escudo en 2.5D. Se actualizan solo cuando
+     * cambia la maniobra (no en cada fix) y se dibujan en espacio de pantalla.
+     */
+    private fun updateStreetCallout(state: NavState) {
+        if (!::perspectiveOverlay.isInitialized) return
+        if (focus != Focus.NAV) {
+            if (calloutKey.isNotEmpty()) {
+                calloutKey = ""
+                perspectiveOverlay.clearCallout()
+            }
+            return
+        }
+        val name = state.nextName.ifBlank { state.actionText }
+        val lat = state.nextLat
+        val lon = state.nextLon
+        if (name.isBlank() || (lat == 0.0 && lon == 0.0)) {
+            if (calloutKey.isNotEmpty()) {
+                calloutKey = ""
+                perspectiveOverlay.clearCallout()
+            }
+            return
+        }
+        val icon = state.nextIcon ?: state.icon
+        val key = "$name|${state.nextRef}|${icon.name}|$lat|$lon"
+        if (key == calloutKey) return
+        calloutKey = key
+        perspectiveOverlay.setCallout(name, state.nextRef, icon, lat, lon)
     }
 
     /** Muestra un frame del mapa renderizado por el teléfono (Fase 2). */
@@ -960,11 +990,18 @@ class MainActivity : AppCompatActivity() {
         navCardDist = findViewById(R.id.navCardDist)
         navCardAction = findViewById(R.id.navCardAction)
         navCardThen = findViewById(R.id.navCardThen)
+        navCardThenRow = findViewById(R.id.navCardThenRow)
+        navCardThenIcon = findViewById(R.id.navCardThenIcon)
         navCardEta = findViewById(R.id.navCardEta)
         navCardRemaining = findViewById(R.id.navCardRemaining)
         navCardDest = findViewById(R.id.navCardDest)
         navCardTraffic = findViewById(R.id.navCardTraffic)
         navCardProgress = findViewById(R.id.navCardProgress)
+        navSummaryPill = findViewById(R.id.navSummaryPill)
+        navSummaryText = findViewById(R.id.navSummaryText)
+        btnCompass = findViewById(R.id.btnCompass)
+        btnMapStyle = findViewById(R.id.btnMapStyle)
+        btnVoice = findViewById(R.id.btnVoice)
         navFinish = findViewById(R.id.navFinish)
         navExit = findViewById(R.id.navExit)
         btnRecenter = findViewById(R.id.btnRecenter)
@@ -976,6 +1013,38 @@ class MainActivity : AppCompatActivity() {
             NavRouteRepository.clear()
             applyFocus(Focus.COCKPIT)
         }
+        btnCompass.setOnClickListener {
+            navNorthUp = !navNorthUp
+            Prefs.setNavNorthUp(this, navNorthUp)
+            if (navNorthUp) {
+                resetMapBearing()
+            } else {
+                lastNavState?.let { applyNavigationHeading(lastDisplayBearing) }
+            }
+            updateCompass()
+            Toast.makeText(
+                this,
+                if (navNorthUp) "Norte arriba" else "Rumbo arriba",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+        btnMapStyle.setOnClickListener { showMapStyleDialog() }
+        btnVoice.setOnClickListener {
+            val on = !Prefs.voiceOn(this)
+            Prefs.setVoiceOn(this, on)
+            updateVoiceButton()
+            try {
+                if (::swVoice.isInitialized) swVoice.isChecked = on
+            } catch (_: Exception) {
+            }
+            Toast.makeText(
+                this,
+                if (on) "Voz de navegación activada" else "Voz de navegación silenciada",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+        updateVoiceButton()
+        updateCompass()
         btnRecenter.setOnClickListener {
             mapMode = MapMode.FOLLOWING
             lastUserMapTouchMs = 0L
@@ -1181,14 +1250,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupMap() {
-        MapHelper.configure(this, map)
-        refTilesOverlay = map.overlays.filterIsInstance<CacheAwareTilesOverlay>().firstOrNull()
+        currentMapStyle = MapStyles.current(this)
+        navNorthUp = Prefs.navNorthUp(this)
+        refTilesOverlay = MapHelper.configure(this, map, currentMapStyle)
+        navCar3d = try {
+            com.chronosbvrx.ibizadash.ui.CarSpriteFactory.create(this)
+        } catch (_: Exception) {
+            null
+        }
         // Perspectiva de conducción: el puck y el coche se dibujan fuera de
         // la matriz 3D para no aplastarse. Un toque aplana el mapa antes de
         // entregar el evento a osmdroid; al soltar, si seguimos en NAV,
         // vuelve solo a la inclinación.
         perspectiveMap.pitch = 0f
-        perspectiveMap.overscan = 1.28f
+        perspectiveMap.overscan = 1.25f
         perspectiveMap.carScreenFraction = 0.79f
         perspectiveMap.onTouchDown = {
             perspectiveTouchDown = true
@@ -1203,6 +1278,7 @@ class MainActivity : AppCompatActivity() {
         perspectiveOverlay.bind(
             perspectiveMap,
             { positionMarker?.icon },
+            { navCar3d },
             { destIcon },
             { routePoints.lastOrNull() }
         )
@@ -1247,14 +1323,13 @@ class MainActivity : AppCompatActivity() {
                 override fun longPressHelper(p: GeoPoint): Boolean = false
             })
         )
-        // Puck (halo + cono) y flechas: viven en el MapView y solo se
-        // activan en NAV. El marcador del coche se crea después y queda
-        // encima; bringPuckToFront() mantiene ese orden al dibujar la ruta.
+        // Ruta 2D (2 pasadas) y puck. La ruta se añade antes que el puck para
+        // que este quede encima; bringPuckToFront() lo reafirma al cambiarla.
         try {
+            routeLineOverlay = RouteLineOverlay(this).also { map.overlays.add(it) }
             puckOverlay = NavPuckOverlay(this).apply {
                 anchor = { positionMarker?.position }
             }.also { map.overlays.add(it) }
-            chevronOverlay = RouteChevronOverlay(this).also { map.overlays.add(it) }
         } catch (_: Exception) {
         }
     }
@@ -1342,43 +1417,10 @@ class MainActivity : AppCompatActivity() {
         lastRouteTrimMs = 0L
         followPoint = points.first()
 
-        // Tres pasadas: glow (26 px) → casing oscuro (18 px) → línea cian
-        // (12 px). El resultado es una ruta con borde limpio y un halo suave,
-        // legible sobre el mapa oscuro sin engordar el trazo interior.
-        val glow = Polyline(map).apply {
-            setPoints(points)
-            outlinePaint.color = 0x3300E5FF
-            outlinePaint.strokeWidth = 26f
-            outlinePaint.strokeCap = Paint.Cap.ROUND
-            outlinePaint.strokeJoin = Paint.Join.ROUND
-            outlinePaint.isAntiAlias = true
-            isGeodesic = false
-        }
-        val casing = Polyline(map).apply {
-            setPoints(points)
-            outlinePaint.color = Color.parseColor("#0A1018")
-            outlinePaint.strokeWidth = 18f
-            outlinePaint.strokeCap = Paint.Cap.ROUND
-            outlinePaint.strokeJoin = Paint.Join.ROUND
-            outlinePaint.isAntiAlias = true
-            isGeodesic = false
-        }
-        val core = Polyline(map).apply {
-            setPoints(points)
-            outlinePaint.color = Color.parseColor("#00E5FF")
-            outlinePaint.strokeWidth = 12f
-            outlinePaint.strokeCap = Paint.Cap.ROUND
-            outlinePaint.strokeJoin = Paint.Join.ROUND
-            outlinePaint.isAntiAlias = true
-            isGeodesic = false
-        }
-        for (line in arrayOf(glow, casing, core)) {
-            map.overlays.add(line)
-            routeOverlays.add(line)
-        }
-        routeGlow = glow
-        routeCasing = casing
-        routePolyline = core
+        // Dos pasadas limpias: casing azul petróleo (18 px) + core cian
+        // (12 px). Sin glow ni flechas repetidas: el vértice de la próxima
+        // maniobra se dibuja en pantalla (PerspectiveNavOverlayView).
+        routeLineOverlay?.setPoints(points)
 
         // Tramos con tráfico: se pintan encima y más gruesos, como en Waze.
         if (route.trafficSections.isNotEmpty() && points.size > 2) {
@@ -1403,18 +1445,6 @@ class MainActivity : AppCompatActivity() {
                     RouteTrafficOverlay(overlay, span.from, span.to, ArrayList(sub))
                 )
             }
-        }
-
-        // Flechas de dirección cada ~120 m, por encima de la línea y debajo
-        // del destino y del puck.
-        chevronOverlay?.let { overlay ->
-            overlay.arrows = buildChevrons(points, routeCum)
-            overlay.fromIndex = 0
-            overlay.visible = focus == Focus.NAV
-            // Las tres pasadas acaban de añadirse: hay que subir las flechas
-            // por encima de la línea (antes viven debajo del mapa).
-            if (map.overlays.contains(overlay)) map.overlays.remove(overlay)
-            map.overlays.add(overlay)
         }
 
         // Pin de destino propio (cobre del sistema visual, no el pin genérico).
@@ -1457,12 +1487,8 @@ class MainActivity : AppCompatActivity() {
             routeOverlays.clear()
         }
         routeTrafficOverlays.clear()
-        routePolyline = null
-        routeCasing = null
-        routeGlow = null
-        chevronOverlay?.arrows = emptyList()
-        chevronOverlay?.fromIndex = 0
-        chevronOverlay?.visible = false
+        routeLineOverlay?.clear()
+        perspectiveOverlay.clearCallout()
         routePoints = emptyList()
         routeCum = DoubleArray(0)
         routeTrimCursor = 0
@@ -1470,31 +1496,6 @@ class MainActivity : AppCompatActivity() {
         lastRouteTrimMs = 0L
         followPoint = null
         map.invalidate()
-    }
-
-    /**
-     * Flechas cada ~120 m. Se calculan una vez por ruta (no por frame) y el
-     * overlay descarta las que ya quedaron atrás.
-     */
-    private fun buildChevrons(
-        points: List<GeoPoint>,
-        cum: DoubleArray
-    ): List<RouteChevronOverlay.Arrow> {
-        if (points.size < 3 || cum.size != points.size) return emptyList()
-        val spacing = 120.0
-        val out = ArrayList<RouteChevronOverlay.Arrow>()
-        var next = spacing
-        for (i in 1 until points.size) {
-            if (cum[i] < next) continue
-            val a = points[i - 1]
-            val b = points[i]
-            if (geoDist(a.latitude, a.longitude, b.latitude, b.longitude) < 0.5) continue
-            val bearing = bearingBetween(a.latitude, a.longitude, b.latitude, b.longitude)
-            out.add(RouteChevronOverlay.Arrow(b, bearing, i))
-            next = cum[i] + spacing
-            if (out.size >= 2000) break
-        }
-        return out
     }
 
     /** Pin de destino dibujado en código: cobre con borde carbón. */
@@ -1639,13 +1640,9 @@ class MainActivity : AppCompatActivity() {
             routeTrimCursor = cut
             val remaining = routePoints.subList(cut, routePoints.size)
             if (remaining.size >= 2) {
-                // Las tres pasadas se recortan juntas para que el casing y el
-                // glow no se queden pintados detrás del coche.
-                routePolyline?.setPoints(ArrayList(remaining))
-                routeCasing?.setPoints(ArrayList(remaining))
-                routeGlow?.setPoints(ArrayList(remaining))
+                // Una sola pasada de datos: casing y core comparten el Path.
+                routeLineOverlay?.setPoints(ArrayList(remaining))
             }
-            chevronOverlay?.fromIndex = cut
         }
         trimTrafficOverlays(progress)
         map.invalidate()
@@ -1761,13 +1758,42 @@ class MainActivity : AppCompatActivity() {
             val json = intent.getStringExtra("routeJson")
             Log.i("MainActivity", "DEBUG_ROUTE_SET recibido (${json?.length ?: 0} chars)")
             if (json.isNullOrBlank()) {
-                // inject a default test route
+                // Ruta de prueba 2.5D alrededor de Morelia (calles, escudo y
+                // tráfico) para validar globos, flecha y recorte sin teléfono.
                 val test = NavRoute(
                     destinationName = "Centro Histórico, Morelia",
-                    totalDistanceMeters = 8450,
-                    totalDurationSeconds = 1140,
-                    encodedPolyline = MapHelper.encodeTestPolyline(),
-                    steps = emptyList()
+                    totalDistanceMeters = 4300,
+                    totalDurationSeconds = 600,
+                    encodedPolyline = "oygwBvsshR_SoPsS_S{ToP{T_S{ToP",
+                    steps = listOf(
+                        com.chronosbvrx.ibizadash.nav.NavStep(
+                            lat = 19.7125, lon = -101.1890,
+                            instruction = "Gira a la derecha en Cto. Cañadas del Bosque",
+                            maneuver = "turn", modifier = "right",
+                            distanceMeters = 1200,
+                            name = "Cto. Cañadas del Bosque", ref = "48D"
+                        ),
+                        com.chronosbvrx.ibizadash.nav.NavStep(
+                            lat = 19.7195, lon = -101.1830,
+                            instruction = "Continúa por Av. Camelinas",
+                            maneuver = "continue", modifier = "straight",
+                            distanceMeters = 2100,
+                            name = "Av. Camelinas", ref = "126"
+                        ),
+                        com.chronosbvrx.ibizadash.nav.NavStep(
+                            lat = 19.7230, lon = -101.1802,
+                            instruction = "Llegaste a tu destino",
+                            maneuver = "arrive", modifier = "",
+                            distanceMeters = 0,
+                            name = "Destino", ref = ""
+                        )
+                    ),
+                    trafficDelaySeconds = 180,
+                    trafficSections = listOf(
+                        com.chronosbvrx.ibizadash.nav.TrafficSpan(
+                            from = 0.3f, to = 0.6f, delaySeconds = 180, speedKmh = 15
+                        )
+                    )
                 )
                 NavRouteRepository.set(test)
             } else {
@@ -1787,12 +1813,30 @@ class MainActivity : AppCompatActivity() {
                             )
                         }
                     }
+                    val steps = ArrayList<com.chronosbvrx.ibizadash.nav.NavStep>()
+                    obj.optJSONArray("steps")?.let { arr ->
+                        for (i in 0 until arr.length()) {
+                            val s = arr.optJSONObject(i) ?: continue
+                            steps.add(
+                                com.chronosbvrx.ibizadash.nav.NavStep(
+                                    lat = s.optDouble("lat", 0.0),
+                                    lon = s.optDouble("lon", 0.0),
+                                    instruction = s.optString("instruction", ""),
+                                    maneuver = s.optString("maneuver", "").takeIf { it.isNotBlank() },
+                                    modifier = s.optString("modifier", "").takeIf { it.isNotBlank() },
+                                    distanceMeters = s.optInt("distanceMeters", 0),
+                                    name = s.optString("name", ""),
+                                    ref = s.optString("ref", "")
+                                )
+                            )
+                        }
+                    }
                     val route = NavRoute(
                         destinationName = obj.optString("destinationName", "Destino"),
                         totalDistanceMeters = obj.optInt("totalDistanceMeters", 0),
                         totalDurationSeconds = obj.optInt("totalDurationSeconds", 0),
                         encodedPolyline = obj.optString("encodedPolyline", ""),
-                        steps = emptyList(),
+                        steps = steps,
                         trafficDelaySeconds = obj.optInt("trafficDelayS", 0),
                         trafficSections = spans
                     )
@@ -4258,7 +4302,9 @@ class MainActivity : AppCompatActivity() {
         // Reloj oculto en NAV porque la tarjeta de maniobra lo ocupa.
         setPill(clockBlock, target != Focus.NAV)
         setPill(navPill, target == Focus.MEDIA || target == Focus.VEHICLE)
-        setPill(hudPill, target != Focus.COCKPIT)
+        // En NAV el resumen inferior ya lleva velocidad/tiempo; el HUD de
+        // velocidad se solaparía con la píldora de resumen.
+        setPill(hudPill, target == Focus.MEDIA || target == Focus.VEHICLE)
         // La tarjeta de clima grande es solo de Inicio: en el resto de focos
         // el pane izquierdo se estrecha y la tarjeta desbordaría.
         if (::weatherCard.isInitialized) {
@@ -4385,13 +4431,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Muestra u oculta el puck y las flechas según el foco. */
+    /** Muestra u oculta el puck según el foco y la perspectiva. */
     private fun syncMapPuck(nav: Boolean) {
         if (!::map.isInitialized) return
         try {
             val screenSpace = nav && perspectiveActive
             puckOverlay?.visible = nav && !screenSpace
-            chevronOverlay?.visible = nav && routePoints.size >= 2
             puckOverlay?.let { puck ->
                 if (nav) {
                     if (!map.overlays.contains(puck)) map.overlays.add(puck)
@@ -4432,20 +4477,169 @@ class MainActivity : AppCompatActivity() {
         perspectiveOverlay.visibility = if (active) View.VISIBLE else View.GONE
         perspectiveBackdrop.visibility = if (active) View.VISIBLE else View.GONE
         if (active) perspectiveOverlay.invalidate()
+        if (!active) perspectiveOverlay.setCarTilt(0f)
         refTilesOverlay?.isEnabled = !active
         syncMapPuck(nav)
         applyMapBaseFilter()
+        updateCompass()
     }
 
     private fun applyMapBaseFilter() {
         if (!::map.isInitialized) return
         try {
             map.overlayManager.tilesOverlay.setColorFilter(
-                if (focus == Focus.NAV) navRoadColorFilter else null
+                MapStyles.colorFilter(currentMapStyle, focus == Focus.NAV)
             )
             map.invalidate()
         } catch (_: Exception) {
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Estilos de mapa: selector + caché por estilo
+    // ------------------------------------------------------------------
+
+    /**
+     * Selector rápido del HUD. Muestra cuántas teselas hay cacheadas de cada
+     * estilo; el conteo se hace en IO para no bloquear el mapa.
+     */
+    private fun showMapStyleDialog() {
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(8), dp(8), dp(8), dp(4))
+        }
+        val subtitles = HashMap<String, TextView>(MapStyles.ALL.size)
+        val radios = HashMap<String, RadioButton>(MapStyles.ALL.size)
+        var dialogRef: AlertDialog? = null
+        for (style in MapStyles.ALL) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(8), dp(10), dp(8), dp(10))
+                isClickable = true
+                isFocusable = true
+            }
+            val radio = RadioButton(this).apply {
+                isChecked = style.id == currentMapStyle.id
+                buttonTintList = ColorStateList.valueOf(Color.parseColor("#00E5FF"))
+                text = style.label
+                textSize = 16f
+                setTextColor(Color.parseColor("#E8EEF7"))
+                minWidth = dp(190)
+                // El clic lo maneja la fila completa: así el radio no se queda
+                // marcado sin cambiar el mapa.
+                isClickable = false
+                isFocusable = false
+            }
+            radios[style.id] = radio
+            val subtitle = TextView(this).apply {
+                text = "…"
+                textSize = 12f
+                setTextColor(Color.parseColor("#8A94A6"))
+            }
+            subtitles[style.id] = subtitle
+            row.addView(
+                radio,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            )
+            row.addView(
+                subtitle,
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            )
+            row.setOnClickListener {
+                radios.values.forEach { it.isChecked = false }
+                radio.isChecked = true
+                applyMapStyle(style)
+                dialogRef?.dismiss()
+            }
+            content.addView(row)
+        }
+        val scroll = ScrollView(this).apply { addView(content) }
+        val title = TextView(this).apply {
+            text = "Estilo de mapa"
+            textSize = 20f
+            setTextColor(Color.parseColor("#E8EEF7"))
+            setPadding(dp(20), dp(18), dp(20), dp(6))
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setCustomTitle(title)
+            .setView(scroll)
+            .setNegativeButton("Cerrar", null)
+            .create()
+        dialogRef = dialog
+        dialog.show()
+        try {
+            dialog.window?.setBackgroundDrawableResource(R.drawable.bg_sheet)
+            dialog.window?.setDimAmount(0.55f)
+        } catch (_: Exception) {
+        }
+        Thread {
+            val stats = MapStyles.ALL.map { it to MapStyles.cacheStats(this, it) }
+            runOnUiThread {
+                for ((style, st) in stats) {
+                    val mb = st.bytes / 1048576.0
+                    subtitles[style.id]?.text = when {
+                        st.tiles == 0 -> "sin caché offline"
+                        st.tiles < 250 -> "${st.tiles} teselas · %.1f MB".format(mb)
+                        else -> "${st.tiles} teselas · %.1f MB · listo sin conexión".format(mb)
+                    }
+                }
+            }
+        }.apply { isDaemon = true; start() }
+    }
+
+    private fun applyMapStyle(style: MapStyle) {
+        if (style.id == currentMapStyle.id) return
+        currentMapStyle = style
+        MapStyles.select(this, style)
+        try {
+            // 1) vaciar RAM + 2) cambiar TileSource (lee de su carpeta en disco)
+            MapHelper.clearTileCaches(map)
+            refTilesOverlay = MapHelper.applyStyle(this, map, style)
+            refTilesOverlay?.isEnabled = !perspectiveActive
+            // 3) filtro de color por estilo
+            applyMapBaseFilter()
+            navZoomApplied = false
+            navZoomBucket = 1
+            navZoomTarget = MapHelper.DEFAULT_ZOOM
+            lastTileReqKey = ""
+            map.invalidate()
+            // 4) pedir al teléfono lo que falte del nuevo estilo
+            uiHandler.postDelayed({
+                try {
+                    maybeRequestViewportTiles(true)
+                } catch (_: Exception) {
+                }
+            }, 350L)
+            Toast.makeText(
+                this,
+                "Mapa: ${style.shortLabel}${if (NavLink.wifiActive()) "" else " · solo caché"}",
+                Toast.LENGTH_SHORT
+            ).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "No se pudo cambiar el mapa", Toast.LENGTH_SHORT).show()
+            Log.w("MapStyle", "apply: ${e.message}")
+        }
+    }
+
+    private fun updateVoiceButton() {
+        if (!::btnVoice.isInitialized) return
+        val on = Prefs.voiceOn(this)
+        btnVoice.setImageResource(if (on) R.drawable.ic_volume else R.drawable.ic_volume_off)
+        btnVoice.alpha = if (on) 1f else 0.62f
+    }
+
+    /** Brújula: gira con el mapa; en norte-arriba se queda recta. */
+    private fun updateCompass() {
+        if (!::btnCompass.isInitialized) return
+        try {
+            btnCompass.rotation = if (navNorthUp) 0f else map.mapOrientation
+        } catch (_: Exception) {
+        }
+        btnCompass.alpha = if (navNorthUp) 1f else 0.72f
     }
 
     // ------------------------------------------------------------------
@@ -4470,10 +4664,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
         navZoomTarget = when (navZoomBucket) {
-            0 -> if (link) 17.0 else 16.0
+            0 -> if (link && currentMapStyle.maxZoom >= 17) 17.0 else 16.0
             1 -> 16.0
             else -> 15.0
-        }
+        }.coerceAtMost(currentMapStyle.maxZoom.toDouble())
     }
 
     /** Acerca el zoom poco a poco en cada frame de seguimiento. */
@@ -4517,7 +4711,7 @@ class MainActivity : AppCompatActivity() {
             val range = viewportTileRange(zoom, ZOOM_READY_SHRINK) ?: return false
             val root = File(
                 getExternalFilesDir(null) ?: filesDir,
-                "osmdroid/tiles/EsriDark/$zoom"
+                "osmdroid/tiles/${currentMapStyle.folder}/$zoom"
             )
             var total = 0
             var have = 0
@@ -4547,8 +4741,12 @@ class MainActivity : AppCompatActivity() {
         }
         val latC = (box.latNorth + box.latSouth) / 2.0
         val lonC = (box.lonEast + box.lonWest) / 2.0
-        val halfLat = (box.latNorth - box.latSouth) / 2.0 * shrink
-        val halfLon = (box.lonEast - box.lonWest) / 2.0 * shrink
+        // En 2.5D la cámara inclinada enseña más carretera por delante: se
+        // pide un encuadre más alto para no dejar huecos en el horizonte.
+        val latBoost = if (perspectiveActive) 1.5 else 1.0
+        val lonBoost = if (perspectiveActive) 1.15 else 1.0
+        val halfLat = (box.latNorth - box.latSouth) / 2.0 * shrink * latBoost
+        val halfLon = (box.lonEast - box.lonWest) / 2.0 * shrink * lonBoost
         return intArrayOf(
             MapHelper.lonToTileX(lonC - halfLon, zoom),
             MapHelper.latToTileY(latC + halfLat, zoom),
@@ -4593,14 +4791,16 @@ class MainActivity : AppCompatActivity() {
         val now = SystemClock.elapsedRealtime()
         if (!force && now - lastTileReqMs < 2500L) return
         val shown = try {
-            map.zoomLevelDouble.roundToInt().coerceIn(13, 17)
+            map.zoomLevelDouble.roundToInt()
+                .coerceIn(13, currentMapStyle.maxZoom)
         } catch (_: Exception) {
             return
         }
         // Si la cámara va a subir de zoom, se prefetchea ya el centro a ese
         // nivel. Así al acercarse no se ven huecos (osmdroid no rellena con
         // teselas de z16).
-        val target = Math.ceil(navZoomTarget).toInt().coerceIn(13, 17)
+        val target = Math.ceil(navZoomTarget).toInt()
+            .coerceIn(13, currentMapStyle.maxZoom)
         val zoom = if (focus == Focus.NAV && target > shown) target else shown
         val shrink = if (zoom > shown) ZOOM_PREFETCH_SHRINK else 1f
         val range = viewportTileRange(zoom, shrink) ?: return
@@ -4619,17 +4819,22 @@ class MainActivity : AppCompatActivity() {
             org.json.JSONObject()
                 .put("type", "TILE_REQ")
                 .put("layer", "base")
+                .put("style", currentMapStyle.id)
                 .put("z", zoom)
                 .put("x0", x0).put("y0", y0)
                 .put("x1", x1).put("y1", y1)
         )
         // Las etiquetas se piden solo para el zoom visible; en el prefetch
-        // llegarían antes de tiempo y gastarían enlace.
-        if (zoom >= 15 && zoom == shown) {
+        // llegarían antes de tiempo y gastarían enlace. Solo Esri tiene capa
+        // `ref`: Carto/Waze traen (o resuelven con globos) sus etiquetas.
+        if (currentMapStyle.hasRef && !perspectiveActive &&
+            zoom >= 15 && zoom == shown
+        ) {
             NavLink.sendAsync(
                 org.json.JSONObject()
                     .put("type", "TILE_REQ")
                     .put("layer", "ref")
+                    .put("style", currentMapStyle.id)
                     .put("z", zoom)
                     .put("x0", x0).put("y0", y0)
                     .put("x1", x1).put("y1", y1)
@@ -4834,37 +5039,50 @@ class MainActivity : AppCompatActivity() {
 
     /** Mantiene la vista heading-up: el rumbo del coche queda arriba. */
     private fun applyNavigationHeading(bearing: Float) {
-        if (focus != Focus.NAV || RemoteMapBridge.active) return
+        if (focus != Focus.NAV || RemoteMapBridge.active || navNorthUp) return
         val target = ((bearing % 360f) + 360f) % 360f
         animateMapBearing(target)
     }
 
     /** Gira el mapa suavemente hacia el rumbo, por el camino más corto. */
     private fun animateMapBearing(targetBearing: Float) {
+        if (navNorthUp) return
         val from = currentBearingDeg
         var delta = ((targetBearing - from + 540f) % 360f) - 180f
-        // Los cambios continuos son los que hacen que el mapa “acompane” el
+        // Los cambios continuos son los que hacen que el mapa “acompañe” el
         // avance: un umbral de 10° dejaba la cámara quieta en curvas suaves.
         if (Math.abs(delta) < 2f) return
         bearingAnimator?.cancel()
         val to = from + delta
         currentBearingDeg = to
         val duration = (Math.abs(delta) * 12f).toLong().coerceIn(280L, 680L)
+        // Micro-rotación del coche: máxima al entrar a la curva y decae con
+        // la misma animación del mapa (±12°).
+        val carTilt = (delta * 0.30f).coerceIn(-12f, 12f)
         bearingAnimator = android.animation.ValueAnimator.ofFloat(from, to).apply {
             this.duration = duration
             interpolator = android.view.animation.DecelerateInterpolator()
             addUpdateListener {
                 try {
-                    map.mapOrientation = -((it.animatedValue as Float))
+                    val value = it.animatedValue as Float
+                    map.mapOrientation = -value
+                    val frac = if (to != from) (value - from) / (to - from) else 1f
+                    if (::perspectiveOverlay.isInitialized) {
+                        perspectiveOverlay.setCarTilt(carTilt * (1f - frac))
+                    }
                 } catch (_: Exception) {
                 }
+                updateCompass()
             }
             start()
         }
     }
 
     private fun resetMapBearing() {
-        if (currentBearingDeg == 0f && map.mapOrientation == 0f) return
+        if (currentBearingDeg == 0f && map.mapOrientation == 0f) {
+            updateCompass()
+            return
+        }
         bearingAnimator?.cancel()
         bearingAnimator = null
         currentBearingDeg = 0f
@@ -4873,6 +5091,7 @@ class MainActivity : AppCompatActivity() {
         } catch (_: Exception) {
         }
         updateMapMarkerSprite(lastDisplayBearing, carLightsOn)
+        updateCompass()
     }
 
     /** Pinta la tarjeta flotante de navegación con el estado actual. */
@@ -4884,6 +5103,7 @@ class MainActivity : AppCompatActivity() {
 
         navCardProgress.visibility = if (hasRoute) View.VISIBLE else View.GONE
         navFinish.visibility = if (hasRoute) View.VISIBLE else View.GONE
+        navSummaryPill.visibility = if (hasRoute) View.VISIBLE else View.GONE
 
         // Aviso de tráfico: solo si aporta (más de un minuto de retraso).
         val delayS = route?.trafficDelaySeconds ?: 0
@@ -4898,11 +5118,13 @@ class MainActivity : AppCompatActivity() {
             navCardIcon.setImageResource(R.drawable.ic_mav_straight)
             navCardDist.text = "—"
             navCardAction.text = "Sin destino activo"
-            navCardThen.text = "Planifica una ruta desde IbizaCompanion"
+            navCardThen.text = ""
+            navCardThenRow.visibility = View.GONE
             navCardEta.visibility = View.GONE
             navCardRemaining.text = ""
             navCardDest.text = ""
             navCardProgress.progress = 0
+            navSummaryText.text = "Planifica una ruta desde IbizaCompanion"
             return
         }
 
@@ -4917,7 +5139,10 @@ class MainActivity : AppCompatActivity() {
         }
         val then = s.thenText?.takeIf { it.isNotBlank() }
         navCardThen.text = then.orEmpty()
-        navCardThen.visibility = if (then == null) View.GONE else View.VISIBLE
+        navCardThenRow.visibility = if (then == null) View.GONE else View.VISIBLE
+        navCardThenIcon.setImageResource(
+            (s.thenIcon ?: s.icon).resId
+        )
         navCardEta.text = s.etaText
         navCardEta.visibility = if (s.etaText.isNotBlank()) View.VISIBLE else View.GONE
         val remaining = remainingDistanceOnly(s.remainingText)
@@ -4927,6 +5152,20 @@ class MainActivity : AppCompatActivity() {
             if (remaining.isBlank() || remaining == s.distText) View.GONE else View.VISIBLE
         navCardDest.text = s.destName
         navCardProgress.progress = (s.progress.coerceIn(0f, 1f) * 1000f).toInt()
+        navSummaryText.text = tripSummary(s, remaining)
+    }
+
+    /** "8 min · 3.2 km · llega 18:42" para la píldora inferior. */
+    private fun tripSummary(s: NavState, remaining: String): String {
+        val parts = ArrayList<String>(3)
+        if (s.etaText.isNotBlank()) parts.add(s.etaText)
+        if (remaining.isNotBlank()) parts.add(remaining)
+        val etaMin = Regex("([0-9]+)").find(s.etaText)?.groupValues?.get(1)?.toIntOrNull()
+        if (etaMin != null && etaMin in 0..600) {
+            val arrival = System.currentTimeMillis() + etaMin * 60_000L
+            parts.add("llega " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(arrival)))
+        }
+        return parts.joinToString(" · ")
     }
 
     /** "quedan 1.2 km · 8 min" → "1.2 km" (la ETA ya se muestra aparte). */
@@ -4963,23 +5202,27 @@ class MainActivity : AppCompatActivity() {
                     text = "${files.size} packs · ${mb}MB"
                     colorRes = R.color.green
                 } else {
-                    // El módulo y el teléfono guardan teselas sueltas; también
-                    // cuentan como mapa offline.
-                    val tilesDir = File(
-                        org.osmdroid.config.Configuration.getInstance().osmdroidTileCache,
-                        "EsriDark"
-                    )
-                    val tiles = if (tilesDir.exists()) {
-                        tilesDir.walkTopDown()
-                            .filter { it.isFile && it.extension.equals("tile", true) }
-                            .toList()
-                    } else {
-                        emptyList()
+                    // Teselas por estilo: cada mapa tiene su propia carpeta.
+                    var total = 0
+                    var currentTiles = 0
+                    var currentBytes = 0L
+                    for (style in MapStyles.ALL) {
+                        val st = MapStyles.cacheStats(this, style)
+                        total += st.tiles
+                        if (style.id == currentMapStyle.id) {
+                            currentTiles = st.tiles
+                            currentBytes = st.bytes
+                        }
                     }
-                    if (tiles.isNotEmpty()) {
-                        val mb = tiles.sumOf { it.length() } / 1048576.0
-                        text = "Morelia · %.1f MB".format(mb)
+                    if (currentTiles > 0) {
+                        val mb = currentBytes / 1048576.0
+                        text = "%s · %d teselas · %.1f MB".format(
+                            currentMapStyle.shortLabel, currentTiles, mb
+                        )
                         colorRes = R.color.green
+                    } else if (total > 0) {
+                        text = "otros mapas · $total teselas"
+                        colorRes = R.color.amber
                     }
                 }
             } catch (_: Exception) {

@@ -396,7 +396,8 @@ class MediaBridgeService : Service() {
             obj.optInt("y0", 0),
             obj.optInt("x1", 0),
             obj.optInt("y1", 0),
-            obj.optString("layer", "base")
+            obj.optString("layer", "base"),
+            obj.optString("style", "")
         )
     }
 
