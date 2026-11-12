@@ -4,7 +4,7 @@
 > Describe el estado real del código (no un plan). Los nombres de archivo son rutas
 > relativas a la raíz del repo.
 >
-> Versiones de referencia: **IbizaDash 1.11.2 (39)** en el estéreo y
+> Versiones de referencia: **IbizaDash 1.11.3 (40)** en el estéreo y
 > **IbizaCompanion 1.10.0 (29)** en el teléfono.
 
 ---
@@ -101,6 +101,14 @@ que describen el estado 1.10.2. Lo que cambió:
   (`getScaleRotateCanvasMatrix`) antes de la matriz de perspectiva. Antes el pin
   de destino y el globo se proyectaban sin la rotación heading-up y no
   coincidían con el final de la línea.
+
+### Corrección 1.11.3
+
+- **Proporción del coche**: el sprite baja de 104 dp a **72 dp en z16** (~60 dp
+  en z15 y ~79 dp en z17), mucho más cerca de la escala de la calle y de
+  Google Maps/Waze. El globo de calle se separa 36 dp del badge para no taparlo.
+- La escala sigue el zoom en vivo; el cambio se nota de inmediato al acercar o
+  alejar.
 
 ---
 

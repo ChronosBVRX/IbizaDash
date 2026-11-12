@@ -322,7 +322,7 @@ class PerspectiveNavOverlayView @JvmOverloads constructor(
             val textH = bubbleText.descent() - bubbleText.ascent()
             val bw = textW + padH * 2f
             val bh = textH + padV * 2f
-            val gap = badgeRadius + 8f * density
+            val gap = badgeRadius + 16f * density
             var bx = x + gap
             var tailOnRight = false
             if (bx + bw > w - 10f * density) {
@@ -385,17 +385,18 @@ class PerspectiveNavOverlayView @JvmOverloads constructor(
 
         val sprite = car3dProvider?.invoke()
         if (sprite != null) {
-            // Escala con el zoom: más pequeño en autopista (z15) y con
-            // presencia de calle en z16; se recalcula en cada zoom/scroll.
+            // Escala con el zoom: ~72 dp en z16 (calle) y ~60 dp en z15
+            // (autopista). Antes 104 dp se veía como un coche de juguete sobre
+            // la calle; esta proporción se acerca a Google Maps/Waze.
             val zoom = try {
                 map.zoomLevelDouble
             } catch (_: Exception) {
                 16.0
             }
-            val zoomScale = (0.78f + ((zoom - 15.0) * 0.22f).toFloat())
-                .coerceIn(0.70f, 1.15f)
+            val zoomScale = (0.84f + ((zoom - 15.0) * 0.16f).toFloat())
+                .coerceIn(0.72f, 1.10f)
             // Asset 3D con sombra integrada: sin cono ni halo extra.
-            val cw = 104f * density * zoomScale
+            val cw = 72f * density * zoomScale
             val ratio = sprite.intrinsicHeight / sprite.intrinsicWidth.coerceAtLeast(1)
             val ch = cw * ratio
             canvas.save()
@@ -429,9 +430,9 @@ class PerspectiveNavOverlayView @JvmOverloads constructor(
         } catch (_: Exception) {
             16.0
         }
-        val fallbackScale = (0.78f + ((fallbackZoom - 15.0) * 0.22f).toFloat())
-            .coerceIn(0.70f, 1.15f)
-        val scale = (map.overscan * 1.18f * fallbackScale).coerceIn(1.0f, 1.9f)
+        val fallbackScale = (0.84f + ((fallbackZoom - 15.0) * 0.16f).toFloat())
+            .coerceIn(0.72f, 1.10f)
+        val scale = (map.overscan * 1.02f * fallbackScale).coerceIn(0.9f, 1.6f)
         val cw = (car.intrinsicWidth * scale).toInt().coerceAtLeast(1)
         val ch = (car.intrinsicHeight * scale).toInt().coerceAtLeast(1)
         car.setBounds(
