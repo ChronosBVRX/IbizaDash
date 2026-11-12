@@ -4,7 +4,7 @@
 > Describe el estado real del código (no un plan). Los nombres de archivo son rutas
 > relativas a la raíz del repo.
 >
-> Versiones de referencia: **IbizaDash 1.11.0 (37)** en el estéreo y
+> Versiones de referencia: **IbizaDash 1.11.1 (38)** en el estéreo y
 > **IbizaCompanion 1.10.0 (29)** en el teléfono.
 
 ---
@@ -73,6 +73,18 @@ que describen el estado 1.10.2. Lo que cambió:
 - El `MapView` no se agranda: la cobertura de esquinas se hace con la matriz de
   cámara (`overscan = 1.25`, `Camera.rotateX(52°)`), sin disparar peticiones
   extra.
+
+### Correcciones 1.11.1
+
+- **Sprite real**: `res/drawable-nodpi/nav_car_3d.png` (128×128, ~21 KB) recortado
+  del `Auto GPS.png` del usuario, con fondo transparente y sombra suave. Se usa
+  en 2.5D; `CarSpriteFactory` queda como respaldo.
+- **Mini-mapa**: `TILE_REQ` ya no se limita a NAV. Inicio/Música/Auto piden las
+  teselas de su encuadre al entrar al foco y en el bucle de 3 s, así el
+  mini-mapa cambia de estilo y de zona igual que el mapa grande.
+- **Zoom sin salir de NAV**: un pellizco (más de un dedo) ya no activa el modo
+  libre ni aplana la perspectiva. La cámara además se pausa mientras hay un dedo
+  sobre el mapa y retoma el seguimiento al soltar.
 
 ---
 

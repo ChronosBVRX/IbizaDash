@@ -1254,9 +1254,14 @@ class MainActivity : AppCompatActivity() {
         navNorthUp = Prefs.navNorthUp(this)
         refTilesOverlay = MapHelper.configure(this, map, currentMapStyle)
         navCar3d = try {
-            com.chronosbvrx.ibizadash.ui.CarSpriteFactory.create(this)
+            ContextCompat.getDrawable(this, R.drawable.nav_car_3d)
+                ?: com.chronosbvrx.ibizadash.ui.CarSpriteFactory.create(this)
         } catch (_: Exception) {
-            null
+            try {
+                com.chronosbvrx.ibizadash.ui.CarSpriteFactory.create(this)
+            } catch (_: Exception) {
+                null
+            }
         }
         // Perspectiva de conducción: el puck y el coche se dibujan fuera de
         // la matriz 3D para no aplastarse. Un toque aplana el mapa antes de
@@ -1290,16 +1295,21 @@ class MainActivity : AppCompatActivity() {
         map.controller.setCenter(MapHelper.MORELIA)
         map.controller.setZoom(16.0)
         // Solo se deja de seguir si el usuario ARRASTRA de verdad (> 18 px en
-        // el mapa). Un toque rápido no debe “pegar” el coche durante 10 s.
+        // el mapa) con UN dedo. Un pellizco para zoom no debe abandonar NAV.
+        var multiTouch = false
         map.setOnTouchListener { v, event ->
             when (event.actionMasked) {
                 android.view.MotionEvent.ACTION_DOWN -> {
                     touchStartX = event.x
                     touchStartY = event.y
                     touchMoved = false
+                    multiTouch = false
+                }
+                android.view.MotionEvent.ACTION_POINTER_DOWN -> {
+                    multiTouch = true
                 }
                 android.view.MotionEvent.ACTION_MOVE -> {
-                    if (!touchMoved) {
+                    if (!multiTouch && event.pointerCount <= 1 && !touchMoved) {
                         val dx = event.x - touchStartX
                         val dy = event.y - touchStartY
                         if (dx * dx + dy * dy > 18f * 18f) {
@@ -1307,6 +1317,10 @@ class MainActivity : AppCompatActivity() {
                             markMapFree()
                         }
                     }
+                }
+                android.view.MotionEvent.ACTION_UP,
+                android.view.MotionEvent.ACTION_CANCEL -> {
+                    multiTouch = false
                 }
             }
             false
@@ -1726,6 +1740,9 @@ class MainActivity : AppCompatActivity() {
      * encadenar animaciones de cámara ni recalcular el giro del mapa.
      */
     private fun followNavState(state: NavState, bearing: Float, target: GeoPoint) {
+        // No pelear con el dedo del usuario: durante un toque/pellizco la
+        // cámara se queda quieta y retoma el seguimiento al soltar.
+        if (perspectiveTouchDown) return
         if (RemoteMapBridge.active) return
         val now = SystemClock.elapsedRealtime()
         if (mapMode == MapMode.FREE && now - lastUserMapTouchMs > 30_000L) {
@@ -4391,6 +4408,14 @@ class MainActivity : AppCompatActivity() {
         }
         updatePerspective()
         updateRecenterVisibility()
+        // El mini-mapa de Inicio/Música/Auto necesita las teselas de su
+        // encuadre; se piden al entrar al foco sin esperar al bucle de 3 s.
+        uiHandler.postDelayed({
+            try {
+                maybeRequestViewportTiles(true)
+            } catch (_: Exception) {
+            }
+        }, 500L)
     }
 
     /**
@@ -4785,7 +4810,9 @@ class MainActivity : AppCompatActivity() {
      * La firma evita repetir el mismo pedido cada 3 s.
      */
     private fun maybeRequestViewportTiles(force: Boolean) {
-        if (focus != Focus.NAV || RemoteMapBridge.active) return
+        // El mapa es el mismo en Inicio, Música, Auto y NAV: si el mini-mapa
+        // cambia de estilo o de encuadre, también hay que pedir sus teselas.
+        if (RemoteMapBridge.active) return
         if (!::map.isInitialized || map.width <= 0 || map.height <= 0) return
         if (!NavLink.wifiActive()) return
         val now = SystemClock.elapsedRealtime()
@@ -4944,6 +4971,7 @@ class MainActivity : AppCompatActivity() {
         now: Long,
         predicted: Boolean
     ) {
+        if (perspectiveTouchDown) return
         val target = GeoPoint(lat, lon)
         if (focus == Focus.NAV) {
             // Rumbo estable desde la geometría de la ruta; el rumbo GPS solo
