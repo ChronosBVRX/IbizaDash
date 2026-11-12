@@ -15,6 +15,9 @@ import android.view.View
 import androidx.core.content.ContextCompat
 import com.chronosbvrx.ibizadash.nav.ManeuverIcon
 import org.osmdroid.api.IGeoPoint
+import org.osmdroid.events.MapListener
+import org.osmdroid.events.ScrollEvent
+import org.osmdroid.events.ZoomEvent
 
 /**
  * Capa de pantalla del modo conducción.
@@ -44,6 +47,7 @@ class PerspectiveNavOverlayView @JvmOverloads constructor(
     private val carLift = 6f * density
 
     private var map: PerspectiveMapView? = null
+    private var mapListener: MapListener? = null
     private var carProvider: (() -> Drawable?)? = null
     private var car3dProvider: (() -> Drawable?)? = null
     private var destProvider: (() -> Drawable?)? = null
@@ -155,7 +159,28 @@ class PerspectiveNavOverlayView @JvmOverloads constructor(
         destination: () -> Drawable?,
         destinationPoint: () -> IGeoPoint?
     ) {
+        mapListener?.let { old ->
+            try {
+                map?.removeMapListener(old)
+            } catch (_: Exception) {
+            }
+        }
         map = mapView
+        val listener = object : MapListener {
+            override fun onScroll(event: ScrollEvent?): Boolean {
+                // El globo/escudo está anclado a un punto geográfico: al
+                // panear o hacer zoom debe seguir al punto, no quedarse atrás.
+                invalidate()
+                return false
+            }
+
+            override fun onZoom(event: ZoomEvent?): Boolean {
+                invalidate()
+                return false
+            }
+        }
+        mapView.addMapListener(listener)
+        mapListener = listener
         carProvider = car
         car3dProvider = car3d
         destProvider = destination
@@ -360,8 +385,17 @@ class PerspectiveNavOverlayView @JvmOverloads constructor(
 
         val sprite = car3dProvider?.invoke()
         if (sprite != null) {
+            // Escala con el zoom: más pequeño en autopista (z15) y con
+            // presencia de calle en z16; se recalcula en cada zoom/scroll.
+            val zoom = try {
+                map.zoomLevelDouble
+            } catch (_: Exception) {
+                16.0
+            }
+            val zoomScale = (0.78f + ((zoom - 15.0) * 0.22f).toFloat())
+                .coerceIn(0.70f, 1.15f)
             // Asset 3D con sombra integrada: sin cono ni halo extra.
-            val cw = 112f * density
+            val cw = 104f * density * zoomScale
             val ratio = sprite.intrinsicHeight / sprite.intrinsicWidth.coerceAtLeast(1)
             val ch = cw * ratio
             canvas.save()
@@ -390,7 +424,14 @@ class PerspectiveNavOverlayView @JvmOverloads constructor(
         canvas.restore()
 
         val car = carProvider?.invoke() ?: return
-        val scale = (map.overscan * 1.18f).coerceIn(1.25f, 1.8f)
+        val fallbackZoom = try {
+            map.zoomLevelDouble
+        } catch (_: Exception) {
+            16.0
+        }
+        val fallbackScale = (0.78f + ((fallbackZoom - 15.0) * 0.22f).toFloat())
+            .coerceIn(0.70f, 1.15f)
+        val scale = (map.overscan * 1.18f * fallbackScale).coerceIn(1.0f, 1.9f)
         val cw = (car.intrinsicWidth * scale).toInt().coerceAtLeast(1)
         val ch = (car.intrinsicHeight * scale).toInt().coerceAtLeast(1)
         car.setBounds(

@@ -155,6 +155,18 @@ class PerspectiveMapView @JvmOverloads constructor(
         var x = screenPoint.x.toFloat()
         var y = screenPoint.y.toFloat()
         if (pitch > 0.01f) {
+            // osmdroid dibuja el mapa dentro de su matriz de rotación/zoom
+            // (heading-up). El overlay de pantalla está FUERA de esa matriz,
+            // así que hay que aplicarla antes de la perspectiva; si no, el pin
+            // y el globo quedan desalineados de la ruta.
+            try {
+                mapped[0] = x
+                mapped[1] = y
+                proj.scaleRotateCanvasMatrix.mapPoints(mapped)
+                x = mapped[0]
+                y = mapped[1]
+            } catch (_: Exception) {
+            }
             buildPerspectiveMatrix(pointMatrix, width / 2f, height * carScreenFraction)
             mapped[0] = x
             mapped[1] = y

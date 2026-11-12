@@ -4,7 +4,7 @@
 > Describe el estado real del código (no un plan). Los nombres de archivo son rutas
 > relativas a la raíz del repo.
 >
-> Versiones de referencia: **IbizaDash 1.11.1 (38)** en el estéreo y
+> Versiones de referencia: **IbizaDash 1.11.2 (39)** en el estéreo y
 > **IbizaCompanion 1.10.0 (29)** en el teléfono.
 
 ---
@@ -85,6 +85,22 @@ que describen el estado 1.10.2. Lo que cambió:
 - **Zoom sin salir de NAV**: un pellizco (más de un dedo) ya no activa el modo
   libre ni aplana la perspectiva. La cámara además se pausa mientras hay un dedo
   sobre el mapa y retoma el seguimiento al soltar.
+
+### Correcciones 1.11.2
+
+- **Sprite adaptativo al zoom**: el coche 3D escala entre ~0.70× y 1.15× según
+  `map.zoomLevelDouble` (z15 autopista más pequeño, z16 calle a tamaño normal).
+  Un `MapListener` invalida el overlay en cada scroll/zoom para que el globo y
+  el escudo sigan anclados al vértice real.
+- **Ruta real**: la línea recta que se veía era la polilínea sintética del
+  broadcast `DEBUG_ROUTE_SET` (6 puntos), no el motor de rutas. Con un
+  `ROUTE_SET` real de OSRM la ruta sigue calles y glorietas, y los `name`/`ref`
+  de cada maniobra alimentan los globos y escudos.
+- **Pin y globo alineados con la ruta**: `PerspectiveMapView.perspectiveScreenPoint`
+  ahora aplica la matriz de rotación/zoom de osmdroid
+  (`getScaleRotateCanvasMatrix`) antes de la matriz de perspectiva. Antes el pin
+  de destino y el globo se proyectaban sin la rotación heading-up y no
+  coincidían con el final de la línea.
 
 ---
 
