@@ -85,9 +85,9 @@ class TwCommandBinder(private val binder: IBinder) {
         //   write(769, 192, 7)     -> enruta el audio al AUX
         //   write(517, 255)        -> refresca el estado
         // Mandar solo el 769 dejaba al MCU en SourceValue=0 (sin sonido).
-        twdata(40448, 7, byteArrayOf(7))
+        twdata(40448, 7, ByteArray(0))
         twdata(769, 192, byteArrayOf(7))
-        twdata(517, 255, byteArrayOf(255.toByte()))
+        twdata(517, 255, ByteArray(0))
     }
 
     /** Escribe un comando crudo en el MCU a través del servicio del sistema. */
