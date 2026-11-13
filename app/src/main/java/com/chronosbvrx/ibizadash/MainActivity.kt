@@ -55,6 +55,7 @@ import androidx.core.content.res.ResourcesCompat
 import com.chronosbvrx.ibizadash.car.CarSignals
 import com.chronosbvrx.ibizadash.car.GpsEngine
 import com.chronosbvrx.ibizadash.car.GpsFix
+import com.chronosbvrx.ibizadash.car.AuxNative
 import com.chronosbvrx.ibizadash.car.AvrcpController
 import com.chronosbvrx.ibizadash.car.TwCommandClient
 import com.chronosbvrx.ibizadash.car.HumanCarAssistant
@@ -3523,11 +3524,18 @@ class MainActivity : AppCompatActivity() {
             setupRadio()
             twClient?.radioOpenChannel("FM")
         } else {
-            // La música entra por el cable AUX. Antes se abría el canal BT
-            // del MCU, así que el audio del teléfono nunca sonaba.
-            twClient?.openAux()
+            // El servicio del MCU ignora los comandos AUX por Bundle. La app
+            // nativa com.tw.auxin sí deja SourceValue=7; se abre un instante
+            // y se vuelve al launcher. El onPause nativo no borra la fuente.
+            if (mcuSource == 7) {
+                twClient?.requestSource()
+            } else {
+                AuxNative.selectAux(this) {
+                    twClient?.requestSource()
+                }
+            }
         }
-        uiHandler.postDelayed({ twClient?.requestSource() }, 400L)
+        uiHandler.postDelayed({ twClient?.requestSource() }, 700L)
     }
 
     private fun updateSourceToggle() {

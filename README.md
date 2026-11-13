@@ -12,7 +12,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
   (capturas reales del estéreo y del teléfono, con hojas de contacto).
 - **Paquete del estéreo:** `com.chronosbvrx.ibizadash`
 - **Paquete del teléfono:** `com.chronosbvrx.ibizacompanion`
-- **Versiones actuales:** IbizaDash **1.13.0** (versionCode 43) · IbizaCompanion **1.11.0** (versionCode 30)
+- **Versiones actuales:** IbizaDash **1.13.1** (versionCode 44) · IbizaCompanion **1.11.0** (versionCode 30)
 - **minSdk 23 / targetSdk 33 / compileSdk 36** (estéreo)
 - Hecho con **Views** (sin Compose) en el estéreo para que sea liviano en el Cortex-A7.
 
@@ -286,10 +286,12 @@ de MAC o se agota la reconexión, vuelve a buscar solo.
 ### Audio por AUX, presentado como reproductor nativo
 
 La música del teléfono entra por el cable AUX. Al abrir **MÚSICA**, el launcher
-manda al MCU la secuencia de la app nativa `com.tw.auxin` por el servicio del
-sistema: `write(40448, 7)` (marca la línea AUX), `write(769, 192, 7)` (enruta
-el audio) y `write(517, 255)` (refresca el estado). Mandar solo el `769` dejaba
-al MCU en `SourceValue=0`, sin sonido.
+abre durante ~0.5 s la app nativa `com.tw.auxin` y vuelve solo al launcher. Es
+la única ruta que deja el MCU en `SourceValue=7`; los comandos `twdata` del
+servicio se probaron y el MCU los ignora (la fuente se quedaba en 3). El
+`onPause` de la app nativa no borra la fuente: el 7 se mantiene y el audio
+sigue entrando por el cable. Después del cambio, la UI vuelve al reproductor
+sin mostrar nada de AUX.
 
 La interfaz **no menciona AUX**: el encabezado dice **MÚSICA**, el equipo dice
 **Reproductor** y el origen se muestra con el nombre y el logo de la app que
