@@ -15,6 +15,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
+import kotlin.math.cos
 import kotlin.math.sin
 
 /**
@@ -38,6 +39,20 @@ class Elm327Client(private val context: Context) {
     private var ble: BleElm327Link? = null
     private var connectFailures = 0
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    // PIDs extra que se prueban una vez al conectar. El Ibiza 6J no entrega
+    // todos en todas las versiones; si el adaptador nuevo los consigue, se
+    // exprimen; si no, la UI lo dice en vez de inventar valores.
+    private var speedPidOk = false
+    private var fuelLevelPidOk = false
+    private var udsFuelPidOk = false
+    private var mafPidOk = false
+    private var fuelRatePidOk = false
+    private var lastSpeedKmh: Float? = null
+    private var lastSpeedAt = 0L
+    private var accelMps2: Float? = null
+    private var accelAt = 0L
+    private var nextFuelProbeMs = 0L
 
     @Volatile
     private var running = false
@@ -245,6 +260,10 @@ class Elm327Client(private val context: Context) {
                     intakeC = intake,
                     batteryV = battery,
                     fuelLevelPct = 62f,
+                    fuelRangeKm = 430,
+                    speedKmh = (60 + 10 * sin(t / 3.0)).toFloat(),
+                    accelerationMps2 = (0.4 * cos(t / 3.0)).toFloat(),
+                    instantConsumptionL100 = (7.2 + 2.0 * sin(t / 5.0)).toFloat(),
                     milOn = false,
                     dtcCount = 0,
                     dtcs = emptyList(),
@@ -333,10 +352,33 @@ class Elm327Client(private val context: Context) {
                     val throttle = if (slowCounter % 8 == 0 && supports(0x11)) queryValue("0111", "4111") { bytes ->
                         if (bytes.isNotEmpty()) bytes[0] * 100f / 255f else null
                     } else null
+                    // Velocidad real de la ECU (010D). Si el adaptador nuevo
+                    // la consigue, se usa para aceleración y consumo; si no,
+                    // la app cae al GPS sin mentir.
+                    val obdSpeed = if (speedPidOk) queryValue("010D", "410D") { bytes ->
+                        if (bytes.isNotEmpty()) bytes[0].toFloat() else null
+                    } else null
 
                     fast.put(K_RPM, rpm, now)
                     fast.put(K_LOAD, load, now)
                     fast.put(K_THROTTLE, throttle, now)
+                    fast.put(K_SPEED, obdSpeed, now)
+                    if (obdSpeed != null) {
+                        val prevSpeed = lastSpeedKmh
+                        val prevAt = lastSpeedAt
+                        if (prevSpeed != null && prevAt > 0L) {
+                            val dt = ((now - prevAt).coerceAtLeast(250L)) / 1000f
+                            val raw = ((obdSpeed - prevSpeed) / 3.6f) / dt
+                            accelMps2 = if (accelMps2 == null) {
+                                raw.coerceIn(-8f, 8f)
+                            } else {
+                                (accelMps2!! * 0.70f + raw * 0.30f).coerceIn(-8f, 8f)
+                            }
+                            accelAt = now
+                        }
+                        lastSpeedKmh = obdSpeed
+                        lastSpeedAt = now
+                    }
 
                     // Bloque lento completo cada 10 ciclos (~10 s con sleep
                     // 1000 ms): puebla el dashboard tras cada reconexión y
@@ -357,11 +399,61 @@ class Elm327Client(private val context: Context) {
                         val timing = if (supports(0x0E)) queryValue("010E", "410E") { bytes ->
                             if (bytes.isNotEmpty()) bytes[0] / 2f - 64f else null
                         } else null
+                        // Nivel de gasolina: PID estándar 012F. Muchos VAG no
+                        // lo publican por el puerto de motor; se intenta en
+                        // cada ciclo lento y se muestra solo si hay respuesta.
+                        var fuelLevel = when {
+                            fuelLevelPidOk -> queryValue("012F", "412F") { bytes ->
+                                if (bytes.isNotEmpty()) {
+                                    (bytes[0] * 100f / 255f).coerceIn(0f, 100f)
+                                } else null
+                            }
+                            udsFuelPidOk -> queryValue("22F42F", "62F42F") { bytes ->
+                                if (bytes.isNotEmpty()) {
+                                    (bytes[0] * 100f / 255f).coerceIn(0f, 100f)
+                                } else null
+                            }
+                            else -> null
+                        }
+                        // Reintento cada 90 s: algunos adaptadores tardan en
+                        // negociar el protocolo y el 012F empieza a responder
+                        // después de la primera sonda.
+                        if (!fuelLevelPidOk && now >= nextFuelProbeMs) {
+                            nextFuelProbeMs = now + 90_000L
+                            val probe = sendCommand("012F", 3000L)
+                            fuelLevelPidOk = probe.contains("412F") || probe.contains("41 2F")
+                            if (fuelLevelPidOk) {
+                                ObdConsole.info("= Nivel de gasolina disponible (012F)")
+                                fuelLevel = queryValue("012F", "412F") { bytes ->
+                                    if (bytes.isNotEmpty()) {
+                                        (bytes[0] * 100f / 255f).coerceIn(0f, 100f)
+                                    } else null
+                                }
+                            }
+                        }
+                        val maf = if (mafPidOk) queryValue("0110", "4110") { bytes ->
+                            if (bytes.size >= 2) (((bytes[0] * 256) + bytes[1]) / 100f) else null
+                        } else null
+                        val fuelRate = if (fuelRatePidOk) queryValue("015E", "415E") { bytes ->
+                            if (bytes.size >= 2) (((bytes[0] * 256) + bytes[1]) / 20f) else null
+                        } else null
+                        val speedNow = fast.get(K_SPEED, now, FAST_TTL_MS)
+                        val consumption = when {
+                            speedNow == null || speedNow < 5f -> null
+                            fuelRate != null -> (fuelRate / speedNow * 100f).coerceIn(0f, 40f)
+                            maf != null -> {
+                                val lh = maf * 0.329f
+                                (lh / speedNow * 100f).coerceIn(0f, 40f)
+                            }
+                            else -> null
+                        }
                         slow.put(K_COOLANT, coolant, now)
                         slow.put(K_INTAKE, intake, now)
                         slow.put(K_BATTERY, battery, now)
                         slow.put(K_TRIM, fuelTrim, now)
                         slow.put(K_TIMING, timing, now)
+                        slow.put(K_FUEL, fuelLevel, now)
+                        slow.put(K_CONSUMPTION, consumption, now)
                     }
 
                     // Un valor solo sigue visible mientras esté vigente: si la
@@ -371,11 +463,15 @@ class Elm327Client(private val context: Context) {
                         rpm = fast.get(K_RPM, now, FAST_TTL_MS)?.toInt(),
                         loadPct = fast.get(K_LOAD, now, FAST_TTL_MS),
                         throttlePct = fast.get(K_THROTTLE, now, FAST_TTL_MS),
+                        speedKmh = fast.get(K_SPEED, now, FAST_TTL_MS),
+                        accelerationMps2 = if (now - accelAt <= 3_000L) accelMps2 else null,
                         coolantC = slow.get(K_COOLANT, now, SLOW_TTL_MS),
                         intakeC = slow.get(K_INTAKE, now, SLOW_TTL_MS),
                         fuelTrimPct = slow.get(K_TRIM, now, SLOW_TTL_MS),
                         timingAdvanceDeg = slow.get(K_TIMING, now, SLOW_TTL_MS),
                         batteryV = slow.get(K_BATTERY, now, SLOW_TTL_MS),
+                        fuelLevelPct = slow.get(K_FUEL, now, SLOW_TTL_MS),
+                        instantConsumptionL100 = slow.get(K_CONSUMPTION, now, SLOW_TTL_MS),
                         updatedAtMs = now
                     )
                     if (alive(gen)) ObdRepository.publish(last)
@@ -445,6 +541,15 @@ class Elm327Client(private val context: Context) {
     private fun initialize() {
         supportedPids.clear()
         pidMaskTrusted = false
+        speedPidOk = false
+        fuelLevelPidOk = false
+        udsFuelPidOk = false
+        mafPidOk = false
+        fuelRatePidOk = false
+        lastSpeedKmh = null
+        lastSpeedAt = 0L
+        accelMps2 = null
+        accelAt = 0L
         sendCommand("ATZ", 2500L)
         Thread.sleep(700L)
         sendCommand("ATE0", 1200L)
@@ -491,6 +596,34 @@ class Elm327Client(private val context: Context) {
         Log.d(TAG, "0120: ${pids21.replace("\n", " ").take(120)}")
         val pids41 = sendCommand("0140", 2500L)
         Log.d(TAG, "0140: ${pids41.replace("\n", " ").take(120)}")
+
+        // Sondas únicas de los PIDs que el Ibiza 6J no siempre publica.
+        // Se prueban una vez por sesión, no en cada ciclo, para no saturar el
+        // ELM327 ni hacer que la ECU deje de responder.
+        val speedProbe = sendCommand("010D", 3000L)
+        speedPidOk = speedProbe.contains("410D") || speedProbe.contains("41 0D")
+        val fuelProbe = sendCommand("012F", 3000L)
+        fuelLevelPidOk = fuelProbe.contains("412F") || fuelProbe.contains("41 2F")
+        // Segunda oportunidad: WWH-OBD/UDS F42F (el PID 2F con prefijo F4).
+        // Se prueba una sola vez; si la ECU no lo soporta, no se insiste.
+        val udsFuelProbe = if (!fuelLevelPidOk) sendCommand("22F42F", 3000L) else ""
+        udsFuelPidOk = udsFuelProbe.contains("62F42F") || udsFuelProbe.contains("62 F4 2F")
+        if (udsFuelPidOk) ObdConsole.info("= Nivel de gasolina por UDS F42F")
+        val mafProbe = sendCommand("0110", 2500L)
+        mafPidOk = mafProbe.contains("4110") || mafProbe.contains("41 10")
+        val fuelRateProbe = sendCommand("015E", 3000L)
+        fuelRatePidOk = fuelRateProbe.contains("415E") || fuelRateProbe.contains("41 5E")
+        ObdConsole.info(
+            "= Sensores extra: velocidad=${if (speedPidOk) "sí" else "no"}, " +
+                "gasolina=${if (fuelLevelPidOk) "sí" else "no"}, " +
+                "MAF=${if (mafPidOk) "sí" else "no"}, " +
+                "consumo=${if (fuelRatePidOk) "sí" else "no"}"
+        )
+        Log.i(
+            TAG,
+            "extra PIDs speed=$speedPidOk fuel=$fuelLevelPidOk maf=$mafPidOk fuelRate=$fuelRatePidOk"
+        )
+        nextFuelProbeMs = SystemClock.elapsedRealtime() + 60_000L
 
         // Mapa de PIDs soportados: evita pedir datos que la ECU no tiene y
         // esperar el timeout de cada uno en cada ciclo.
@@ -917,5 +1050,8 @@ class Elm327Client(private val context: Context) {
         private const val K_BATTERY = "battery"
         private const val K_TRIM = "trim"
         private const val K_TIMING = "timing"
+        private const val K_SPEED = "speed"
+        private const val K_FUEL = "fuel"
+        private const val K_CONSUMPTION = "consumption"
     }
 }

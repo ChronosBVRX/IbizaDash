@@ -285,14 +285,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var vHumanElectrical: TextView
     private lateinit var vHumanElectricalSub: TextView
     private val metricBars = HashMap<Int, AutomotiveBarDrawable>()
-    private lateinit var vHumanMaintenance: TextView
-    private lateinit var vHumanMaintenanceSub: TextView
+    private lateinit var vHumanFuel: TextView
+    private lateinit var vHumanFuelSub: TextView
+    private lateinit var vHumanAccel: TextView
+    private lateinit var vHumanAccelSub: TextView
     private lateinit var vHumanThermalBar: View
     private lateinit var vHumanElectricalBar: View
-    private lateinit var vHumanMaintenanceBar: View
+    private lateinit var vHumanFuelBar: View
+    private lateinit var vHumanAccelBar: View
     private lateinit var vHumanThermalIcon: ImageView
     private lateinit var vHumanElectricalIcon: ImageView
-    private lateinit var vHumanMaintenanceIcon: ImageView
+    private lateinit var vHumanFuelIcon: ImageView
+    private lateinit var vHumanAccelIcon: ImageView
     private lateinit var vGear: TextView
     private lateinit var vGearText: TextView
     private lateinit var vSource: TextView
@@ -314,15 +318,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var vLoadState: TextView
     private lateinit var vVoltage: TextView
     private lateinit var vVoltageState: TextView
-    private lateinit var vIntake: TextView
-    private lateinit var vIntakeAdv: TextView
-    private lateinit var vIntakeState: TextView
-    private lateinit var vTiming: TextView
-    private lateinit var vTimingAdv: TextView
-    private lateinit var vTimingState: TextView
-    private lateinit var vTrim: TextView
-    private lateinit var vTrimAdv: TextView
-    private lateinit var vTrimState: TextView
+    private lateinit var vFuel: TextView
+    private lateinit var vFuelAdv: TextView
+    private lateinit var vFuelState: TextView
+    private lateinit var vAccel: TextView
+    private lateinit var vAccelAdv: TextView
+    private lateinit var vAccelState: TextView
+    private lateinit var vConsumption: TextView
+    private lateinit var vConsumptionAdv: TextView
+    private lateinit var vConsumptionState: TextView
     private lateinit var vVin: TextView
     private lateinit var vDtc: TextView
     private lateinit var vDtcMeanings: TextView
@@ -371,6 +375,15 @@ class MainActivity : AppCompatActivity() {
     private var lastGpsFix: GpsFix? = null
     private var lastGpsUiMs = 0L
     private var currentSpeedKmh = 0f
+
+    // Datos que el CAN del coche publica por el MCU (no siempre por OBD).
+    private var canFuelRangeKm: Int? = null
+    private var canCoolantC: Float? = null
+    // Aceleración de respaldo calculada con la velocidad del GPS.
+    private var lastGpsSpeedKmh = 0f
+    private var lastGpsSpeedAt = 0L
+    private var gpsAccelMps2: Float? = null
+    private var lastHumanUiMs = 0L
     private var uiVisible = true
 
     // Geometría completa de la ruta activa. La polilínea visible se recorta
@@ -1124,15 +1137,19 @@ class MainActivity : AppCompatActivity() {
         vHumanThermalSub = findViewById(R.id.vHumanThermalSub)
         vHumanElectrical = findViewById(R.id.vHumanElectrical)
         vHumanElectricalSub = findViewById(R.id.vHumanElectricalSub)
-        vHumanMaintenance = findViewById(R.id.vHumanMaintenance)
-        vHumanMaintenanceSub = findViewById(R.id.vHumanMaintenanceSub)
+        vHumanFuel = findViewById(R.id.vHumanFuel)
+        vHumanFuelSub = findViewById(R.id.vHumanFuelSub)
+        vHumanAccel = findViewById(R.id.vHumanAccel)
+        vHumanAccelSub = findViewById(R.id.vHumanAccelSub)
         vHumanThermalBar = findViewById(R.id.vHumanThermalBar)
         vHumanElectricalBar = findViewById(R.id.vHumanElectricalBar)
-        vHumanMaintenanceBar = findViewById(R.id.vHumanMaintenanceBar)
+        vHumanFuelBar = findViewById(R.id.vHumanFuelBar)
+        vHumanAccelBar = findViewById(R.id.vHumanAccelBar)
         vHumanThermalIcon = findViewById(R.id.vHumanThermalIcon)
         vHumanElectricalIcon = findViewById(R.id.vHumanElectricalIcon)
+        vHumanFuelIcon = findViewById(R.id.vHumanFuelIcon)
+        vHumanAccelIcon = findViewById(R.id.vHumanAccelIcon)
         cockpitHealthIcon = findViewById(R.id.cockpitHealthIcon)
-        vHumanMaintenanceIcon = findViewById(R.id.vHumanMaintenanceIcon)
         val techContainer = findViewById<android.widget.LinearLayout>(R.id.layoutTechDataContainer)
         val toggleBtn = findViewById<View>(R.id.btnToggleTechData)
         val toggleLabel = findViewById<TextView>(R.id.vToggleLabel)
@@ -1142,11 +1159,15 @@ class MainActivity : AppCompatActivity() {
             techVisible = !techVisible
             techContainer.visibility = if (techVisible) View.VISIBLE else View.GONE
             toggleLabel.text =
-                if (techVisible) "Cerrar panel de diagnóstico"
-                else "Abrir panel de diagnóstico"
+                if (techVisible) "Ocultar detalles del motor"
+                else "Ver detalles del motor"
             toggleChevron.setImageResource(
                 if (techVisible) R.drawable.ic_chevron_up else R.drawable.ic_chevron_down
             )
+            if (techVisible) {
+                val scroll = vehicleModule as? ScrollView
+                scroll?.post { scroll.smoothScrollTo(0, techContainer.top) }
+            }
         }
         findViewById<Button>(R.id.btnOilChange).setOnClickListener { Prefs.setLastOilChangeKm(this, Prefs.totalOdometerKm(this)); Prefs.setOilLevelCheckedNow(this); renderHumanNow() }
         findViewById<Button>(R.id.btnOilCheck).setOnClickListener { Prefs.setOilLevelCheckedNow(this); renderHumanNow() }
@@ -1190,15 +1211,15 @@ class MainActivity : AppCompatActivity() {
         vLoadState = findViewById(R.id.vLoadState)
         vVoltage = findViewById(R.id.vVoltage)
         vVoltageState = findViewById(R.id.vVoltageState)
-        vIntake = findViewById(R.id.vIntake)
-        vIntakeAdv = findViewById(R.id.vIntakeAdv)
-        vIntakeState = findViewById(R.id.vIntakeState)
-        vTiming = findViewById(R.id.vTiming)
-        vTimingAdv = findViewById(R.id.vTimingAdv)
-        vTimingState = findViewById(R.id.vTimingState)
-        vTrim = findViewById(R.id.vTrim)
-        vTrimAdv = findViewById(R.id.vTrimAdv)
-        vTrimState = findViewById(R.id.vTrimState)
+        vFuel = findViewById(R.id.vFuel)
+        vFuelAdv = findViewById(R.id.vFuelAdv)
+        vFuelState = findViewById(R.id.vFuelState)
+        vAccel = findViewById(R.id.vAccel)
+        vAccelAdv = findViewById(R.id.vAccelAdv)
+        vAccelState = findViewById(R.id.vAccelState)
+        vConsumption = findViewById(R.id.vConsumption)
+        vConsumptionAdv = findViewById(R.id.vConsumptionAdv)
+        vConsumptionState = findViewById(R.id.vConsumptionState)
         vVin = findViewById(R.id.vVin)
         vDtc = findViewById(R.id.vDtc)
         vDtcMeanings = findViewById(R.id.vDtcMeanings)
@@ -1911,13 +1932,27 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onVehicleBundle(bundle: Bundle) {
-        // El servicio manda la fuente en un Bundle, no en un broadcast.
-        if (bundle.getString("action") == "Source_recieve") {
-            val value = bundle.getInt("SourceValue", -1)
-            if (value >= 0) applyMcuSource(value)
+        when (bundle.getString("action")) {
+            // El servicio manda la fuente en un Bundle, no en un broadcast.
+            "Source_recieve" -> {
+                val value = bundle.getInt("SourceValue", -1)
+                if (value >= 0) applyMcuSource(value)
+            }
+            // El CAN del coche publica estos dos datos por el MCU. Son los
+            // que el cuadro usa para la aguja y la autonomía.
+            "car_info_recieve" -> {
+                bundle.getString("water_temperature")
+                    ?.replace(',', '.')
+                    ?.toFloatOrNull()
+                    ?.takeIf { it > -40f && it < 150f }
+                    ?.let { canCoolantC = it }
+                bundle.getString("RemainKON")
+                    ?.let { raw -> Regex("\\d+").find(raw)?.value?.toIntOrNull() }
+                    ?.takeIf { it in 0..2000 }
+                    ?.let { canFuelRangeKm = it }
+                renderHumanNow()
+            }
         }
-        // Los frames CAN crudos se registran en VehicleCallback hasta validar
-        // el mapa de bytes contra el coche.
     }
 
     private fun onCarInfo(extras: Bundle) {
@@ -2060,18 +2095,18 @@ class MainActivity : AppCompatActivity() {
             )
         )
         attachMetricBar(
-            R.id.vIntake,
+            R.id.vFuel,
             AutomotiveBarDrawable(
-                -20f, 60f, d,
+                0f, 100f, d,
                 initialLow = cyan,
                 initialHigh = 0xFF10B981.toInt(),
                 uiContext = this
             )
         )
         attachMetricBar(
-            R.id.vTiming,
+            R.id.vAccel,
             AutomotiveBarDrawable(
-                -10f, 40f, d,
+                -5f, 5f, d,
                 bipolar = true,
                 initialLow = 0xFF64748B.toInt(),
                 initialHigh = 0xFFE2E8F0.toInt(),
@@ -2079,10 +2114,9 @@ class MainActivity : AppCompatActivity() {
             )
         )
         attachMetricBar(
-            R.id.vTrim,
+            R.id.vConsumption,
             AutomotiveBarDrawable(
-                -25f, 25f, d,
-                bipolar = true,
+                0f, 20f, d,
                 initialLow = 0xFF64748B.toInt(),
                 initialHigh = 0xFFE2E8F0.toInt(),
                 uiContext = this
@@ -2157,18 +2191,31 @@ class MainActivity : AppCompatActivity() {
             }
             bar.animateTo(temp)
         }
-        metricBars[R.id.vIntake]?.animateTo(s.intakeC)
-        metricBars[R.id.vTiming]?.let { bar ->
-            val timing = s.timingAdvanceDeg
-            if (timing != null && kotlin.math.abs(timing) > 10f) bar.setColors(amber, amber)
-            else bar.setColors(neutralLow, neutralHigh)
-            bar.animateTo(timing)
+        metricBars[R.id.vFuel]?.let { bar ->
+            val fuel = s.fuelLevelPct
+            when {
+                fuel == null -> bar.setColors(neutralLow, neutralHigh)
+                fuel < 12f -> bar.setColors(red, red)
+                fuel < 25f -> bar.setColors(amber, amber)
+                else -> bar.setColors(cyan, 0xFF10B981.toInt())
+            }
+            bar.animateTo(fuel)
         }
-        metricBars[R.id.vTrim]?.let { bar ->
-            val trim = s.fuelTrimPct
-            if (trim != null && kotlin.math.abs(trim) > 10f) bar.setColors(amber, amber)
+        metricBars[R.id.vAccel]?.let { bar ->
+            val accel = s.accelerationMps2 ?: gpsAccelMps2
+            if (accel != null && kotlin.math.abs(accel) > 3f) bar.setColors(amber, amber)
             else bar.setColors(neutralLow, neutralHigh)
-            bar.animateTo(trim)
+            bar.animateTo(accel)
+        }
+        metricBars[R.id.vConsumption]?.let { bar ->
+            val cons = s.instantConsumptionL100
+            when {
+                cons == null -> bar.setColors(neutralLow, neutralHigh)
+                cons > 12f -> bar.setColors(amber, amber)
+                cons < 8f -> bar.setColors(0xFF059669.toInt(), 0xFF10B981.toInt())
+                else -> bar.setColors(neutralLow, neutralHigh)
+            }
+            bar.animateTo(cons)
         }
         metricBars[R.id.vVoltage]?.animateTo(s.batteryV)
     }
@@ -2256,7 +2303,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val s = if (!state.connected && !state.demo) ObdTelemetry() else state
+        val s = (if (!state.connected && !state.demo) ObdTelemetry() else state).let {
+            it.copy(
+                coolantC = it.coolantC ?: canCoolantC,
+                fuelRangeKm = it.fuelRangeKm ?: canFuelRangeKm
+            )
+        }
         if (updateBars) updateMetricBars(s)
 
         if (updateTexts) {
@@ -2268,14 +2320,24 @@ class MainActivity : AppCompatActivity() {
             vLoadAdv.text = loadAdvice(s.loadPct, s.rpm)
             vThrottle.text = s.throttlePct?.let { "${it.roundToInt()} %" } ?: "--"
             vThrottleAdv.text = throttleAdvice(s.throttlePct)
-            vCoolant.text = s.coolantC?.let { "${it.roundToInt()} °C" } ?: "--"
-            vCoolantAdv.text = coolantAdvice(s.coolantC)
-            vIntake.text = s.intakeC?.let { "${it.roundToInt()} °C" } ?: "--"
-            vIntakeAdv.text = intakeAdvice(s.intakeC)
-            vTiming.text = s.timingAdvanceDeg?.let { "%.0f°".format(it) } ?: "--"
-            vTimingAdv.text = timingAdvice(s.timingAdvanceDeg)
-            vTrim.text = s.fuelTrimPct?.let { "%+.1f %%".format(it) } ?: "--"
-            vTrimAdv.text = trimAdvice(s.fuelTrimPct)
+            val coolant = s.coolantC
+            val fuel = s.fuelLevelPct
+            val range = s.fuelRangeKm
+            val accel = s.accelerationMps2 ?: gpsAccelMps2
+            vCoolant.text = coolant?.let { "${it.roundToInt()} °C" } ?: "--"
+            vCoolantAdv.text = coolantAdvice(coolant)
+            vFuel.text = when {
+                fuel != null -> "${fuel.roundToInt()} %"
+                range != null -> "~$range km"
+                else -> "--"
+            }
+            vFuelAdv.text = fuelAdvice(fuel, range)
+            vAccel.text = accel?.let { "%+.1f m/s²".format(it) } ?: "--"
+            vAccelAdv.text = accelAdvice(accel)
+            vConsumption.text = s.instantConsumptionL100?.let {
+                "%.1f L/100".format(it)
+            } ?: "--"
+            vConsumptionAdv.text = consumptionAdvice(s.instantConsumptionL100)
 
             vVoltage.text = s.batteryV?.let { "%.1f V".format(it) } ?: "--"
             vVoltageState.text = batteryAdvice(s.batteryV, s.rpm)
@@ -2286,10 +2348,10 @@ class MainActivity : AppCompatActivity() {
             applyMetricState(vRpmState, rpmState(s.rpm))
             applyMetricState(vLoadState, loadState(s.loadPct))
             applyMetricState(vThrottleState, throttleState(s.throttlePct))
-            applyMetricState(vCoolantState, coolantState(s.coolantC))
-            applyMetricState(vIntakeState, intakeState(s.intakeC))
-            applyMetricState(vTimingState, timingState(s.timingAdvanceDeg))
-            applyMetricState(vTrimState, trimState(s.fuelTrimPct))
+            applyMetricState(vCoolantState, coolantState(coolant))
+            applyMetricState(vFuelState, fuelState(fuel, range))
+            applyMetricState(vAccelState, accelState(accel))
+            applyMetricState(vConsumptionState, consumptionState(s.instantConsumptionL100))
 
             state.vin?.let { vVin.text = it }
             renderFaults(state)
@@ -2297,11 +2359,17 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (updateTexts) {
-            val human = HumanCarAssistant.evaluate(this, state, currentSpeedKmh.roundToInt())
-            renderHuman(human, state)
+            val human = HumanCarAssistant.evaluate(this, s, currentSpeedKmh.roundToInt())
+            renderHuman(human, s)
             // Proactive alert capsule for critical/warning insights.
-            val alertInsight = listOf(human.thermalMessage, human.electricalMessage, human.maintenanceMessage)
-                .firstOrNull { it.voiceOrBannerAlert && (it.severity == Severity.WARNING || it.severity == Severity.CRITICAL) }
+            val alertInsight = listOf(
+                human.thermalMessage,
+                human.electricalMessage,
+                human.maintenanceMessage,
+                fuelInsight(s)
+            ).firstOrNull {
+                it.voiceOrBannerAlert && (it.severity == Severity.WARNING || it.severity == Severity.CRITICAL)
+            }
             if (alertInsight != null) {
                 showHumanAlert(alertInsight)
             }
@@ -2367,15 +2435,23 @@ class MainActivity : AppCompatActivity() {
                 ContextCompat.getColor(this, obdSeekColor(rpmLevel))
             )
             setObdBar(obdCockpitRpmBar, (((s.rpm ?: 0).toFloat() / 7000f * 100f).toInt()), rpmLevel)
-            // NIVEL: solo se muestra el % si la ECU lo entrega; si no, "--".
+            // NIVEL: se muestra el % si la ECU lo entrega; si solo hay
+            // autonomía CAN, se muestra en km para no dejar el hueco en "--".
             val fuelLevel = s.fuelLevelPct
+            val fuelRange = s.fuelRangeKm
             val fuelWarning = when {
-                fuelLevel == null -> -1
-                fuelLevel < 12f -> 2
-                fuelLevel < 25f -> 1
+                fuelLevel != null && fuelLevel < 12f -> 2
+                fuelLevel != null && fuelLevel < 25f -> 1
+                fuelLevel == null && fuelRange != null && fuelRange < 80 -> 2
+                fuelLevel == null && fuelRange != null && fuelRange < 150 -> 1
+                fuelLevel == null && fuelRange == null -> -1
                 else -> 0
             }
-            obdCockpitFuel.text = fuelLevel?.let { "${it.roundToInt()}%" } ?: "--"
+            obdCockpitFuel.text = when {
+                fuelLevel != null -> "${fuelLevel.roundToInt()}%"
+                fuelRange != null -> "~${fuelRange}km"
+                else -> "--"
+            }
             obdCockpitFuel.setTextColor(
                 ContextCompat.getColor(
                     this,
@@ -2619,25 +2695,28 @@ class MainActivity : AppCompatActivity() {
         else -> MetricState("Peligro", R.color.danger)
     }
 
-    private fun intakeState(t: Float?): MetricState = when {
-        t == null -> MetricState("Sin dato", R.color.text_muted)
-        t < 50f -> MetricState("Fresco", R.color.green)
-        t <= 70f -> MetricState("Tibio", R.color.accent_sky)
-        else -> MetricState("Caliente", R.color.amber)
+    private fun fuelState(level: Float?, rangeKm: Int?): MetricState = when {
+        level == null && rangeKm == null -> MetricState("Sin dato", R.color.text_muted)
+        level != null && level < 12f -> MetricState("Reserva", R.color.danger)
+        level != null && level < 25f -> MetricState("Bajo", R.color.amber)
+        level != null -> MetricState("Normal", R.color.green)
+        else -> MetricState("Autonomía", R.color.accent_sky)
     }
 
-    private fun timingState(t: Float?): MetricState = when {
-        t == null -> MetricState("Sin dato", R.color.text_muted)
-        t in 5f..20f -> MetricState("Normal", R.color.green)
-        t < 0f -> MetricState("Atrasado", R.color.amber)
-        else -> MetricState("Avanzado", R.color.accent_sky)
+    private fun accelState(a: Float?): MetricState = when {
+        a == null -> MetricState("Sin dato", R.color.text_muted)
+        a > 1.5f -> MetricState("Acelerando", R.color.accent_sky)
+        a > 0.25f -> MetricState("Suave", R.color.green)
+        a < -1.5f -> MetricState("Frenando", R.color.amber)
+        a < -0.25f -> MetricState("Reteniendo", R.color.accent_sky)
+        else -> MetricState("Estable", R.color.green)
     }
 
-    private fun trimState(t: Float?): MetricState = when {
-        t == null -> MetricState("Sin dato", R.color.text_muted)
-        t in -10f..10f -> MetricState("Equilibrada", R.color.green)
-        t > 10f -> MetricState("Pobre", R.color.amber)
-        else -> MetricState("Rica", R.color.amber)
+    private fun consumptionState(c: Float?): MetricState = when {
+        c == null -> MetricState("Sin dato", R.color.text_muted)
+        c < 8f -> MetricState("Económico", R.color.green)
+        c < 12f -> MetricState("Normal", R.color.accent_sky)
+        else -> MetricState("Alto", R.color.amber)
     }
 
     private fun batteryStateColor(v: Float?, rpm: Int?): Int = when {
@@ -2682,34 +2761,46 @@ class MainActivity : AppCompatActivity() {
         else -> "PELIGRO: detente en un lugar seguro y no abras el tapón caliente."
     }
 
-    private fun intakeAdvice(t: Float?): String = when {
-        t == null -> "Sin lectura."
-        t < 50 -> "Aire fresco, buena combustión."
-        t <= 70 -> "Aire tibio; normal en tráfico."
-        else -> "Aire muy caliente: pierdes potencia; revisa el filtro."
+    private fun fuelAdvice(level: Float?, rangeKm: Int?): String = when {
+        level == null && rangeKm == null ->
+            "La ECU no entrega el nivel por OBD. La aguja del cuadro es la referencia."
+        level != null && level < 12f ->
+            "Reserva. Busca gasolinera ya; no conviene apurar la bomba de gasolina."
+        level != null && level < 25f ->
+            "Nivel bajo. Llena pronto para no quedarte sin gasolina."
+        level != null && rangeKm != null ->
+            "Son ${level.roundToInt()}% del tanque; alcanza para ~$rangeKm km."
+        level != null ->
+            "Porcentaje del tanque. Sirve para planear la próxima carga."
+        else ->
+            "Autonomía estimada por el CAN: ~$rangeKm km con lo que queda."
     }
 
     private fun batteryAdvice(v: Float?, rpm: Int?): String = when {
         v == null -> "Sin lectura todavía."
         (rpm ?: 0) < 300 && v < 11.9 -> "Batería baja con el motor apagado: enciende o carga pronto."
         (rpm ?: 0) >= 500 && v < 13.1 -> "No está cargando: revisa la banda del alternador y las terminales."
-        v in 13.2f..14.8f -> "Cargando bien."
+        v in 13.2f..14.8f -> "El alternador está cargando bien la batería."
         v > 14.8 -> "Voltaje alto: conviene revisar el regulador."
         else -> "Valor en transición; observa si baja de 12 V con el motor apagado."
     }
 
-    private fun trimAdvice(t: Float?): String = when {
-        t == null -> "Sin lectura."
-        t in -10f..10f -> "Mezcla bien ajustada."
-        t > 10 -> "El motor pide más gasolina: puede entrar aire de más."
-        else -> "El motor recibe gasolina de más: conviene revisar inyectores."
+    private fun consumptionAdvice(c: Float?): String = when {
+        c == null ->
+            "Se calcula con el aire que entra al motor y la velocidad. Si no hay dato, el motor no publica MAF ni consumo."
+        c < 8f -> "Consumo bajo: vas manejando de forma eficiente."
+        c < 12f -> "Consumo normal para este motor. Sirve para comparar trayectos."
+        else -> "Consumo alto: acelerones, subida o tráfico. Levanta el pie para ahorrar."
     }
 
-    private fun timingAdvice(t: Float?): String = when {
-        t == null -> "Sin lectura."
-        t in 5f..20f -> "Encendido bien ajustado en marcha."
-        t < 0 -> "Encendido atrasado: el motor se está protegiendo."
-        else -> "Encendido adelantado: normal con poca carga."
+    private fun accelAdvice(a: Float?): String = when {
+        a == null ->
+            "Se calcula con la velocidad OBD o GPS. Sirve para notar tirones o falta de potencia."
+        a > 1.5f -> "Aceleración fuerte. El motor responde; suelta un poco para cuidar el consumo."
+        a > 0.25f -> "Estás acelerando. Normal al incorporarte o rebasar."
+        a < -1.5f -> "Frenado fuerte. Si no fue a propósito, revisa frenos o presión de llantas."
+        a < -0.25f -> "Estás frenando o reteniendo con el motor."
+        else -> "Velocidad estable. Buen momento para revisar el consumo."
     }
 
     private fun trimInsight(state: ObdTelemetry): HumanInsight {
@@ -2722,9 +2813,92 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun fuelInsight(state: ObdTelemetry): HumanInsight {
+        val level = state.fuelLevelPct
+        val range = state.fuelRangeKm
+        if (level == null && range == null) {
+            return HumanInsight(
+                "fuel_none",
+                "Nivel de gasolina no disponible",
+                "Este coche no lo entrega por OBD; usa la aguja del cuadro. La autonomía sí puede llegar por CAN.",
+                Severity.INFO
+            )
+        }
+        val title = when {
+            level != null && range != null -> "Gasolina ${level.roundToInt()}% · ~$range km"
+            level != null -> "Gasolina ${level.roundToInt()}%"
+            else -> "Autonomía ~$range km"
+        }
+        return when {
+            level != null && level < 12f -> HumanInsight(
+                "fuel_low", title,
+                "Estás en reserva. Busca una gasolinera pronto para no quedarte tirado.",
+                Severity.WARNING, true
+            )
+            level != null && level < 25f -> HumanInsight(
+                "fuel_warn", title,
+                "Nivel bajo. Llena antes de que entre en reserva; así cuidas la bomba.",
+                Severity.WARNING
+            )
+            level != null -> HumanInsight(
+                "fuel_ok", title,
+                "Nivel leído de la ECU. Sirve para saber cuánto puedes manejar antes de cargar.",
+                Severity.GOOD
+            )
+            else -> HumanInsight(
+                "fuel_range", title,
+                when {
+                    (range ?: 999) < 80 ->
+                        "Autonomía baja. Busca una gasolinera pronto; el CAN calcula ~$range km."
+                    (range ?: 999) < 150 ->
+                        "Te queda poca autonomía. Planea tu próxima carga."
+                    else ->
+                        "Distancia aproximada que puedes manejar con lo que queda. La calcula el CAN del coche."
+                },
+                when {
+                    (range ?: 999) < 80 -> Severity.WARNING
+                    (range ?: 999) < 150 -> Severity.INFO
+                    else -> Severity.GOOD
+                },
+                voiceOrBannerAlert = (range ?: 999) < 80
+            )
+        }
+    }
+
+    private fun accelInsight(state: ObdTelemetry): HumanInsight {
+        val a = state.accelerationMps2 ?: gpsAccelMps2
+        if (a == null) {
+            return HumanInsight(
+                "accel_none",
+                "Aceleración sin dato",
+                "Se calcula con la velocidad OBD o GPS. Sirve para notar tirones o falta de potencia.",
+                Severity.INFO
+            )
+        }
+        val title = when {
+            a > 1.5f -> "Aceleración fuerte %+.1f m/s²".format(a)
+            a > 0.25f -> "Acelerando %+.1f m/s²".format(a)
+            a < -1.5f -> "Frenado fuerte %+.1f m/s²".format(a)
+            a < -0.25f -> "Frenando %+.1f m/s²".format(a)
+            else -> "Velocidad estable %+.1f m/s²".format(a)
+        }
+        val sub = "Qué tan rápido cambia la velocidad. Sirve para detectar tirones, falta de potencia o frenadas bruscas."
+        return HumanInsight(
+            "accel",
+            title,
+            sub,
+            if (kotlin.math.abs(a) > 3f) Severity.WARNING else Severity.GOOD
+        )
+    }
+
     private fun renderHumanNow() {
         try {
-            val state = ObdRepository.current
+            val state = ObdRepository.current.let {
+                it.copy(
+                    coolantC = it.coolantC ?: canCoolantC,
+                    fuelRangeKm = it.fuelRangeKm ?: canFuelRangeKm
+                )
+            }
             renderHuman(
                 HumanCarAssistant.evaluate(this, state, currentSpeedKmh.roundToInt()),
                 state
@@ -2787,19 +2961,26 @@ class MainActivity : AppCompatActivity() {
             human.electricalMessage, R.drawable.ic_battery
         )
         renderHumanInsight(
-            vHumanMaintenanceBar, vHumanMaintenanceIcon, vHumanMaintenance, vHumanMaintenanceSub,
-            human.maintenanceMessage, R.drawable.ic_oil
+            vHumanFuelBar, vHumanFuelIcon, vHumanFuel, vHumanFuelSub,
+            fuelInsight(state), R.drawable.ic_fuel
+        )
+        renderHumanInsight(
+            vHumanAccelBar, vHumanAccelIcon, vHumanAccel, vHumanAccelSub,
+            accelInsight(state), R.drawable.ic_gauge
         )
 
-        cockpitHealth.text = "${human.headlineStatus}\n${human.thermalMessage.title} · ${human.electricalMessage.title}"
+        cockpitHealth.text =
+            "${human.headlineStatus}\n${human.thermalMessage.title} · ${human.electricalMessage.title}"
     }
 
-    /** Cantidad de sistemas con datos reales (mantenimiento siempre cuenta). */
+    /** Cantidad de sistemas con datos reales. */
     private fun monitoredSystems(state: ObdTelemetry): Int {
-        var n = 1 // aceite/mantenimiento se basa en el odómetro local
+        var n = 0
         if (state.coolantC != null || state.intakeC != null) n++
         if (state.batteryV != null) n++
-        return n
+        if (state.fuelLevelPct != null || state.fuelRangeKm != null) n++
+        if (state.accelerationMps2 != null || gpsAccelMps2 != null) n++
+        return n.coerceAtLeast(1)
     }
 
     private fun renderHumanInsight(
@@ -3738,6 +3919,20 @@ class MainActivity : AppCompatActivity() {
         }
 
         currentSpeedKmh = signals.speedKmh
+        val accelNow = SystemClock.elapsedRealtime()
+        if (lastGpsSpeedAt > 0L && accelNow - lastGpsSpeedAt in 250L..3_000L) {
+            val dt = (accelNow - lastGpsSpeedAt) / 1000f
+            val raw = ((signals.speedKmh - lastGpsSpeedKmh) / 3.6f) / dt
+            gpsAccelMps2 = if (gpsAccelMps2 == null) {
+                raw.coerceIn(-8f, 8f)
+            } else {
+                (gpsAccelMps2!! * 0.65f + raw * 0.35f).coerceIn(-8f, 8f)
+            }
+        } else if (lastGpsSpeedAt == 0L || accelNow - lastGpsSpeedAt > 3_000L) {
+            gpsAccelMps2 = null
+        }
+        lastGpsSpeedKmh = signals.speedKmh
+        lastGpsSpeedAt = accelNow
         speedometer.useMph = mph
         speedometer.setSourceLabel(signals.source)
         speedometer.setSpeed(signals.speedKmh.roundToInt())
@@ -3801,6 +3996,12 @@ class MainActivity : AppCompatActivity() {
 
         if (signals.reverse != reverseActive) {
             onReverseChanged(signals.reverse)
+        }
+        // La aceleración de respaldo (GPS) y la autonomía CAN deben refrescar
+        // el panel AUTO aunque el adaptador OBD no entregue velocidad.
+        if (now - lastHumanUiMs >= 2_000L) {
+            lastHumanUiMs = now
+            renderHumanNow()
         }
     }
 
@@ -4501,6 +4702,19 @@ class MainActivity : AppCompatActivity() {
             }, 900L)
         } else {
             resetMapBearing()
+            // Fuera de NAV el minimapa también debe seguir al coche. Antes se
+            // quedaba en la última posición o en Morelia hasta tocar el mapa.
+            mapMode = MapMode.FOLLOWING
+            lastUserMapTouchMs = 0L
+            lastGpsFix?.let { fix ->
+                try {
+                    val target = GeoPoint(fix.latitude, fix.longitude)
+                    positionMarker?.position = target
+                    map.controller.setCenter(target)
+                    map.invalidate()
+                } catch (_: Exception) {
+                }
+            }
         }
         updatePerspective()
         updateRecenterVisibility()
@@ -4566,14 +4780,12 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             positionMarker?.let { pm ->
-                if (nav) {
-                    if (!map.overlays.contains(pm)) map.overlays.add(pm)
-                    // En perspectiva el coche lo pinta PerspectiveNavOverlayView.
-                    pm.isEnabled = !screenSpace
-                } else {
-                    map.overlays.remove(pm)
-                    pm.isEnabled = true
-                }
+                // El coche debe verse también en el minimapa de Inicio,
+                // Música y Auto; antes solo se agregaba en NAV y por eso el
+                // vehículo desaparecía fuera de la sección de mapas.
+                if (!map.overlays.contains(pm)) map.overlays.add(pm)
+                // En perspectiva el coche lo pinta PerspectiveNavOverlayView.
+                pm.isEnabled = !screenSpace
             }
             destinationMarker?.isEnabled = !screenSpace
             if (nav) bringPuckToFront()

@@ -316,7 +316,7 @@
                             style="@style/Label"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="ELÉCTRICO" />
+                            android:text="Batería" />
 
                         <TextView
                             android:id="@+id/vHumanElectrical"
@@ -351,8 +351,9 @@
             android:baselineAligned="false"
             android:orientation="horizontal">
 
+            <!-- COMBUSTIBLE -->
             <LinearLayout
-                android:id="@+id/vHumanMaintenanceCard"
+                android:id="@+id/vHumanFuelCard"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1"
@@ -360,7 +361,7 @@
                 android:orientation="horizontal">
 
                 <View
-                    android:id="@+id/vHumanMaintenanceBar"
+                    android:id="@+id/vHumanFuelBar"
                     android:layout_width="3dp"
                     android:layout_height="match_parent"
                     android:background="@drawable/bg_accent_bar"
@@ -383,12 +384,12 @@
                         android:background="@drawable/bg_icon_badge">
 
                         <ImageView
-                            android:id="@+id/vHumanMaintenanceIcon"
+                            android:id="@+id/vHumanFuelIcon"
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:layout_gravity="center"
-                            android:contentDescription="Mantenimiento"
-                            android:src="@drawable/ic_oil"
+                            android:contentDescription="Combustible"
+                            android:src="@drawable/ic_fuel"
                             android:tint="@color/green" />
                     </FrameLayout>
 
@@ -403,27 +404,111 @@
                             style="@style/Label"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="MANTENIMIENTO" />
+                            android:text="COMBUSTIBLE" />
 
                         <TextView
-                            android:id="@+id/vHumanMaintenance"
+                            android:id="@+id/vHumanFuel"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:ellipsize="end"
                             android:fontFamily="sans-serif-medium"
                             android:maxLines="2"
-                            android:text="Aceite y servicio al día"
+                            android:text="Nivel no disponible"
                             android:textColor="@color/text_primary"
                             android:textSize="12sp" />
 
                         <TextView
-                            android:id="@+id/vHumanMaintenanceSub"
+                            android:id="@+id/vHumanFuelSub"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="1dp"
                             android:ellipsize="end"
                             android:maxLines="2"
-                            android:text="Faltan 9997 km para el próximo cambio"
+                            android:text="Te dice cuánta gasolina queda y cuántos km puedes manejar"
+                            android:textColor="@color/text_muted"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+            <Space
+                android:layout_width="10dp"
+                android:layout_height="match_parent" />
+
+            <!-- ACELERACIÓN -->
+            <LinearLayout
+                android:id="@+id/vHumanAccelCard"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/bg_insight_card"
+                android:orientation="horizontal">
+
+                <View
+                    android:id="@+id/vHumanAccelBar"
+                    android:layout_width="3dp"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/bg_accent_bar"
+                    android:backgroundTint="@color/green" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="11dp"
+                    android:paddingTop="10dp"
+                    android:paddingEnd="11dp"
+                    android:paddingBottom="10dp">
+
+                    <FrameLayout
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:background="@drawable/bg_icon_badge">
+
+                        <ImageView
+                            android:id="@+id/vHumanAccelIcon"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:contentDescription="Aceleración"
+                            android:src="@drawable/ic_gauge"
+                            android:tint="@color/green" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Label"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="ACELERACIÓN" />
+
+                        <TextView
+                            android:id="@+id/vHumanAccel"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:ellipsize="end"
+                            android:fontFamily="sans-serif-medium"
+                            android:maxLines="2"
+                            android:text="Sin dato"
+                            android:textColor="@color/text_primary"
+                            android:textSize="12sp" />
+
+                        <TextView
+                            android:id="@+id/vHumanAccelSub"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="1dp"
+                            android:ellipsize="end"
+                            android:maxLines="2"
+                            android:text="Qué tan fuerte acelera o frena; sirve para notar tirones o falta de potencia"
                             android:textColor="@color/text_muted"
                             android:textSize="11sp" />
                     </LinearLayout>
@@ -510,7 +595,7 @@
                 android:layout_marginStart="7dp"
                 android:fontFamily="sans-serif-medium"
                 android:letterSpacing="0.02"
-                android:text="Abrir panel de diagnóstico"
+                android:text="Ver detalles del motor"
                 android:textColor="@color/accent_primary"
                 android:textSize="11sp" />
         </LinearLayout>
@@ -722,7 +807,7 @@
                     style="@style/VehicleActionButton"
                     android:layout_width="0dp"
                     android:layout_weight="1"
-                    android:text="Eléctrico" />
+                    android:text="Batería" />
 
                 <Space
                     android:layout_width="8dp"
@@ -744,7 +829,7 @@
                     style="@style/VehicleActionButton"
                     android:layout_width="0dp"
                     android:layout_weight="1"
-                    android:text="Consola" />
+                    android:text="Avanzado" />
             </LinearLayout>
 
             <!-- PAGE: motor (premium cards, only real ECU data) -->
@@ -791,7 +876,7 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="RPM" />
+                                android:text="REVOLUCIONES (RPM)" />
 
                             <TextView
                                 android:id="@+id/vRpmState"
@@ -855,7 +940,7 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="CARGA MOTOR" />
+                                android:text="ESFUERZO DEL MOTOR" />
 
                             <TextView
                                 android:id="@+id/vLoadState"
@@ -927,7 +1012,7 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="ACELERADOR" />
+                                android:text="PEDAL DEL ACELERADOR" />
 
                             <TextView
                                 android:id="@+id/vThrottleState"
@@ -991,7 +1076,7 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="REFRIGERANTE" />
+                                android:text="TEMPERATURA DEL MOTOR" />
 
                             <TextView
                                 android:id="@+id/vCoolantState"
@@ -1055,7 +1140,7 @@
                                 android:layout_height="15dp"
                                 android:layout_marginEnd="6dp"
                                 android:contentDescription="@null"
-                                android:src="@drawable/ic_air"
+                                android:src="@drawable/ic_fuel"
                                 android:tint="@color/text_muted" />
 
                             <TextView
@@ -1063,10 +1148,10 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="ADMISIÓN" />
+                                android:text="COMBUSTIBLE" />
 
                             <TextView
-                                android:id="@+id/vIntakeState"
+                                android:id="@+id/vFuelState"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:fontFamily="sans-serif-medium"
@@ -1077,7 +1162,7 @@
                         </LinearLayout>
 
                         <TextView
-                            android:id="@+id/vIntake"
+                            android:id="@+id/vFuel"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
@@ -1088,7 +1173,7 @@
                             android:textSize="24sp" />
 
                         <TextView
-                            android:id="@+id/vIntakeAdv"
+                            android:id="@+id/vFuelAdv"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
@@ -1119,7 +1204,7 @@
                                 android:layout_height="15dp"
                                 android:layout_marginEnd="6dp"
                                 android:contentDescription="@null"
-                                android:src="@drawable/ic_timing"
+                                android:src="@drawable/ic_gauge"
                                 android:tint="@color/text_muted" />
 
                             <TextView
@@ -1127,10 +1212,10 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="AVANCE" />
+                                android:text="ACELERACIÓN" />
 
                             <TextView
-                                android:id="@+id/vTimingState"
+                                android:id="@+id/vAccelState"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:fontFamily="sans-serif-medium"
@@ -1141,7 +1226,7 @@
                         </LinearLayout>
 
                         <TextView
-                            android:id="@+id/vTiming"
+                            android:id="@+id/vAccel"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
@@ -1152,7 +1237,7 @@
                             android:textSize="24sp" />
 
                         <TextView
-                            android:id="@+id/vTimingAdv"
+                            android:id="@+id/vAccelAdv"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
@@ -1191,7 +1276,7 @@
                                 android:layout_height="15dp"
                                 android:layout_marginEnd="6dp"
                                 android:contentDescription="@null"
-                                android:src="@drawable/ic_mixture"
+                                android:src="@drawable/ic_fuel"
                                 android:tint="@color/text_muted" />
 
                             <TextView
@@ -1199,10 +1284,10 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="MEZCLA" />
+                                android:text="CONSUMO" />
 
                             <TextView
-                                android:id="@+id/vTrimState"
+                                android:id="@+id/vConsumptionState"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:fontFamily="sans-serif-medium"
@@ -1213,7 +1298,7 @@
                         </LinearLayout>
 
                         <TextView
-                            android:id="@+id/vTrim"
+                            android:id="@+id/vConsumption"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
@@ -1224,7 +1309,7 @@
                             android:textSize="24sp" />
 
                         <TextView
-                            android:id="@+id/vTrimAdv"
+                            android:id="@+id/vConsumptionAdv"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
@@ -1254,7 +1339,10 @@
                     android:gravity="center_vertical"
                     android:minHeight="120dp"
                     android:orientation="horizontal"
-                    android:padding="16dp">
+                    android:paddingStart="16dp"
+                    android:paddingTop="16dp"
+                    android:paddingEnd="16dp"
+                    android:paddingBottom="28dp">
 
                     <LinearLayout
                         android:layout_width="0dp"
@@ -1310,7 +1398,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="Leído vía ATRV + PID 0142. Con motor en marcha lo sano es 13.2–14.8 V."
+                    android:text="Con el motor encendido lo sano es 13.2–14.8 V. Si baja de 12.2 V con el motor apagado, la batería está débil. Si no sube de 13 V con el motor encendido, el alternador no está cargando."
                     android:textColor="@color/text_faint"
                     android:textSize="11sp" />
             </LinearLayout>

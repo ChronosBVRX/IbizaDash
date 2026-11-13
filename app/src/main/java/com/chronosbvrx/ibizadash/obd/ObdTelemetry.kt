@@ -25,8 +25,16 @@ data class ObdTelemetry(
     val fuelTrimPct: Float? = null,
     val timingAdvanceDeg: Float? = null,
     val batteryV: Float? = null,
-    /** Nivel de combustible (%) cuando una fuente real lo publique (demo: 62%). */
+    /** Nivel de combustible (%) leído de la ECU (PID 012F) si lo entrega. */
     val fuelLevelPct: Float? = null,
+    /** Autonomía estimada que publica el CAN del coche (RemainKON), en km. */
+    val fuelRangeKm: Int? = null,
+    /** Velocidad de la ECU (PID 010D), si el adaptador la consigue. */
+    val speedKmh: Float? = null,
+    /** Aceleración longitudinal calculada con la velocidad OBD, en m/s². */
+    val accelerationMps2: Float? = null,
+    /** Consumo instantáneo calculado con MAF/fuel rate y velocidad, L/100 km. */
+    val instantConsumptionL100: Float? = null,
     val milOn: Boolean? = null,
     val dtcCount: Int? = null,
     val dtcs: List<String> = emptyList(),
@@ -44,7 +52,8 @@ data class ObdTelemetry(
         get() = (connected || demo) && (
             rpm != null || coolantC != null ||
                 loadPct != null || throttlePct != null ||
-                intakeC != null || batteryV != null
+                intakeC != null || batteryV != null ||
+                fuelLevelPct != null || speedKmh != null
             )
 
     /** Segundos desde la última publicación de telemetría. */

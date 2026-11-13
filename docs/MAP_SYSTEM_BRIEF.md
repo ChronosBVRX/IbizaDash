@@ -4,7 +4,7 @@
 > Describe el estado real del código (no un plan). Los nombres de archivo son rutas
 > relativas a la raíz del repo.
 >
-> Versiones de referencia: **IbizaDash 1.12.1 (42)** en el estéreo y
+> Versiones de referencia: **IbizaDash 1.13.0 (43)** en el estéreo y
 > **IbizaCompanion 1.11.0 (30)** en el teléfono.
 
 ---

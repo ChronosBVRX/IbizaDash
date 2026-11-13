@@ -1323,7 +1323,7 @@
                                     android:ellipsize="end"
                                     android:letterSpacing="0.02"
                                     android:maxLines="1"
-                                    android:text="NIVEL"
+                                    android:text="TANQUE"
                                     android:textSize="8sp" />
                             </LinearLayout>
 

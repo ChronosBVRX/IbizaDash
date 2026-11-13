@@ -12,7 +12,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
   (capturas reales del estéreo y del teléfono, con hojas de contacto).
 - **Paquete del estéreo:** `com.chronosbvrx.ibizadash`
 - **Paquete del teléfono:** `com.chronosbvrx.ibizacompanion`
-- **Versiones actuales:** IbizaDash **1.12.1** (versionCode 42) · IbizaCompanion **1.11.0** (versionCode 30)
+- **Versiones actuales:** IbizaDash **1.13.0** (versionCode 43) · IbizaCompanion **1.11.0** (versionCode 30)
 - **minSdk 23 / targetSdk 33 / compileSdk 36** (estéreo)
 - Hecho con **Views** (sin Compose) en el estéreo para que sea liviano en el Cortex-A7.
 
@@ -257,6 +257,22 @@ el ELM327 (`ATZ`) cada minuto. La velocidad sale **solo del GPS** y el nivel de
 combustible se retiró de la UI. La mezcla (`0106`) se conserva como dato de
 motor. Investigación histórica: [docs/OBD_FUEL_INVESTIGATION.md](docs/OBD_FUEL_INVESTIGATION.md).
 
+### Panel AUTO en lenguaje normal
+
+El módulo **AUTO** muestra cuatro tarjetas que responden a “¿está bien mi coche?”:
+**temperatura del motor**, **batería**, **combustible** y **aceleración**. Cada
+una explica en una frase qué significa y para qué sirve. El detalle técnico
+(RPM, esfuerzo, pedal, consumo, fallas) vive en **Ver detalles del motor**, con
+la misma explicación en lenguaje cotidiano.
+
+- **Gasolina:** prueba el PID estándar `012F`, luego el UDS `22F42F` y, si no
+  hay nivel, muestra la autonomía que publica el CAN (`RemainKON`).
+- **Aceleración:** usa la velocidad OBD `010D` si el adaptador la consigue; si
+  no, la calcula con la velocidad GPS. No se inventa: si no hay dato, lo dice.
+- **Consumo:** usa `015E` (fuel rate) o `0110` (MAF) combinado con la velocidad.
+- **Fallas:** check engine y códigos con explicación; sin datos, no afirma que
+  todo esté bien.
+
 ### Detección de un OBD nuevo
 
 La app ya no espera a que el ELM327 esté vinculado: al arrancar, y desde
@@ -337,6 +353,9 @@ el coche orientado sobre el trazo de la ruta.
 - **Cámara**: en NAV el coche se ancla al ~65 % del alto (`setMapCenterOffset(0, 90dp)`)
   para enseñar camino por delante; fuera de NAV vuelve al centro. El pivote de rotación
   usa el mismo offset, así que el coche no se mueve al girar en heading-up.
+- **Minimapa siempre sigue al coche**: el marcador del Ibiza se dibuja en Inicio,
+  Música y Auto, no solo en NAV; al cambiar de sección el mapa se recentra en la
+  última posición GPS y sigue los fixes nuevos.
 - **Zoom por velocidad**: 16 urbano, 16 carretera y 15 autopista, con histéresis para que no
   oscile. Esri no tiene z17 en muchas zonas de México (devuelve “Map data not yet available”),
   así que los estilos limitan a **z16**; el teléfono puede cachear z15–z17 para otros estilos.

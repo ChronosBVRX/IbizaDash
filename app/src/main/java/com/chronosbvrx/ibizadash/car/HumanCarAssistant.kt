@@ -40,11 +40,21 @@ object HumanCarAssistant {
         // enlace puede estar abierto y la ECU muda (contacto apagado, PID no
         // soportado). En ese caso el titular debe decirlo.
         val noLiveData = !state.demo && (!state.connected || !state.hasLiveData)
+        // El nivel de gasolina no es "salud del motor", pero si está en
+        // reserva el titular debe avisar antes de que el coche se pare.
+        val fuelSeverity = when {
+            state.fuelLevelPct != null && state.fuelLevelPct < 12f -> Severity.WARNING
+            state.fuelLevelPct != null && state.fuelLevelPct < 25f -> Severity.INFO
+            state.fuelRangeKm != null && state.fuelRangeKm < 80 -> Severity.WARNING
+            state.fuelRangeKm != null && state.fuelRangeKm < 150 -> Severity.INFO
+            else -> Severity.GOOD
+        }
+        val baseSeverity = listOf(thermal, electrical, maintenance)
+            .maxByOrNull { it.severity.ordinal }?.severity ?: Severity.GOOD
         val headlineSeverity = if (noLiveData) {
             Severity.INFO
         } else {
-            listOf(thermal, electrical, maintenance)
-                .maxByOrNull { it.severity.ordinal }?.severity ?: Severity.GOOD
+            Severity.values()[maxOf(baseSeverity.ordinal, fuelSeverity.ordinal)]
         }
         val headlineStatus = if (noLiveData) {
             "Sin datos del motor • Revisa la conexión OBD"
@@ -75,19 +85,19 @@ object HumanCarAssistant {
         return when {
             t < 60f -> HumanInsight(
                 "thermal_cold", "Motor frío, maneja suave",
-                "Evita acelerar fuerte mientras toma temperatura", Severity.INFO
+                "Todavía no está a temperatura. Evita acelerar fuerte para no desgastarlo.", Severity.INFO
             )
             t <= 104f -> HumanInsight(
-                "thermal_ok", "Temperatura perfecta",
-                "El motor trabaja en su rango ideal", Severity.GOOD
+                "thermal_ok", "Motor a temperatura ideal",
+                "Entre 80 y 105 °C es normal. Sirve para saber que no se está sobrecalentando.", Severity.GOOD
             )
             t <= 111f -> HumanInsight(
-                "thermal_warm", "El auto está calentándose más de lo normal",
-                "Modera la marcha y vigila el tráfico", Severity.WARNING, true
+                "thermal_warm", "El motor está más caliente de lo normal",
+                "Modera la marcha y vigila la temperatura; si sigue subiendo, detente.", Severity.WARNING, true
             )
             else -> HumanInsight(
-                "thermal_hot", "¡PELIGRO! El auto está muy caliente",
-                "Detente en un lugar seguro y no abras el tapón del anticongelante", Severity.CRITICAL, true
+                "thermal_hot", "¡PELIGRO! El motor está muy caliente",
+                "Detente en un lugar seguro y no abras el tapón del anticongelante.", Severity.CRITICAL, true
             )
         }
     }
@@ -101,24 +111,24 @@ object HumanCarAssistant {
         return if (rpm < 300) {
             if (v < LOW_BATTERY_V) HumanInsight(
                 "bat_weak", "Batería débil",
-                "Enciende el motor pronto para no quedarte sin carga", Severity.WARNING, true
+                "Con el motor apagado debe marcar 12.2 V o más. Enciende o carga pronto.", Severity.WARNING, true
             ) else HumanInsight(
                 "bat_ok_off", "Batería OK",
-                "Sistema eléctrico en reposo", Severity.GOOD
+                "En reposo mantiene buena carga. Si baja de 12.2 V, estará débil.", Severity.GOOD
             )
         } else {
             when {
                 v < MIN_CHARGE_V -> HumanInsight(
-                    "alt_fail", "El motor no está cargando la batería",
-                    "Revisa la banda del alternador y las terminales", Severity.CRITICAL, true
+                    "alt_fail", "El alternador no está cargando",
+                    "Con el motor encendido debería haber 13.2–14.8 V. Revisa la banda y las terminales.", Severity.CRITICAL, true
                 )
                 v <= MAX_CHARGE_V -> HumanInsight(
-                    "bat_charge_ok", "Batería y carga al 100%",
-                    "Sistema eléctrico funcionando sin problemas", Severity.GOOD
+                    "bat_charge_ok", "Batería cargando bien",
+                    "El alternador mantiene entre 13.2 y 14.8 V. Es la señal de que la carga está sana.", Severity.GOOD
                 )
                 else -> HumanInsight(
                     "bat_overcharge", "Voltaje alto",
-                    "Revisa el regulador del alternador", Severity.WARNING, true
+                    "Más de 14.8 V puede dañar la batería. Revisa el regulador del alternador.", Severity.WARNING, true
                 )
             }
         }
