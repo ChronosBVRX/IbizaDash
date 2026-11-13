@@ -12,7 +12,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
   (capturas reales del estéreo y del teléfono, con hojas de contacto).
 - **Paquete del estéreo:** `com.chronosbvrx.ibizadash`
 - **Paquete del teléfono:** `com.chronosbvrx.ibizacompanion`
-- **Versiones actuales:** IbizaDash **1.11.3** (versionCode 40) · IbizaCompanion **1.10.0** (versionCode 29)
+- **Versiones actuales:** IbizaDash **1.12.0** (versionCode 41) · IbizaCompanion **1.10.0** (versionCode 29)
 - **minSdk 23 / targetSdk 33 / compileSdk 36** (estéreo)
 - Hecho con **Views** (sin Compose) en el estéreo para que sea liviano en el Cortex-A7.
 
@@ -71,8 +71,11 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
 ```
 
 - **Wi-Fi Direct es el único canal de datos.** No hay puente Bluetooth de datos ni respaldo RFCOMM.
-- **Bluetooth** se conserva solo para lo que no puede ir por Wi-Fi: audio **A2DP/AVRCP**,
-  llamadas **HFP** y adaptadores **ELM327/OBD**.
+- **El audio de música entra por el cable AUX.** El estéreo selecciona la entrada AUX
+  del MCU; el teléfono manda metadatos y recibe play/pausa/anterior/siguiente por Wi-Fi Direct.
+  Ya **no se usa A2DP** para escuchar música.
+- **Bluetooth** se conserva solo para llamadas **HFP** y adaptadores **ELM327/OBD**
+  (clásicos y BLE).
 - **El estéreo no consulta Internet**: no descarga clima, carátulas ni mapas. Recibe todo del
   teléfono o usa su caché local de teselas.
 - **El clima** lo calcula IbizaCompanion con Open-Meteo y lo envía como mensaje `WEATHER`.
@@ -94,8 +97,9 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
 | Reversa automática (AIDL de `com.tw.service.xt`) | ✅ |
 | Lanzar app de cámara `com.tw.reverse` | ✅ |
 | Controles de media (play/pausa, anterior, siguiente) | ✅ |
-| Media Bluetooth: título, artista, carátula (catálogo offline) | ✅ |
-| Estado Bluetooth: nombre, A2DP/HFP, batería, llamada | ✅ |
+| Audio por **AUX** (única fuente de música) + metadatos por Wi-Fi | ✅ |
+| OBD: descubrimiento clásico + BLE, emparejamiento y reconexión | ✅ |
+| Estado Bluetooth: nombre, HFP, batería, llamada | ✅ |
 | Navegación turn-by-turn en el estéreo (banner, calle, ETA) | ✅ |
 | Navegación y mapa calculados en el teléfono | ✅ |
 | Wi-Fi Direct para rutas, mapas, portadas, clima y OTA | ✅ |
@@ -253,6 +257,25 @@ el ELM327 (`ATZ`) cada minuto. La velocidad sale **solo del GPS** y el nivel de
 combustible se retiró de la UI. La mezcla (`0106`) se conserva como dato de
 motor. Investigación histórica: [docs/OBD_FUEL_INVESTIGATION.md](docs/OBD_FUEL_INVESTIGATION.md).
 
+### Detección de un OBD nuevo
+
+La app ya no espera a que el ELM327 esté vinculado: al arrancar, y desde
+**OBD-II · ELM327 → Buscar nuevo OBD**, hace descubrimiento Bluetooth **clásico
+y BLE**, lista todos los dispositivos encontrados (incluidos los de nombre no
+estándar) y permite elegir uno. Al elegir un clásico se prepara el PIN
+(`1234`, `0000`, `6789` o `1111`) y se inicia el emparejamiento; el cliente
+reintenta la conexión hasta que el enlace queda listo. Si el adaptador cambia
+de MAC o se agota la reconexión, vuelve a buscar solo.
+
+### Audio por AUX (sin Bluetooth)
+
+La música del teléfono entra por el cable AUX. Al abrir **MÚSICA**, el launcher
+manda al MCU la misma orden que la app nativa `com.tw.auxin`
+(`TWUtil.write(769, 192, 7)`) para seleccionar la entrada AUX, sin abrir la
+pantalla de cámara AUX. El botón **ABRIR EN SU APP** se retiró del módulo de
+música. Los controles y los metadatos del teléfono siguen viajando por Wi-Fi
+Direct, así que el único enlace de audio es el cable.
+
 ### Seguimiento y diagnóstico del GPS
 
 El coche se sigue con su propio GPS. El motor `car/GpsEngine` aplica reglas
@@ -393,11 +416,12 @@ SHA-256 ya calculados. En **Ajustes → Módulos** aparece y se instala con un t
 
 ---
 
-## Cortes de música por Wi-Fi + Bluetooth
+## Wi-Fi Direct y audio AUX
 
-El estéreo (`sp7731e`, SC7731E) usa un chip combo **solo de 2,4 GHz**: Wi-Fi Direct y el
-audio A2DP comparten antena, así que un pico de datos ahoga el Bluetooth. Lo que ya hace
-la app para reducirlo:
+El estéreo (`sp7731e`, SC7731E) usa un chip combo **solo de 2,4 GHz**. La música ya no
+viaja por A2DP: entra por el cable AUX, así que el audio no compite con la antena. Aun
+así, un pico de datos puede retrasar los metadatos, las teselas o el mapa. Lo que hace la
+app para reducirlo:
 
 - **Mapa remoto** (`MAP_FRAME`): WebP q65 en vez de JPEG q80, 1,7–2,5 fps, sin repetir
   frames idénticos (se reenvía uno cada 2 s para que el estéreo no pierda la proyección) y
@@ -410,16 +434,15 @@ la app para reducirlo:
   *Wi-Fi Direct en 5 GHz*; en el `sp7731e` actual sale deshabilitado porque ni la API ni
   el chip lo permiten.
 
-Si todavía se corta, en el teléfono: **Opciones de desarrollador → códec de audio
-Bluetooth → SBC** y desactivar la sincronización de contactos/historial del perfil.
-**No** desactives "Audio multimedia": la música viaja del teléfono al estéreo por A2DP,
-no por Wi-Fi Direct.
+Si el teléfono todavía se entrecorta, revisa que el cable AUX esté bien conectado en
+ambos extremos y que el MCU tenga seleccionada la fuente **AUX** (el launcher la pone al
+abrir MÚSICA). El Bluetooth queda solo para llamadas y para el ELM327.
 
 Desde **1.9.3** la compañera detecta si suena música (`AudioManager.isMusicActive`)
 y baja automáticamente los envíos grandes: teselas a **60 KB/s** (y solo locales,
 sin descargar online con música), voces a 60 KB/s, y OTA/módulos espaciados
-(60 ms/chunk). Sin música el ritmo es 250 KB/s. Así el Wi-Fi Direct deja hueco
-para el A2DP del POCO en el 2,4 GHz.
+(60 ms/chunk). Sin música el ritmo es 250 KB/s. Así el Wi-Fi Direct no compite con el
+audio del cable ni con las llamadas Bluetooth.
 
 ---
 

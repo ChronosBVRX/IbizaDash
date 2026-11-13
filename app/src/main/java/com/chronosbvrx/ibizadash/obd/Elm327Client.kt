@@ -5,9 +5,9 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
-import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanResult
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import com.chronosbvrx.ibizadash.Prefs
 import android.util.Log
@@ -36,8 +36,8 @@ class Elm327Client(private val context: Context) {
     private var input: InputStream? = null
     private var output: OutputStream? = null
     private var ble: BleElm327Link? = null
-    private var lastBleScanMs = 0L
     private var connectFailures = 0
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     @Volatile
     private var running = false
@@ -157,6 +157,34 @@ class Elm327Client(private val context: Context) {
         }
     }
 
+    /**
+     * Escanea clásico + BLE para el selector de adaptadores.
+     * El callback se entrega en el hilo principal.
+     */
+    fun discoverDevices(onDone: (List<ObdDevice>) -> Unit) {
+        ObdConsole.info("= Buscando adaptadores OBD (Bluetooth clásico y BLE)…")
+        Thread {
+            val list = try {
+                ObdScanner.scan(context, 12_000L)
+            } catch (e: Exception) {
+                Log.w(TAG, "discoverDevices: ${e.message}")
+                emptyList()
+            }
+            if (list.isNotEmpty()) {
+                ObdConsole.info(
+                    "= Encontrados: " + list.joinToString(", ") { it.label }.take(240)
+                )
+            } else {
+                ObdConsole.info("= No se encontró ningún dispositivo Bluetooth")
+            }
+            mainHandler.post { onDone(list) }
+        }.apply {
+            name = "ObdScan"
+            isDaemon = true
+            start()
+        }
+    }
+
     fun stop() {
         running = false
         generation++
@@ -233,19 +261,38 @@ class Elm327Client(private val context: Context) {
 
     private fun runReal(mac: String?, gen: Int) {
         var last = ObdTelemetry()
+        var currentMac = mac
+        val tried = LinkedHashSet<String>()
         val fast = FreshReading()
         val slow = FreshReading()
         while (alive(gen)) {
-            val device = resolveDevice(mac)
+            val device = resolveDevice(currentMac, tried)
             if (device == null) {
-                ObdRepository.publish(last.copy(connected = false, error = "Sin adaptador OBD emparejado"))
-                Thread.sleep(4000L)
+                tried.clear()
+                ObdRepository.publish(
+                    last.copy(
+                        connected = false,
+                        error = "Buscando adaptador OBD (enciende el contacto y revisa el ELM327)"
+                    )
+                )
+                Thread.sleep(6000L)
                 continue
             }
             try {
                 if (!openLink(device)) throw IOException("OBD link failed")
                 connectFailures = 0
-                last = last.copy(connected = true, demo = false, deviceName = device.name, error = null)
+                tried.clear()
+                val connectedAddress = safeAddress(device)
+                if (connectedAddress.isNotBlank()) {
+                    currentMac = connectedAddress
+                    Prefs.setObdMac(context, connectedAddress)
+                }
+                last = last.copy(
+                    connected = true,
+                    demo = false,
+                    deviceName = runCatching { device.name }.getOrNull(),
+                    error = null
+                )
 
                 initialize()
                 fast.clear()
@@ -376,6 +423,14 @@ class Elm327Client(private val context: Context) {
                 }
                 ObdRepository.publish(last.copy(connected = false, error = msg))
                 closeSocket()
+                // Si hay varios ELM327 vinculados (el viejo y el nuevo), el
+                // siguiente intento prueba el otro en vez de insistir al que
+                // está apagado.
+                try {
+                    tried.add(device.address)
+                } catch (_: Exception) {
+                }
+                currentMac = null
                 connectFailures++
                 if (connectFailures >= 3 && !Prefs.obdMac(context).isNullOrBlank()) {
                     // MAC BLE aleatoria o adaptador cambiado: volver a buscar.
@@ -480,89 +535,87 @@ class Elm327Client(private val context: Context) {
         }
     }
 
-    private fun resolveDevice(mac: String?): BluetoothDevice? {
+    private fun resolveDevice(
+        mac: String?,
+        exclude: Set<String> = emptySet()
+    ): BluetoothDevice? {
         val adapter = adapter ?: return null
         if (!adapter.isEnabled) return null
-        if (!mac.isNullOrBlank()) {
-            return try {
+
+        // 1) MAC elegida por el usuario o guardada por una conexión anterior.
+        if (!mac.isNullOrBlank() && mac !in exclude) {
+            val device = try {
                 adapter.getRemoteDevice(mac)
             } catch (_: Exception) {
                 null
             }
-        }
-        return try {
-            val candidates = adapter.bondedDevices?.filter { device ->
-                val name = device.name?.lowercase().orEmpty()
-                name.contains("obd") || name.contains("elm") || name.contains("vgate") ||
-                    name.contains("v-link") || name.contains("superbox") || name.contains("327") ||
-                    name.contains("b16") || name.contains("mini")
-            }.orEmpty()
-            val match = candidates.firstOrNull { it.name?.lowercase()?.contains("obdii") == true }
-                ?: candidates.firstOrNull()
-            if (match != null) return match
-
-            // BLE (B16/Vgate): no aparece en bondedDevices; escanear con throttle.
-            val now = SystemClock.elapsedRealtime()
-            if (now - lastBleScanMs > 20_000L) {
-                lastBleScanMs = now
-                scanBle()?.let { device ->
-                    Prefs.setObdMac(context, device.address)
-                    return device
+            if (device != null) {
+                if (device.type != BluetoothDevice.DEVICE_TYPE_LE) {
+                    ObdScanner.pair(device, Prefs.obdPin(context))
                 }
+                return device
             }
-            null
-        } catch (_: SecurityException) {
-            null
         }
+
+        // 2) Vinculados con pinta de ELM327 (sin importar la marca exacta).
+        // Se prueban en orden hasta que uno responda: el adaptador viejo pudo
+        // quedarse en la lista aunque el usuario ya use uno nuevo.
+        val bonded = try {
+            adapter.bondedDevices?.toList().orEmpty()
+        } catch (_: SecurityException) {
+            emptyList()
+        }
+        val likelyBonded = bonded
+            .map { it to ObdScanner.score(runCatching { it.name }.getOrNull()) }
+            .filter { it.second > 0 }
+            .sortedByDescending { it.second }
+            .map { it.first }
+            .filterNot { safeAddress(it) in exclude }
+        likelyBonded.firstOrNull()?.let { device ->
+            if (device.type != BluetoothDevice.DEVICE_TYPE_LE) {
+                ObdScanner.pair(device, Prefs.obdPin(context))
+            }
+            return device
+        }
+
+        // 3) Búsqueda activa: clásico + BLE. Un adaptador nuevo no aparece en
+        // bondedDevices hasta que alguien lo empareja; antes se quedaba en
+        // "Sin adaptador OBD emparejado" para siempre.
+        ObdConsole.info("= Sin OBD vinculado; buscando un adaptador nuevo…")
+        val found = try {
+            ObdScanner.scan(context, 9_000L) { !running }
+        } catch (e: Exception) {
+            Log.w(TAG, "scan: ${e.message}")
+            emptyList()
+        }
+        val best = found
+            .filterNot { it.address in exclude }
+            .firstOrNull { it.likelyObd && it.type != BluetoothDevice.DEVICE_TYPE_LE }
+            ?: found.filterNot { it.address in exclude }.firstOrNull { it.likelyObd }
+            ?: found.filterNot { it.address in exclude }
+                .firstOrNull { it.type == BluetoothDevice.DEVICE_TYPE_LE && it.bonded }
+        if (best != null) {
+            val device = try {
+                adapter.getRemoteDevice(best.address)
+            } catch (_: Exception) {
+                null
+            }
+            if (device != null) {
+                if (device.type != BluetoothDevice.DEVICE_TYPE_LE) {
+                    ObdScanner.pair(device, Prefs.obdPin(context))
+                }
+                Prefs.setObdMac(context, device.address)
+                ObdConsole.info("= OBD detectado: ${best.label}")
+                return device
+            }
+        }
+        return null
     }
 
-    @SuppressLint("MissingPermission")
-    private fun scanBle(): BluetoothDevice? {
-        val scanner = try {
-            adapter?.bluetoothLeScanner
-        } catch (_: Exception) {
-            null
-        } ?: return null
-        val latch = java.util.concurrent.CountDownLatch(1)
-        var found: BluetoothDevice? = null
-        val callback = object : ScanCallback() {
-            override fun onScanResult(callbackType: Int, result: ScanResult?) {
-                val device = result?.device ?: return
-                val name = (result.scanRecord?.deviceName ?: device.name ?: "").lowercase()
-                val uuids = result.scanRecord?.serviceUuids?.map { it.uuid } ?: emptyList()
-                val elmService = uuids.any {
-                    it == java.util.UUID.fromString("0000ffe0-0000-1000-8000-00805f9b34fb") ||
-                        it == java.util.UUID.fromString("000018f0-0000-1000-8000-00805f9b34fb")
-                }
-                if (elmService || name.contains("obd") || name.contains("elm") || name.contains("b16") ||
-                    name.contains("vgate") || name.contains("v-link") || name.contains("327")
-                ) {
-                    found = device
-                    try {
-                        scanner.stopScan(this)
-                    } catch (_: Exception) {
-                    }
-                    latch.countDown()
-                }
-            }
-
-            override fun onScanFailed(errorCode: Int) {
-                Log.w(TAG, "BLE scan failed: $errorCode")
-                latch.countDown()
-            }
-        }
-        return try {
-            scanner.startScan(callback)
-            latch.await(7, java.util.concurrent.TimeUnit.SECONDS)
-            try {
-                scanner.stopScan(callback)
-            } catch (_: Exception) {
-            }
-            found
-        } catch (e: Exception) {
-            Log.w(TAG, "scanBle: ${e.message}")
-            null
-        }
+    private fun safeAddress(device: BluetoothDevice): String = try {
+        device.address
+    } catch (_: Exception) {
+        ""
     }
 
     @SuppressLint("MissingPermission")
@@ -588,17 +641,17 @@ class Elm327Client(private val context: Context) {
             ble = null
             true
         } catch (e: Exception) {
-            if (device.type == BluetoothDevice.DEVICE_TYPE_DUAL) {
-                val link = BleElm327Link(context, device)
-                if (link.connect()) {
-                    ble = link
-                    socket = null
-                    input = null
-                    output = null
-                    return true
-                }
-                link.close()
+            // Muchos clones nuevos se anuncian como BR/EDR pero solo hablan
+            // GATT. Se intenta BLE también para DUAL/CLÁSICO antes de rendirse.
+            val link = BleElm327Link(context, device)
+            if (link.connect()) {
+                ble = link
+                socket = null
+                input = null
+                output = null
+                return true
             }
+            link.close()
             throw e
         }
     }
@@ -645,14 +698,11 @@ class Elm327Client(private val context: Context) {
                 }
             }
         }
-        // Purge invalid device (BLE or non-OBD name) so auto-scan can recover.
-        val name = device.name?.lowercase().orEmpty()
-        val keywords = listOf("obd", "elm", "vgate", "v-link", "superbox", "327", "obdii", "b16", "mini")
-        if (device.type == BluetoothDevice.DEVICE_TYPE_LE || keywords.none { name.contains(it) }) {
-            Prefs.setObdMac(context, null)
-        }
+        // No se borra la MAC aquí: si es un clon con nombre raro, runReal
+        // agota sus reintentos y decide. Borrarla al primer fallo impedía
+        // reconectar a un ELM327 nuevo con nombre no estándar.
         if (device.type == BluetoothDevice.DEVICE_TYPE_LE) {
-            throw IOException("Dispositivo BLE o no-OBD (requiere ELM327 SPP clásico)")
+            throw IOException("Dispositivo BLE: se reintentará por GATT")
         }
         throw IOException("OBD SPP/RFCOMM connect failed")
     }

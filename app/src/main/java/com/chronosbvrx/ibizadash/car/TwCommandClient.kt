@@ -26,6 +26,7 @@ class TwCommandClient(
     private var bound = false
     private var started = false
     private var receiverRegistered = false
+    private var pendingAux = false
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private var reconnectAttempt = 0
 
@@ -66,7 +67,11 @@ class TwCommandClient(
                 command.register(vehicle)
                 command.getReverseStatus()
                 command.getBtPhoneStatus()
-                command.extendedInterface(android.os.Bundle())
+                command.requestSource()
+                if (pendingAux) {
+                    command.openAux()
+                    pendingAux = false
+                }
                 Log.i("TwCommandClient", "conectado a com.tw.service.xt")
             } catch (e: Exception) {
                 Log.w("TwCommandClient", "error al conectar: ${e.message}")
@@ -155,6 +160,16 @@ class TwCommandClient(
     fun btNext(): Boolean = commandBinder?.let { it.btNext(); true } ?: false
 
     fun btOpenMusic(): Boolean = commandBinder?.let { it.btOpenMusic(); true } ?: false
+
+    /** Fuente AUX del MCU (la única entrada de música que usa el launcher). */
+    fun openAux(): Boolean {
+        val applied = commandBinder?.let { it.openAux(); true } ?: false
+        if (!applied) pendingAux = true
+        return applied
+    }
+
+    /** Sincroniza la fuente real del MCU con la UI. */
+    fun requestSource(): Boolean = commandBinder?.let { it.requestSource(); true } ?: false
 
     fun radioOpenChannel(name: String): Boolean = commandBinder?.let { it.radioOpenChannel(name); true } ?: false
 

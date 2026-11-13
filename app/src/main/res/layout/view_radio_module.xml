@@ -61,7 +61,7 @@
                 android:background="@drawable/bg_pill"
                 android:fontFamily="sans-serif-medium"
                 android:gravity="center"
-                android:text="MÚSICA"
+                android:text="AUX"
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
 

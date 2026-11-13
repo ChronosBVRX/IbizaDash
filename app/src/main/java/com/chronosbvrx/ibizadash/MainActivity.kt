@@ -2,6 +2,7 @@ package com.chronosbvrx.ibizadash
 
 import android.Manifest
 import android.app.AlertDialog
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.BroadcastReceiver
 import android.content.ComponentName
@@ -20,6 +21,7 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.LayerDrawable
 import java.io.File
 import android.media.AudioManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -93,6 +95,7 @@ import com.chronosbvrx.ibizadash.nav.projectOnSegment
 import com.chronosbvrx.ibizadash.obd.DtcDictionary
 import com.chronosbvrx.ibizadash.obd.Elm327Client
 import com.chronosbvrx.ibizadash.obd.ObdRepository
+import com.chronosbvrx.ibizadash.obd.ObdScanner
 import com.chronosbvrx.ibizadash.obd.ObdTelemetry
 import com.chronosbvrx.ibizadash.weather.WeatherRepository
 import org.osmdroid.events.MapEventsReceiver
@@ -691,12 +694,38 @@ class MainActivity : AppCompatActivity() {
 
     private val sourceReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action != "source_recieve") return
+            if (intent.action != "source_recieve" && intent.action != "Source_recieve") return
             val dump = intent.extras?.keySet()?.joinToString(" | ") { key ->
                 "$key=${intent.extras?.get(key)}"
             } ?: ""
             Log.i("VehicleData", "source_recieve extras=[$dump]")
-            intent.getStringExtra("source")?.let { vSource.text = it }
+            val value = intent.getIntExtra("SourceValue", -1)
+            if (value >= 0) applyMcuSource(value)
+        }
+    }
+
+    /**
+     * Sincroniza la fuente de audio del MCU con el launcher.
+     *
+     * El servicio contesta `Source_recieve` con `SourceValue`:
+     * 1 radio, 3 música local, 7 AUX, 8 Bluetooth, 9 vídeo. Si el MCU sigue
+     * en Bluetooth y el usuario quiere AUX, se cambia una sola vez para que
+     * el audio del cable no se quede sin ruta.
+     */
+    private fun applyMcuSource(value: Int) {
+        mcuSource = value
+        if (value == 8 && !radioSource && !auxAutoSwitchDone) {
+            auxAutoSwitchDone = true
+            twClient?.openAux()
+            uiHandler.postDelayed({ twClient?.requestSource() }, 500L)
+        }
+        if (::mmSource.isInitialized) {
+            mmSource.text = when (value) {
+                7 -> "AUX"
+                1 -> "RADIO"
+                8 -> "AUX" // el MCU aún está en BT; el cambio a AUX va en curso
+                else -> "MÚSICA"
+            }
         }
     }
 
@@ -739,6 +768,9 @@ class MainActivity : AppCompatActivity() {
     private var focus = Focus.COCKPIT
     private var splitFraction = 0.55f
     private var radioSource = false
+    /** Fuente real del MCU: 1 radio, 3 música local, 7 AUX, 8 Bluetooth, 9 vídeo. */
+    private var mcuSource = -1
+    private var auxAutoSwitchDone = false
     private var radioFreqKhz = 99500
     private var radioBandIndex = 0
     private val radioBands = arrayOf("FM1", "FM2", "AM")
@@ -1885,8 +1917,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onVehicleBundle(bundle: Bundle) {
-        // The raw CAN frames are logged by VehicleCallback until the byte map
-        // is validated against physical actions (doors, lights, RPM).
+        // El servicio manda la fuente en un Bundle, no en un broadcast.
+        if (bundle.getString("action") == "Source_recieve") {
+            val value = bundle.getInt("SourceValue", -1)
+            if (value >= 0) applyMcuSource(value)
+        }
+        // Los frames CAN crudos se registran en VehicleCallback hasta validar
+        // el mapa de bytes contra el coche.
     }
 
     private fun onCarInfo(extras: Bundle) {
@@ -1958,6 +1995,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupObd() {
+        requestBluetoothPermissions()
         ObdRepository.addListener(obdListener)
         obdClient = Elm327Client(this)
         val demo = intent.getBooleanExtra("obd_demo", false) || Prefs.obdDemo(this)
@@ -1966,6 +2004,20 @@ class MainActivity : AppCompatActivity() {
             obdClient?.connect(null, demo = true)
         } else {
             obdClient?.connect(mac, demo = false)
+        }
+    }
+
+    private fun requestBluetoothPermissions() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        val required = arrayOf(
+            Manifest.permission.BLUETOOTH_SCAN,
+            Manifest.permission.BLUETOOTH_CONNECT
+        )
+        val missing = required.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, missing.toTypedArray(), 104)
         }
     }
 
@@ -2820,38 +2872,49 @@ class MainActivity : AppCompatActivity() {
         }
         val labels = ArrayList<String>()
         devices.forEach { labels.add("${it.name ?: "Sin nombre"} · ${it.address}") }
+        val searchIndex = labels.size
+        labels.add("Buscar nuevo OBD (Bluetooth clásico + BLE)")
+        val autoIndex = labels.size
         labels.add("Buscar automáticamente")
+        val demoIndex = labels.size
         labels.add("Modo demo (simulado)")
+        val settingsIndex = labels.size
         labels.add("Ajustes Bluetooth")
+        val pinIndex = labels.size
         labels.add("PIN de emparejamiento OBD (${Prefs.obdPin(this)})")
+        val disconnectIndex = labels.size
         labels.add("Desconectar")
 
         AlertDialog.Builder(this)
             .setTitle("OBD-II · ELM327")
             .setItems(labels.toTypedArray()) { _, which ->
-                when {
-                    which < devices.size -> {
+                when (which) {
+                    in devices.indices -> {
                         val device = devices[which]
                         Prefs.setObdDemo(this, false)
                         Prefs.setObdMac(this, device.address)
+                        if (device.type != BluetoothDevice.DEVICE_TYPE_LE) {
+                            Thread { ObdScanner.pair(device, Prefs.obdPin(this)) }.start()
+                        }
                         obdClient?.connect(device.address, demo = false)
                     }
-                    which == devices.size -> {
+                    searchIndex -> searchObdDevices()
+                    autoIndex -> {
                         Prefs.setObdDemo(this, false)
                         Prefs.setObdMac(this, null)
                         obdClient?.connect(null, demo = false)
                     }
-                    which == devices.size + 1 -> {
+                    demoIndex -> {
                         Prefs.setObdDemo(this, true)
                         obdClient?.connect(null, demo = true)
                     }
-                    which == devices.size + 2 -> {
+                    settingsIndex -> {
                         startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
                     }
-                    which == devices.size + 3 -> {
+                    pinIndex -> {
                         showObdPinDialog()
                     }
-                    else -> {
+                    disconnectIndex -> {
                         Prefs.setObdDemo(this, false)
                         obdClient?.stop()
                         ObdRepository.publish(ObdTelemetry())
@@ -2860,6 +2923,62 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cerrar", null)
             .show()
+    }
+
+    private fun searchObdDevices() {
+        val client = obdClient
+        val manager = getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+        if (client == null) {
+            Toast.makeText(this, "El cliente OBD todavía no está listo", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val progress = AlertDialog.Builder(this)
+            .setTitle("Buscando OBD…")
+            .setMessage("Revisando Bluetooth clásico y BLE. Enciende el contacto y el adaptador.")
+            .setCancelable(false)
+            .create()
+        progress.show()
+        client.discoverDevices { list ->
+            progress.dismiss()
+            if (isFinishing || isDestroyed) return@discoverDevices
+            if (list.isEmpty()) {
+                AlertDialog.Builder(this)
+                    .setTitle("OBD no encontrado")
+                    .setMessage(
+                        "No apareció ningún dispositivo. Revisa que el ELM327 tenga " +
+                            "corriente, que el contacto esté encendido y que esté cerca del estéreo."
+                    )
+                    .setPositiveButton("Ajustes Bluetooth") { _, _ ->
+                        startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                    }
+                    .setNegativeButton("Cerrar", null)
+                    .show()
+                return@discoverDevices
+            }
+            val items = list.map { it.label }.toTypedArray()
+            AlertDialog.Builder(this)
+                .setTitle("Elegir adaptador OBD")
+                .setItems(items) { _, index ->
+                    val pick = list[index]
+                    Prefs.setObdDemo(this, false)
+                    Prefs.setObdMac(this, pick.address)
+                    try {
+                        val device = manager?.adapter?.getRemoteDevice(pick.address)
+                        if (device != null && device.type != BluetoothDevice.DEVICE_TYPE_LE) {
+                            Thread { ObdScanner.pair(device, Prefs.obdPin(this)) }.start()
+                        }
+                    } catch (_: Exception) {
+                    }
+                    obdClient?.connect(pick.address, demo = false)
+                    Toast.makeText(
+                        this,
+                        "Conectando a ${pick.name.ifBlank { pick.address }}…",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                .setNegativeButton("Cerrar", null)
+                .show()
+        }
     }
 
     private fun showObdPinDialog() {
@@ -2903,10 +3022,9 @@ class MainActivity : AppCompatActivity() {
             applyFocus(Focus.NAV)
         }
         addDockItem(R.drawable.ic_media, "MÚSICA") {
-            // Música y radio viven en el mismo módulo: el dock abre el
-            // reproductor y el selector superior cambia a RADIO FM.
-            radioSource = false
-            updateSourceToggle()
+            // Música y radio viven en el mismo módulo. Al abrir MÚSICA se
+            // selecciona AUX en el MCU, que es la única entrada que usamos.
+            setMediaSource(false)
             applyFocus(Focus.MEDIA)
         }
         addDockItem(R.drawable.ic_car, "AUTO") {
@@ -3193,16 +3311,6 @@ class MainActivity : AppCompatActivity() {
         mediaCard.setOnClickListener {
             applyFocus(Focus.MEDIA)
         }
-        findViewById<View>(R.id.mmOpenSource).setOnClickListener {
-            val packageName = MediaRepository.current?.packageName
-            if (!packageName.isNullOrBlank() &&
-                packageName != "demo" &&
-                openPackage(packageName)
-            ) {
-                return@setOnClickListener
-            }
-            openPackage("com.tw.media")
-        }
     }
 
     private fun mediaPrev() {
@@ -3240,8 +3348,11 @@ class MainActivity : AppCompatActivity() {
             setupRadio()
             twClient?.radioOpenChannel("FM")
         } else {
-            twClient?.btOpenMusic()
+            // La música entra por el cable AUX. Antes se abría el canal BT
+            // del MCU, así que el audio del teléfono nunca sonaba.
+            twClient?.openAux()
         }
+        uiHandler.postDelayed({ twClient?.requestSource() }, 400L)
     }
 
     private fun updateSourceToggle() {
@@ -3402,7 +3513,7 @@ class MainActivity : AppCompatActivity() {
             pkg == "com.soundcloud.android" || pkg.startsWith("com.soundcloud.") ->
                 MediaSourceInfo(R.drawable.ic_media, "SoundCloud")
             pkg == "bluetooth" || pkg == "phone" ->
-                MediaSourceInfo(R.drawable.ic_media, "Música")
+                MediaSourceInfo(R.drawable.ic_media, "AUX")
             pkg == "demo" ->
                 MediaSourceInfo(R.drawable.ic_media, "Demo")
             else -> MediaSourceInfo(R.drawable.ic_media, "Reproductor")
@@ -3412,7 +3523,7 @@ class MainActivity : AppCompatActivity() {
     private fun mediaDeviceLabel(nowPlaying: NowPlaying?): String {
         // La música entra por AUX y los datos por Wi-Fi Direct: no se nombra
         // Bluetooth ni "line in" en la interfaz.
-        return "Música"
+        return "Cable AUX"
     }
 
     private fun applyMediaSourceIcon(iconView: ImageView, info: MediaSourceInfo) {
@@ -3492,7 +3603,7 @@ class MainActivity : AppCompatActivity() {
     private fun updateMedia(nowPlaying: NowPlaying?) {
         if (nowPlaying == null) {
             mediaTitle.text = getString(R.string.media_title)
-            mediaSubtitle.text = "Música · Radio FM"
+            mediaSubtitle.text = "AUX · Radio FM"
             renderArt(albumArt, null, 14)
             btnPlay.setImageResource(R.drawable.ic_play)
             mediaProgress.visibility = View.GONE
@@ -3503,18 +3614,17 @@ class MainActivity : AppCompatActivity() {
             miniPlay.setImageResource(R.drawable.ic_play)
 
             mmTitle.text = "Sin reproducción"
-            mmArtist.text = "Música · Radio FM"
+            mmArtist.text = "AUX · Radio FM"
             mmAlbum.text = ""
             renderArt(mmArt, null, 70)
         mmBackdrop.setImageDrawable(null)
             mmPlay.setImageResource(R.drawable.ic_play)
             mmProgress.visibility = View.GONE
             mmTime.visibility = View.GONE
-            mmSource.text = "—"
-            mediaSourceIcon.setImageResource(R.drawable.ic_bluetooth)
-            mediaDevice.text = lastBluetooth?.name?.takeIf { it.isNotBlank() }
-                ?: "Música"
-            mmSourceIcon.setImageResource(R.drawable.ic_bluetooth)
+            mmSource.text = "AUX"
+            mediaSourceIcon.setImageResource(R.drawable.ic_media)
+            mediaDevice.text = "Cable AUX"
+            mmSourceIcon.setImageResource(R.drawable.ic_media)
             mmDevice.text = mediaDevice.text
             lastMediaKey = null
             lastMediaPlaying = null
@@ -3553,7 +3663,7 @@ class MainActivity : AppCompatActivity() {
         mmTitle.text = title
         mmArtist.text = nowPlaying.artist.ifBlank { "Reproducción activa" }
         mmAlbum.text = nowPlaying.album
-        mmSource.text = sourceInfo.label
+        mmSource.text = if (mcuSource == 7) "AUX" else sourceInfo.label
         mmDevice.text = deviceText
         applyMediaSourceIcon(mmSourceIcon, sourceInfo)
 
@@ -3568,7 +3678,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderNowPlayingToastIdle() {
         npToastTitle.text = "Sin reproducción"
-        npToastSubtitle.text = "Música · Radio FM"
+        npToastSubtitle.text = "AUX · Radio FM"
         npToastEq.visibility = View.GONE
         npToastStateIcon.setImageResource(R.drawable.ic_play)
         npToastTime.visibility = View.GONE
@@ -4136,6 +4246,9 @@ class MainActivity : AppCompatActivity() {
             enableLocation()
         }
         syncMediaMode()
+        // Si el MCU cambió de fuente mientras estábamos fuera (mando del
+        // volante u otra app), la UI se entera al volver.
+        twClient?.requestSource()
     }
 
     override fun onPause() {

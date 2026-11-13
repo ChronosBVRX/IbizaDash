@@ -5,7 +5,7 @@
     <string name="speed_unit_mph">mph</string>
     <string name="climate_temp">22°</string>
     <string name="media_title">Reproductor</string>
-    <string name="media_subtitle">Bluetooth / Radio FM</string>
+    <string name="media_subtitle">AUX / Radio FM</string>
     <string name="apps_title">Aplicaciones</string>
     <string name="map_title">Mapa</string>
     <string name="settings_title">Ajustes</string>

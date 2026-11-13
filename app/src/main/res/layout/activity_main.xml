@@ -1520,7 +1520,7 @@
                 android:layout_marginTop="2dp"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:text="Música · Radio FM"
+                android:text="AUX · Radio FM"
                 android:textColor="@color/text_muted"
                 android:textSize="11sp" />
         </LinearLayout>
