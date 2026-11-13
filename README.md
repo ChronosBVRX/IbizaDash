@@ -12,7 +12,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
   (capturas reales del estéreo y del teléfono, con hojas de contacto).
 - **Paquete del estéreo:** `com.chronosbvrx.ibizadash`
 - **Paquete del teléfono:** `com.chronosbvrx.ibizacompanion`
-- **Versiones actuales:** IbizaDash **1.12.0** (versionCode 41) · IbizaCompanion **1.10.0** (versionCode 29)
+- **Versiones actuales:** IbizaDash **1.12.1** (versionCode 42) · IbizaCompanion **1.11.0** (versionCode 30)
 - **minSdk 23 / targetSdk 33 / compileSdk 36** (estéreo)
 - Hecho con **Views** (sin Compose) en el estéreo para que sea liviano en el Cortex-A7.
 
@@ -97,7 +97,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
 | Reversa automática (AIDL de `com.tw.service.xt`) | ✅ |
 | Lanzar app de cámara `com.tw.reverse` | ✅ |
 | Controles de media (play/pausa, anterior, siguiente) | ✅ |
-| Audio por **AUX** (única fuente de música) + metadatos por Wi-Fi | ✅ |
+| Audio por **AUX** como reproductor nativo (sin etiquetas AUX) + metadatos/logos por Wi-Fi | ✅ |
 | OBD: descubrimiento clásico + BLE, emparejamiento y reconexión | ✅ |
 | Estado Bluetooth: nombre, HFP, batería, llamada | ✅ |
 | Navegación turn-by-turn en el estéreo (banner, calle, ETA) | ✅ |
@@ -124,7 +124,7 @@ IbizaDash/
 │  ├─ App.kt                   # configuración de osmdroid
 │  ├─ car/                     # CAN, AIDL del MCU, reversa, llamadas
 │  ├─ map/MapHelper.kt         # Esri Dark Gray + caché
-│  ├─ media/                   # media A2DP/AVRCP y catálogo offline
+│  ├─ media/                   # metadatos del teléfono, AVRCP legado y catálogo offline
 │  ├─ nav/                     # puente Wi-Fi, rutas, navegación
 │  ├─ ota/                     # recepción y instalación de APK
 │  ├─ weather/                 # clima recibido del teléfono
@@ -267,14 +267,22 @@ estándar) y permite elegir uno. Al elegir un clásico se prepara el PIN
 reintenta la conexión hasta que el enlace queda listo. Si el adaptador cambia
 de MAC o se agota la reconexión, vuelve a buscar solo.
 
-### Audio por AUX (sin Bluetooth)
+### Audio por AUX, presentado como reproductor nativo
 
 La música del teléfono entra por el cable AUX. Al abrir **MÚSICA**, el launcher
-manda al MCU la misma orden que la app nativa `com.tw.auxin`
-(`TWUtil.write(769, 192, 7)`) para seleccionar la entrada AUX, sin abrir la
-pantalla de cámara AUX. El botón **ABRIR EN SU APP** se retiró del módulo de
-música. Los controles y los metadatos del teléfono siguen viajando por Wi-Fi
-Direct, así que el único enlace de audio es el cable.
+manda al MCU la secuencia de la app nativa `com.tw.auxin` por el servicio del
+sistema: `write(40448, 7)` (marca la línea AUX), `write(769, 192, 7)` (enruta
+el audio) y `write(517, 255)` (refresca el estado). Mandar solo el `769` dejaba
+al MCU en `SourceValue=0`, sin sonido.
+
+La interfaz **no menciona AUX**: el encabezado dice **MÚSICA**, el equipo dice
+**Reproductor** y el origen se muestra con el nombre y el logo de la app que
+suena (Spotify, YouTube Music, etc.). La compañera envía `packageName` y
+`appLabel` junto con título, artista, álbum y portada, y el estéreo cambia
+título/artista/portada en cada canción. El botón **ABRIR EN SU APP** se retiró.
+
+Para que el teléfono mande el audio por el cable y no por Bluetooth, desactiva
+**Audio multimedia** en el perfil Bluetooth del coche (deja solo llamadas).
 
 ### Seguimiento y diagnóstico del GPS
 
@@ -434,9 +442,10 @@ app para reducirlo:
   *Wi-Fi Direct en 5 GHz*; en el `sp7731e` actual sale deshabilitado porque ni la API ni
   el chip lo permiten.
 
-Si el teléfono todavía se entrecorta, revisa que el cable AUX esté bien conectado en
-ambos extremos y que el MCU tenga seleccionada la fuente **AUX** (el launcher la pone al
-abrir MÚSICA). El Bluetooth queda solo para llamadas y para el ELM327.
+Si no suena, revisa que el cable AUX esté bien conectado en ambos extremos, que el
+volumen multimedia del teléfono no esté en cero y que el perfil Bluetooth del coche
+**no tenga activado Audio multimedia** (solo llamadas). El launcher selecciona la línea
+AUX al abrir MÚSICA. El Bluetooth queda solo para llamadas y para el ELM327.
 
 Desde **1.9.3** la compañera detecta si suena música (`AudioManager.isMusicActive`)
 y baja automáticamente los envíos grandes: teselas a **60 KB/s** (y solo locales,

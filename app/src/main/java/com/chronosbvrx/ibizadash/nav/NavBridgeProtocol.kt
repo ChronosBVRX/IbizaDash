@@ -163,6 +163,8 @@ object NavBridgeProtocol {
                 val artist = obj.optString("artist", "")
                 val album = obj.optString("album", "")
                 val isPlaying = obj.optBoolean("isPlaying", true)
+                val packageName = obj.optString("packageName", "")
+                val appLabel = obj.optString("appLabel", "")
                 var bmp: android.graphics.Bitmap? = null
                 if (b64.isNotBlank()) {
                     try {
@@ -178,7 +180,15 @@ object NavBridgeProtocol {
                     }
                 }
                 if (bmp != null || title.isNotBlank() || artist.isNotBlank()) {
-                    MediaRepository.updateFromPhone(title, artist, album, isPlaying, bmp)
+                    MediaRepository.updateFromPhone(
+                        title,
+                        artist,
+                        album,
+                        isPlaying,
+                        bmp,
+                        packageName,
+                        appLabel
+                    )
                 }
             }
 

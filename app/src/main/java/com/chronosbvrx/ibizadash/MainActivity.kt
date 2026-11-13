@@ -719,14 +719,8 @@ class MainActivity : AppCompatActivity() {
             twClient?.openAux()
             uiHandler.postDelayed({ twClient?.requestSource() }, 500L)
         }
-        if (::mmSource.isInitialized) {
-            mmSource.text = when (value) {
-                7 -> "AUX"
-                1 -> "RADIO"
-                8 -> "AUX" // el MCU aún está en BT; el cambio a AUX va en curso
-                else -> "MÚSICA"
-            }
-        }
+        // La fuente del MCU es un detalle interno: la UI siempre muestra la
+        // app que suena (Spotify, YouTube Music...) como un reproductor nativo.
     }
 
     private val phoneStateReceiver = object : BroadcastReceiver() {
@@ -3491,8 +3485,9 @@ class MainActivity : AppCompatActivity() {
      * metadato; en ese caso el receiver reconoce al menos Spotify por su
      * broadcast público y el resto cae en un Bluetooth honesto.
      */
-    private fun mediaSourceInfo(packageName: String?): MediaSourceInfo {
+    private fun mediaSourceInfo(packageName: String?, sourceLabel: String = ""): MediaSourceInfo {
         val pkg = packageName.orEmpty().lowercase().trim()
+        val fallback = sourceLabel.ifBlank { "Música" }
         return when {
             pkg == "com.spotify.music" || pkg.startsWith("com.spotify.") ->
                 MediaSourceInfo(R.drawable.ic_spotify, "Spotify")
@@ -3512,18 +3507,10 @@ class MainActivity : AppCompatActivity() {
                 MediaSourceInfo(R.drawable.ic_media, "Amazon Music")
             pkg == "com.soundcloud.android" || pkg.startsWith("com.soundcloud.") ->
                 MediaSourceInfo(R.drawable.ic_media, "SoundCloud")
-            pkg == "bluetooth" || pkg == "phone" ->
-                MediaSourceInfo(R.drawable.ic_media, "AUX")
             pkg == "demo" ->
                 MediaSourceInfo(R.drawable.ic_media, "Demo")
-            else -> MediaSourceInfo(R.drawable.ic_media, "Reproductor")
+            else -> MediaSourceInfo(R.drawable.ic_media, fallback)
         }
-    }
-
-    private fun mediaDeviceLabel(nowPlaying: NowPlaying?): String {
-        // La música entra por AUX y los datos por Wi-Fi Direct: no se nombra
-        // Bluetooth ni "line in" en la interfaz.
-        return "Cable AUX"
     }
 
     private fun applyMediaSourceIcon(iconView: ImageView, info: MediaSourceInfo) {
@@ -3582,9 +3569,10 @@ class MainActivity : AppCompatActivity() {
         val title = nowPlaying.title.ifBlank { getString(R.string.media_title) }
         renderArt(npToastArt, nowPlaying.artwork, 10)
         npToastTitle.text = title
+        val sourceInfo = mediaSourceInfo(nowPlaying.packageName, nowPlaying.sourceLabel)
         val subtitle = listOf(
             nowPlaying.artist.ifBlank { "Desconocido" },
-            mediaDeviceLabel(nowPlaying),
+            sourceInfo.label,
             if (nowPlaying.isPlaying) "Reproduciendo" else "En pausa"
         ).joinToString(" · ")
         npToastSubtitle.text = subtitle
@@ -3603,7 +3591,7 @@ class MainActivity : AppCompatActivity() {
     private fun updateMedia(nowPlaying: NowPlaying?) {
         if (nowPlaying == null) {
             mediaTitle.text = getString(R.string.media_title)
-            mediaSubtitle.text = "AUX · Radio FM"
+            mediaSubtitle.text = "Música · Radio FM"
             renderArt(albumArt, null, 14)
             btnPlay.setImageResource(R.drawable.ic_play)
             mediaProgress.visibility = View.GONE
@@ -3614,16 +3602,16 @@ class MainActivity : AppCompatActivity() {
             miniPlay.setImageResource(R.drawable.ic_play)
 
             mmTitle.text = "Sin reproducción"
-            mmArtist.text = "AUX · Radio FM"
+            mmArtist.text = "Música · Radio FM"
             mmAlbum.text = ""
             renderArt(mmArt, null, 70)
         mmBackdrop.setImageDrawable(null)
             mmPlay.setImageResource(R.drawable.ic_play)
             mmProgress.visibility = View.GONE
             mmTime.visibility = View.GONE
-            mmSource.text = "AUX"
+            mmSource.text = "Música"
             mediaSourceIcon.setImageResource(R.drawable.ic_media)
-            mediaDevice.text = "Cable AUX"
+            mediaDevice.text = "Reproductor"
             mmSourceIcon.setImageResource(R.drawable.ic_media)
             mmDevice.text = mediaDevice.text
             lastMediaKey = null
@@ -3634,14 +3622,9 @@ class MainActivity : AppCompatActivity() {
 
         val title = nowPlaying.title.ifBlank { getString(R.string.media_title) }
         mediaTitle.text = title
-        val sourceInfo = mediaSourceInfo(nowPlaying.packageName)
-        val deviceText = mediaDeviceLabel(nowPlaying)
-        val source = if (sourceInfo.label == "Bluetooth" && nowPlaying.album.isNotBlank()) {
-            nowPlaying.album
-        } else {
-            sourceInfo.label
-        }
-        val subtitle = listOf(nowPlaying.artist, source)
+        val sourceInfo = mediaSourceInfo(nowPlaying.packageName, nowPlaying.sourceLabel)
+        val deviceText = sourceInfo.label
+        val subtitle = listOf(nowPlaying.artist, sourceInfo.label)
             .filter { it.isNotBlank() }
             .joinToString(" • ")
         mediaSubtitle.text = subtitle
@@ -3663,7 +3646,7 @@ class MainActivity : AppCompatActivity() {
         mmTitle.text = title
         mmArtist.text = nowPlaying.artist.ifBlank { "Reproducción activa" }
         mmAlbum.text = nowPlaying.album
-        mmSource.text = if (mcuSource == 7) "AUX" else sourceInfo.label
+        mmSource.text = "Música"
         mmDevice.text = deviceText
         applyMediaSourceIcon(mmSourceIcon, sourceInfo)
 
@@ -3678,7 +3661,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderNowPlayingToastIdle() {
         npToastTitle.text = "Sin reproducción"
-        npToastSubtitle.text = "AUX · Radio FM"
+        npToastSubtitle.text = "Música · Radio FM"
         npToastEq.visibility = View.GONE
         npToastStateIcon.setImageResource(R.drawable.ic_play)
         npToastTime.visibility = View.GONE

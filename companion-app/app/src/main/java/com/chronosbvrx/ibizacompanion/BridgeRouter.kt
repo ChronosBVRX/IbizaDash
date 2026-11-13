@@ -62,8 +62,12 @@ class BridgeRouter(private val wifi: WifiBridgeClient) {
         artist: String,
         album: String,
         isPlaying: Boolean,
-        pngBase64: String
-    ): Boolean = send(mediaArtJson(title, artist, album, isPlaying, pngBase64))
+        pngBase64: String,
+        packageName: String = "",
+        appLabel: String = ""
+    ): Boolean = send(
+        mediaArtJson(title, artist, album, isPlaying, pngBase64, packageName, appLabel)
+    )
 
     /** Portada de 384 px: suficiente para el panel y menos peso en el enlace. */
     fun mediaArtMaxSize(): Int = 384
@@ -123,7 +127,9 @@ class BridgeRouter(private val wifi: WifiBridgeClient) {
             artist: String,
             album: String,
             isPlaying: Boolean,
-            pngBase64: String
+            pngBase64: String,
+            packageName: String = "",
+            appLabel: String = ""
         ): JSONObject = JSONObject()
             .put("type", "MEDIA_ART")
             .put("title", title)
@@ -131,6 +137,8 @@ class BridgeRouter(private val wifi: WifiBridgeClient) {
             .put("album", album)
             .put("isPlaying", isPlaying)
             .put("pngBase64", pngBase64)
+            .put("packageName", packageName)
+            .put("appLabel", appLabel)
 
         fun pingJson(): JSONObject = JSONObject()
             .put("type", "PING")

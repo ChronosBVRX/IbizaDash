@@ -66,7 +66,7 @@
                     style="@style/Label"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="AUX · RADIO DEL AUTO" />
+                    android:text="MÚSICA · RADIO DEL AUTO" />
             </LinearLayout>
 
             <LinearLayout
@@ -84,7 +84,7 @@
                     android:background="@drawable/bg_dock_active"
                     android:fontFamily="sans-serif-medium"
                     android:gravity="center"
-                    android:text="AUX"
+                    android:text="MÚSICA"
                     android:textColor="@color/accent_primary"
                     android:textSize="11sp" />
 
@@ -169,7 +169,7 @@
                     android:layout_marginTop="2dp"
                     android:ellipsize="end"
                     android:maxLines="1"
-                    android:text="AUX · Radio FM"
+                    android:text="Música · Radio FM"
                     android:textColor="@color/text_secondary"
                     android:textSize="15sp" />
 
@@ -207,7 +207,7 @@
                         android:layout_weight="1"
                         android:ellipsize="end"
                         android:maxLines="1"
-                        android:text="Cable AUX"
+                        android:text="Reproductor"
                         android:textColor="@color/text_primary"
                         android:textSize="14sp" />
                 </LinearLayout>
@@ -250,7 +250,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginStart="4dp"
                         android:fontFeatureSettings="tnum"
-                        android:text="AUX"
+                        android:text="Música"
                         android:textColor="@color/text_muted"
                         android:textSize="11sp" />
                 </LinearLayout>

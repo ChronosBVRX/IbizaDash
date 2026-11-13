@@ -69,7 +69,7 @@ class TwCommandClient(
                 command.getBtPhoneStatus()
                 command.requestSource()
                 if (pendingAux) {
-                    command.openAux()
+                    openAux()
                     pendingAux = false
                 }
                 Log.i("TwCommandClient", "conectado a com.tw.service.xt")

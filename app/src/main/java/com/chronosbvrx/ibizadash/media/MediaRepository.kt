@@ -128,7 +128,9 @@ object MediaRepository {
         artist: String,
         album: String,
         isPlaying: Boolean,
-        artwork: Bitmap?
+        artwork: Bitmap?,
+        packageName: String = "phone",
+        sourceLabel: String = ""
     ) {
         val c = current
         if (c != null && !c.isBluetooth) return
@@ -139,16 +141,24 @@ object MediaRepository {
                 album = album,
                 artwork = artwork,
                 isPlaying = isPlaying,
-                packageName = "phone",
-                isBluetooth = true
+                packageName = packageName.ifBlank { "phone" },
+                isBluetooth = true,
+                sourceLabel = sourceLabel
             )
         } else {
+            // Si cambia la canción y no llegó portada, no dejar la anterior:
+            // parecería que el reproductor nativo muestra una carátula falsa.
+            val sameTitle = c.title == title || title.isBlank()
             c.copy(
-                title = c.title.ifBlank { title },
-                artist = c.artist.ifBlank { artist },
-                album = c.album.ifBlank { album },
-                artwork = artwork ?: c.artwork,
-                isPlaying = isPlaying
+                // Preferir siempre el dato nuevo; solo conservar el anterior
+                // cuando el mensaje llega vacío (actualización parcial).
+                title = title.ifBlank { c.title },
+                artist = artist.ifBlank { c.artist },
+                album = album.ifBlank { c.album },
+                artwork = artwork ?: if (sameTitle) c.artwork else null,
+                isPlaying = isPlaying,
+                packageName = packageName.ifBlank { c.packageName },
+                sourceLabel = sourceLabel.ifBlank { c.sourceLabel }
             )
         }
         notifyListeners(current)

@@ -573,6 +573,12 @@ class MediaBridgeService : Service() {
         val album = md.getString(MediaMetadata.METADATA_KEY_ALBUM).orEmpty()
         val isPlaying = c.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING
         val bmp = AlbumArtReader.readArtworkBitmap(this, c)
+        val pkg = c.packageName.orEmpty()
+        val appLabel = try {
+            packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+        } catch (_: Exception) {
+            ""
+        }
         // Update UI state even if metadata is partially empty.
         com.chronosbvrx.ibizacompanion.core.state.CompanionState.update {
             it.copy(
@@ -582,20 +588,28 @@ class MediaBridgeService : Service() {
                     album = album,
                     artwork = bmp,
                     isPlaying = isPlaying,
-                    packageName = c.packageName
+                    packageName = pkg
                 )
             )
         }
         if (title.isBlank() && artist.isBlank()) return
-        val key = "$title|$artist|$album|$isPlaying"
+        val key = "$title|$artist|$album|$isPlaying|$pkg"
         if (key == lastTrackKey) return
-        lastTrackKey = key
         val b64 = if (bmp != null) {
             AlbumArtReader.bitmapToBase64(bmp, router?.mediaArtMaxSize() ?: 256)
         } else ""
-        if (b64.isNotBlank()) {
-            router?.sendMediaArt(title, artist, album, isPlaying, b64)
-        }
+        // Mandar también sin portada: título/artista/app son lo que permite
+        // que el estéreo muestre el logo y los metadatos como reproductor nativo.
+        val sent = router?.sendMediaArt(
+            title,
+            artist,
+            album,
+            isPlaying,
+            b64,
+            pkg,
+            appLabel
+        ) == true
+        if (sent) lastTrackKey = key
         updateNotification("$title — $artist")
         bringAppToFrontIfAllowed()
     }
