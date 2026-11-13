@@ -79,10 +79,10 @@
 - Cabecera: VEHÍCULO, SEAT IBIZA 6J, chip OBD y chip fuente **GPS**.
 - Resumen: velocidad, marcha, fuente, reversa.
 - TPMS 2×2 (placeholders `—`; sin CAN, oculto).
-- Motor: RPM, carga, acelerador, refrigerante, batería y mezcla (0106).
-- **Sin nivel de combustible ni velocidad OBD:** este coche no responde `012F`/UDS ni `010D`; la velocidad sale solo del GPS (`car/GpsEngine.kt`).
+- Resumen AUTO: temperatura del motor, batería, combustible (nivel `012F`/UDS `F42F` o autonomía CAN `RemainKON`) y aceleración real (velocidad OBD `010D` o GPS), con explicación en lenguaje normal. El detalle incluye RPM, esfuerzo, pedal, consumo (`015E`/`0110`) y fallas.
+- **Nivel de combustible y velocidad OBD se intentan siempre:** el adaptador nuevo hace una sonda de `012F`, `22F42F`, `010D`, `0110` y `015E`; si el coche no los entrega, la UI lo dice y cae a GPS/autonomía CAN sin inventar valores. El intento de `012F` se repite cada 90 s.
 - Footer: VIN, DTC/MIL con diccionario específico del **2.0 CEKA**.
-- **OBD-II ELM327** implementado (`obd/Elm327Client.kt`): Bluetooth SPP/BLE, ATZ/ATE0/ATL0/ATS0/ATH0/ATSP0, PIDs 010C/0104/0111/0105/010F/0106/010E/0142/0101/03/0902. Hilo propio, sin bloquear UI. Auto-detecta dispositivos emparejados con nombre OBD/ELM/Vgate/V-Link/Superbox/327. Diálogo al tocar el chip OBD. **Modo demo** (`--ez obd_demo true` o el diálogo) genera valores plausibles.
+- **OBD-II ELM327** implementado (`obd/Elm327Client.kt`): Bluetooth SPP/BLE, ATZ/ATE0/ATL0/ATS0/ATH0/ATSP0, PIDs 010C/0104/0111/0105/010F/0106/010E/0142/0101/03/0902 más las sondas anteriores. Hilo propio, sin bloquear UI. Descubrimiento clásico + BLE y diálogo al tocar el chip OBD. **Modo demo** (`--ez obd_demo true` o el diálogo) genera valores plausibles.
 - **Diccionario DTC del coche** (`obd/DtcDictionary.kt`): 158 códigos SAE/VAG + 19 códigos de taller de 5 dígitos, explicados para el **Ibiza 6J 2010 2.0 MPI 8V CEKA**; explorador táctil en Vehículo → Fallas.
 - **CAN real:** `persist.can.speed` y `light_recieve` del MCU; en pruebas no llegaron tramas `type=2560..2563` ni `513`.
 
@@ -224,8 +224,8 @@ FrameLayout (obsidian)
 
 **OBD-II:**
 - `obd/Elm327Client.kt`, Bluetooth SPP UUID `00001101-0000-1000-8000-00805F9B34FB`.
-- PIDs: RPM `010C`, carga `0104`, acelerador `0111`, refrigerante `0105`, admisión `010F`, mezcla `0106`, avance `010E`, batería `0142`, MIL `0101`, DTC `03`, VIN `0902`. Velocidad y nivel de combustible se retiraron (no responden en este coche).
-- Poll: rápido ~350 ms; lento cada 4 ciclos; VIN/DTC al conectar.
+- PIDs: RPM `010C`, carga `0104`, acelerador `0111`, refrigerante `0105`, admisión `010F`, mezcla `0106`, avance `010E`, batería `0142`, MIL `0101`, DTC `03`, VIN `0902`. Además se sondean velocidad `010D`, gasolina `012F`/UDS `22F42F`, MAF `0110` y fuel rate `015E`; el nivel se reintenta cada 90 s y la autonomía llega del CAN (`RemainKON`).
+- Poll: rápido ~350–1000 ms; lento cada 10 ciclos; VIN/DTC al conectar.
 - `ObdRepository` publica `ObdTelemetry`; `MainActivity.renderObd` llena la UI.
 - Demo: `--ez obd_demo true` o el diálogo OBD.
 - No probado con hardware real; el adaptador debe estar emparejado y el contacto puesto. BLE detection: si SPP/RFCOMM 1/2 fallan, comprueba `device.type == DEVICE_TYPE_LE` y publica mensaje de error.
