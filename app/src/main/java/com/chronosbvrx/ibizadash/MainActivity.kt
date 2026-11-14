@@ -55,7 +55,6 @@ import androidx.core.content.res.ResourcesCompat
 import com.chronosbvrx.ibizadash.car.CarSignals
 import com.chronosbvrx.ibizadash.car.GpsEngine
 import com.chronosbvrx.ibizadash.car.GpsFix
-import com.chronosbvrx.ibizadash.car.AuxNative
 import com.chronosbvrx.ibizadash.car.AvrcpController
 import com.chronosbvrx.ibizadash.car.TwCommandClient
 import com.chronosbvrx.ibizadash.car.HumanCarAssistant
@@ -722,19 +721,12 @@ class MainActivity : AppCompatActivity() {
      * Sincroniza la fuente de audio del MCU con el launcher.
      *
      * El servicio contesta `Source_recieve` con `SourceValue`:
-     * 1 radio, 3 música local, 7 AUX, 8 Bluetooth, 9 vídeo. Si el MCU sigue
-     * en Bluetooth y el usuario quiere AUX, se cambia una sola vez para que
-     * el audio del cable no se quede sin ruta.
+     * 1 radio, 3 música local, 8 Bluetooth, 9 vídeo.
      */
     private fun applyMcuSource(value: Int) {
         mcuSource = value
-        if (value == 8 && !radioSource && !auxAutoSwitchDone) {
-            auxAutoSwitchDone = true
-            twClient?.openAux()
-            uiHandler.postDelayed({ twClient?.requestSource() }, 500L)
-        }
         // La fuente del MCU es un detalle interno: la UI siempre muestra la
-        // app que suena (Spotify, YouTube Music...) como un reproductor nativo.
+        // app que suena (Spotify, YouTube Music...) o Radio FM.
     }
 
     private val phoneStateReceiver = object : BroadcastReceiver() {
@@ -776,9 +768,8 @@ class MainActivity : AppCompatActivity() {
     private var focus = Focus.COCKPIT
     private var splitFraction = 0.55f
     private var radioSource = false
-    /** Fuente real del MCU: 1 radio, 3 música local, 7 AUX, 8 Bluetooth, 9 vídeo. */
+    /** Fuente real del MCU: 1 radio, 3 música local, 8 Bluetooth, 9 vídeo. */
     private var mcuSource = -1
-    private var auxAutoSwitchDone = false
     private var radioFreqKhz = 99500
     private var radioBandIndex = 0
     private val radioBands = arrayOf("FM1", "FM2", "AM")
@@ -1281,7 +1272,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun togglePlayback() {
         val playing = MediaRepository.current?.isPlaying == true
-        // La música entra por AUX: el control va siempre por Wi-Fi Direct.
         if (!MediaRepository.isDemo() && hasPhoneLink()) {
             sendPhoneMediaCommand(if (playing) "pause" else "play")
             MediaRepository.current?.let {
@@ -1292,6 +1282,13 @@ class MainActivity : AppCompatActivity() {
         if (MediaRepository.isDemo()) {
             MediaRepository.playPause()
             return
+        }
+        val mac = lastBluetooth?.address
+        if (playing) {
+            if (avrcpController?.pause(mac) == true) return
+        } else {
+            if (avrcpController?.play(mac) == true) return
+            if (twClient?.btPlay() == true) return
         }
         Toast.makeText(this, "Abre IbizaCompanion para controlar la música", Toast.LENGTH_SHORT)
             .show()
@@ -3198,8 +3195,8 @@ class MainActivity : AppCompatActivity() {
             applyFocus(Focus.NAV)
         }
         addDockItem(R.drawable.ic_media, "MÚSICA") {
-            // Música y radio viven en el mismo módulo. Al abrir MÚSICA se
-            // selecciona AUX en el MCU, que es la única entrada que usamos.
+            // Música y radio viven en el mismo módulo: el dock abre el
+            // reproductor y el selector superior cambia a RADIO FM.
             setMediaSource(false)
             applyFocus(Focus.MEDIA)
         }
@@ -3498,6 +3495,9 @@ class MainActivity : AppCompatActivity() {
             MediaRepository.prev()
             return
         }
+        val mac = lastBluetooth?.address
+        if (avrcpController?.previous(mac) == true) return
+        if (twClient?.btPrev() == true) return
         Toast.makeText(this, "Abre IbizaCompanion para controlar la música", Toast.LENGTH_SHORT)
             .show()
     }
@@ -3511,6 +3511,9 @@ class MainActivity : AppCompatActivity() {
             MediaRepository.next()
             return
         }
+        val mac = lastBluetooth?.address
+        if (avrcpController?.next(mac) == true) return
+        if (twClient?.btNext() == true) return
         Toast.makeText(this, "Abre IbizaCompanion para controlar la música", Toast.LENGTH_SHORT)
             .show()
     }
@@ -3524,16 +3527,7 @@ class MainActivity : AppCompatActivity() {
             setupRadio()
             twClient?.radioOpenChannel("FM")
         } else {
-            // El servicio del MCU ignora los comandos AUX por Bundle. La app
-            // nativa com.tw.auxin sí deja SourceValue=7; se abre un instante
-            // y se vuelve al launcher. El onPause nativo no borra la fuente.
-            if (mcuSource == 7) {
-                twClient?.requestSource()
-            } else {
-                AuxNative.selectAux(this) {
-                    twClient?.requestSource()
-                }
-            }
+            twClient?.btOpenMusic()
         }
         uiHandler.postDelayed({ twClient?.requestSource() }, 700L)
     }

@@ -71,35 +71,6 @@ class TwCommandBinder(private val binder: IBinder) {
         bundle.writeToParcel(it, 0)
     }
 
-    /**
-     * Pone la entrada AUX como fuente de audio del MCU.
-     *
-     * La app nativa `com.tw.auxin` hace exactamente `TWUtil.write(769, 192, 7)`
-     * al abrirse. Se manda por el canal extendido del servicio para no abrir
-     * la pantalla de cámara AUX encima del dashboard.
-     */
-    fun openAux() {
-        Log.i("TwCommand", "MCU source -> AUX (40448=7, 769=192/7)")
-        // La app nativa com.tw.auxin hace, en este orden:
-        //   write(40448, 7)        -> marca la línea AUX
-        //   write(769, 192, 7)     -> enruta el audio al AUX
-        //   write(517, 255)        -> refresca el estado
-        // Mandar solo el 769 dejaba al MCU en SourceValue=0 (sin sonido).
-        twdata(40448, 7, ByteArray(0))
-        twdata(769, 192, byteArrayOf(7))
-        twdata(517, 255, ByteArray(0))
-    }
-
-    /** Escribe un comando crudo en el MCU a través del servicio del sistema. */
-    private fun twdata(what: Int, type: Int, data: ByteArray) {
-        extendedInterface(android.os.Bundle().apply {
-            putString("dateType", "twdata")
-            putByte("type", type.toByte())
-            putInt("what", what)
-            putByteArray("data", data)
-        })
-    }
-
     /** Pide al MCU la fuente actual; responde por `Source_recieve`. */
     fun requestSource() = extendedInterface(android.os.Bundle().apply {
         putString("project", "system")

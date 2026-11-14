@@ -12,7 +12,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
   (capturas reales del estéreo y del teléfono, con hojas de contacto).
 - **Paquete del estéreo:** `com.chronosbvrx.ibizadash`
 - **Paquete del teléfono:** `com.chronosbvrx.ibizacompanion`
-- **Versiones actuales:** IbizaDash **1.13.1** (versionCode 44) · IbizaCompanion **1.11.0** (versionCode 30)
+- **Versiones actuales:** IbizaDash **1.13.2** (versionCode 45) · IbizaCompanion **1.11.0** (versionCode 30)
 - **minSdk 23 / targetSdk 33 / compileSdk 36** (estéreo)
 - Hecho con **Views** (sin Compose) en el estéreo para que sea liviano en el Cortex-A7.
 
@@ -97,7 +97,7 @@ Launcher/dashboard estilo Tesla para el **SEAT Ibiza 6J 2010, 2.0 Style 4 puerta
 | Reversa automática (AIDL de `com.tw.service.xt`) | ✅ |
 | Lanzar app de cámara `com.tw.reverse` | ✅ |
 | Controles de media (play/pausa, anterior, siguiente) | ✅ |
-| Audio por **AUX** como reproductor nativo (sin etiquetas AUX) + metadatos/logos por Wi-Fi | ✅ |
+| Audio por **Bluetooth A2DP** como reproductor nativo + metadatos/logos por Wi-Fi | ✅ |
 | OBD: descubrimiento clásico + BLE, emparejamiento y reconexión | ✅ |
 | Estado Bluetooth: nombre, HFP, batería, llamada | ✅ |
 | Navegación turn-by-turn en el estéreo (banner, calle, ETA) | ✅ |
@@ -283,24 +283,24 @@ estándar) y permite elegir uno. Al elegir un clásico se prepara el PIN
 reintenta la conexión hasta que el enlace queda listo. Si el adaptador cambia
 de MAC o se agota la reconexión, vuelve a buscar solo.
 
-### Audio por AUX, presentado como reproductor nativo
+### Audio multimedia presentado como reproductor nativo
 
-La música del teléfono entra por el cable AUX. Al abrir **MÚSICA**, el launcher
-abre durante ~0.5 s la app nativa `com.tw.auxin` y vuelve solo al launcher. Es
-la única ruta que deja el MCU en `SourceValue=7`; los comandos `twdata` del
-servicio se probaron y el MCU los ignora (la fuente se quedaba en 3). El
-`onPause` de la app nativa no borra la fuente: el 7 se mantiene y el audio
-sigue entrando por el cable. Después del cambio, la UI vuelve al reproductor
-sin mostrar nada de AUX.
+El audio del teléfono suena por **Bluetooth A2DP** enlazado con el canal del
+MCU (`btOpenMusic()`), mientras que los metadatos (título, artista, álbum,
+portada en HD y app de origen como Spotify, YouTube Music, etc.) viajan en tiempo
+real por Wi-Fi Direct desde IbizaCompanion.
 
-La interfaz **no menciona AUX**: el encabezado dice **MÚSICA**, el equipo dice
-**Reproductor** y el origen se muestra con el nombre y el logo de la app que
-suena (Spotify, YouTube Music, etc.). La compañera envía `packageName` y
-`appLabel` junto con título, artista, álbum y portada, y el estéreo cambia
-título/artista/portada en cada canción. El botón **ABRIR EN SU APP** se retiró.
+La interfaz **se presenta como reproductor nativo**: el encabezado dice
+**MÚSICA**, el equipo dice **Reproductor** y el origen se muestra con el nombre y
+el logo de la app que suena. La compañera envía `packageName` y `appLabel`, y el
+estéreo adapta título/artista/portada en cada canción. Los botones de control
+(Play/Pausa, Anterior, Siguiente) envían comandos por Wi-Fi Direct a la
+compañera y cuentan con respaldo AVRCP por Bluetooth.
 
-Para que el teléfono mande el audio por el cable y no por Bluetooth, desactiva
-**Audio multimedia** en el perfil Bluetooth del coche (deja solo llamadas).
+*(Nota técnica sobre AUX: la app nativa `com.tw.auxin` del estéreo Topway es en
+realidad el visor de cámara AV-IN / frontal, no un reproductor de audio;
+desconecta el audio al perder foco en su `onPause` con `write(40448, 135)` y
+secuestraba la pantalla al encender el auto. Queda totalmente descartada).*
 
 ### Seguimiento y diagnóstico del GPS
 
@@ -445,34 +445,27 @@ SHA-256 ya calculados. En **Ajustes → Módulos** aparece y se instala con un t
 
 ---
 
-## Wi-Fi Direct y audio AUX
+## Wi-Fi Direct y audio Bluetooth
 
-El estéreo (`sp7731e`, SC7731E) usa un chip combo **solo de 2,4 GHz**. La música ya no
-viaja por A2DP: entra por el cable AUX, así que el audio no compite con la antena. Aun
-así, un pico de datos puede retrasar los metadatos, las teselas o el mapa. Lo que hace la
-app para reducirlo:
+El estéreo (`sp7731e`, SC7731E) usa un chip combo **solo de 2,4 GHz**. La música
+viaja por Bluetooth A2DP y los datos por Wi-Fi Direct. Para evitar cortes:
 
 - **Mapa remoto** (`MAP_FRAME`): WebP q65 en vez de JPEG q80, 1,7–2,5 fps, sin repetir
   frames idénticos (se reenvía uno cada 2 s para que el estéreo no pierda la proyección) y
   *throttle* adaptativo si el TCP empieza a llenarse.
-- **Teselas** (`TILE_BATCH`): tope de 8 MB (antes 12 MB) y ritmo máximo ~400 KB/s al
+- **Teselas** (`TILE_BATCH`): tope de 8 MB y ritmo máximo ~400 KB/s al
   iniciar una ruta, para no saturar el enlace durante la descarga.
-- **Portadas**: 384 px (antes 512 px).
+- **Portadas**: 384 px.
 - **Grupo Wi-Fi Direct en 5 GHz**: `WifiP2pConfig.Builder.setGroupOperatingBand` (API 29+),
   con caída automática a 2,4 GHz si el chip no es dual-band. En **Ajustes** aparece como
   *Wi-Fi Direct en 5 GHz*; en el `sp7731e` actual sale deshabilitado porque ni la API ni
   el chip lo permiten.
 
-Si no suena, revisa que el cable AUX esté bien conectado en ambos extremos, que el
-volumen multimedia del teléfono no esté en cero y que el perfil Bluetooth del coche
-**no tenga activado Audio multimedia** (solo llamadas). El launcher selecciona la línea
-AUX al abrir MÚSICA. El Bluetooth queda solo para llamadas y para el ELM327.
-
 Desde **1.9.3** la compañera detecta si suena música (`AudioManager.isMusicActive`)
 y baja automáticamente los envíos grandes: teselas a **60 KB/s** (y solo locales,
 sin descargar online con música), voces a 60 KB/s, y OTA/módulos espaciados
-(60 ms/chunk). Sin música el ritmo es 250 KB/s. Así el Wi-Fi Direct no compite con el
-audio del cable ni con las llamadas Bluetooth.
+(60 ms/chunk). Sin música el ritmo es 250 KB/s. Así el Wi-Fi Direct deja ancho de banda
+limpio para el A2DP del teléfono y las llamadas Bluetooth.
 
 ---
 
