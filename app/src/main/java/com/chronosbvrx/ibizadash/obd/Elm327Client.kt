@@ -224,7 +224,7 @@ class Elm327Client(private val context: Context) {
 
     private fun alive(gen: Int): Boolean = running && generation == gen
 
-    private fun isLive(): Boolean {
+    fun isLive(): Boolean {
         return try {
             (socket?.isConnected == true || ble?.isConnected() == true) &&
                 ObdRepository.current.connected

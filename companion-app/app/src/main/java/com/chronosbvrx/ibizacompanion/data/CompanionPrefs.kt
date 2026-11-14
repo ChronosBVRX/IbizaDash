@@ -80,4 +80,29 @@ object CompanionPrefs {
     fun setMapStyle(context: Context, id: String) {
         prefs(context).edit().putString(KEY_MAP_STYLE, id).apply()
     }
+
+    private const val KEY_OBD_MAC = "obd_mac"
+    private const val KEY_OBD_PIN = "obd_pin"
+    private const val KEY_OBD_DEMO = "obd_demo"
+
+    fun obdMac(context: Context): String? =
+        prefs(context).getString(KEY_OBD_MAC, null)?.takeIf { it.isNotBlank() }
+
+    fun setObdMac(context: Context, mac: String?) {
+        prefs(context).edit().putString(KEY_OBD_MAC, mac?.trim()).apply()
+    }
+
+    fun obdPin(context: Context): String =
+        prefs(context).getString(KEY_OBD_PIN, "1234") ?: "1234"
+
+    fun setObdPin(context: Context, pin: String) {
+        prefs(context).edit().putString(KEY_OBD_PIN, pin.trim()).apply()
+    }
+
+    fun obdDemo(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_OBD_DEMO, false)
+
+    fun setObdDemo(context: Context, demo: Boolean) {
+        prefs(context).edit().putBoolean(KEY_OBD_DEMO, demo).apply()
+    }
 }

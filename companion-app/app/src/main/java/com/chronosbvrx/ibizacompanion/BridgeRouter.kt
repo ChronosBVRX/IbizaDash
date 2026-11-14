@@ -69,6 +69,9 @@ class BridgeRouter(private val wifi: WifiBridgeClient) {
         mediaArtJson(title, artist, album, isPlaying, pngBase64, packageName, appLabel)
     )
 
+    fun sendObdTelemetry(t: com.chronosbvrx.ibizacompanion.obd.ObdTelemetry): Boolean =
+        send(obdTelemetryJson(t))
+
     /** Portada de 384 px: suficiente para el panel y menos peso en el enlace. */
     fun mediaArtMaxSize(): Int = 384
 
@@ -143,5 +146,35 @@ class BridgeRouter(private val wifi: WifiBridgeClient) {
         fun pingJson(): JSONObject = JSONObject()
             .put("type", "PING")
             .put("ts", System.currentTimeMillis())
+
+        fun obdTelemetryJson(t: com.chronosbvrx.ibizacompanion.obd.ObdTelemetry): JSONObject = JSONObject()
+            .put("type", "OBD_TELEMETRY")
+            .put("connected", t.connected)
+            .put("demo", t.demo)
+            .apply {
+                t.error?.let { put("error", it) }
+                t.deviceName?.let { put("deviceName", it) }
+                t.rpm?.let { put("rpm", it) }
+                t.coolantC?.let { put("coolantC", it.toDouble()) }
+                t.loadPct?.let { put("loadPct", it.toDouble()) }
+                t.throttlePct?.let { put("throttlePct", it.toDouble()) }
+                t.intakeC?.let { put("intakeC", it.toDouble()) }
+                t.fuelTrimPct?.let { put("fuelTrimPct", it.toDouble()) }
+                t.timingAdvanceDeg?.let { put("timingAdvanceDeg", it.toDouble()) }
+                t.batteryV?.let { put("batteryV", it.toDouble()) }
+                t.fuelLevelPct?.let { put("fuelLevelPct", it.toDouble()) }
+                t.fuelRangeKm?.let { put("fuelRangeKm", it) }
+                t.speedKmh?.let { put("speedKmh", it.toDouble()) }
+                t.accelerationMps2?.let { put("accelerationMps2", it.toDouble()) }
+                t.instantConsumptionL100?.let { put("instantConsumptionL100", it.toDouble()) }
+                t.milOn?.let { put("milOn", it) }
+                t.dtcCount?.let { put("dtcCount", it) }
+                if (t.dtcs.isNotEmpty()) {
+                    val arr = org.json.JSONArray()
+                    t.dtcs.forEach { arr.put(it) }
+                    put("dtcs", arr)
+                }
+                t.vin?.let { put("vin", it) }
+            }
     }
 }

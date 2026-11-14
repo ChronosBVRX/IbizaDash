@@ -435,6 +435,12 @@ class MainActivity : AppCompatActivity() {
     private var obdClient: Elm327Client? = null
 
     private val obdListener: (ObdTelemetry) -> Unit = { state ->
+        if (state.hasLiveData && NavLink.wifiActive() && obdClient?.isLive() == true) {
+            // El teléfono está enviando telemetría fresca por Wi-Fi Direct:
+            // apagamos el cliente local del estéreo para que su radio Bluetooth
+            // quede 100% libre para la música A2DP sin colisiones de paquetes.
+            obdClient?.stop()
+        }
         runOnUiThread { renderObd(state) }
     }
 
@@ -2029,7 +2035,7 @@ class MainActivity : AppCompatActivity() {
         val mac = Prefs.obdMac(this)
         if (demo) {
             obdClient?.connect(null, demo = true)
-        } else {
+        } else if (!NavLink.wifiActive() && !mac.isNullOrBlank()) {
             obdClient?.connect(mac, demo = false)
         }
     }

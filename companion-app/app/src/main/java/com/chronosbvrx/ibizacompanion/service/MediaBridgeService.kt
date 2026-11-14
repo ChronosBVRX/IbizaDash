@@ -69,6 +69,12 @@ class MediaBridgeService : Service() {
     private var wifiClient: WifiBridgeClient? = null
     private var router: BridgeRouter? = null
     private var carBtWatcher: CarBtWatcher? = null
+    private var obdClient: com.chronosbvrx.ibizacompanion.obd.Elm327Client? = null
+    private val obdListener: (com.chronosbvrx.ibizacompanion.obd.ObdTelemetry) -> Unit = { telemetry ->
+        if (telemetry.connected || telemetry.hasLiveData) {
+            router?.sendObdTelemetry(telemetry)
+        }
+    }
     @Volatile private var lastTrackKey: String? = null
     @Volatile private var currentController: MediaController? = null
     @Volatile private var lastBringToFrontMs = 0L
@@ -98,6 +104,12 @@ class MediaBridgeService : Service() {
         }
         PhoneNavController.init(this)
         com.chronosbvrx.ibizacompanion.voice.VoiceSynthesizer.init(this)
+        com.chronosbvrx.ibizacompanion.obd.ObdRepository.addListener(obdListener)
+        obdClient = com.chronosbvrx.ibizacompanion.obd.Elm327Client(this).also {
+            val mac = com.chronosbvrx.ibizacompanion.data.CompanionPrefs.obdMac(this)
+            val demo = com.chronosbvrx.ibizacompanion.data.CompanionPrefs.obdDemo(this)
+            it.connect(mac, demo)
+        }
         wifiClient?.start()
         startConnectionWatchdog()
         // Auto → enlace: al conectarse el Bluetooth del auto, la app abre
@@ -769,6 +781,9 @@ class MediaBridgeService : Service() {
         }
         mapWakeLock = null
         mapStreaming = false
+        com.chronosbvrx.ibizacompanion.obd.ObdRepository.removeListener(obdListener)
+        obdClient?.stop()
+        obdClient = null
         carBtWatcher?.stop()
         carBtWatcher = null
         com.chronosbvrx.ibizacompanion.core.state.CompanionState.update {

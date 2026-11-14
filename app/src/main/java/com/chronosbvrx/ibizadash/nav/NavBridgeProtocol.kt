@@ -252,6 +252,41 @@ object NavBridgeProtocol {
 
             "MAP_FRAME_STOP" -> RemoteMapBridge.stop()
 
+            "OBD_TELEMETRY" -> {
+                val dtcsJson = obj.optJSONArray("dtcs")
+                val dtcList = mutableListOf<String>()
+                if (dtcsJson != null) {
+                    for (i in 0 until dtcsJson.length()) {
+                        dtcList.add(dtcsJson.optString(i))
+                    }
+                }
+                val telemetry = com.chronosbvrx.ibizadash.obd.ObdTelemetry(
+                    connected = obj.optBoolean("connected", false),
+                    demo = obj.optBoolean("demo", false),
+                    error = obj.optString("error").takeIf { it.isNotBlank() },
+                    deviceName = obj.optString("deviceName").takeIf { it.isNotBlank() },
+                    rpm = if (obj.has("rpm")) obj.optInt("rpm") else null,
+                    coolantC = if (obj.has("coolantC")) obj.optDouble("coolantC").toFloat() else null,
+                    loadPct = if (obj.has("loadPct")) obj.optDouble("loadPct").toFloat() else null,
+                    throttlePct = if (obj.has("throttlePct")) obj.optDouble("throttlePct").toFloat() else null,
+                    intakeC = if (obj.has("intakeC")) obj.optDouble("intakeC").toFloat() else null,
+                    fuelTrimPct = if (obj.has("fuelTrimPct")) obj.optDouble("fuelTrimPct").toFloat() else null,
+                    timingAdvanceDeg = if (obj.has("timingAdvanceDeg")) obj.optDouble("timingAdvanceDeg").toFloat() else null,
+                    batteryV = if (obj.has("batteryV")) obj.optDouble("batteryV").toFloat() else null,
+                    fuelLevelPct = if (obj.has("fuelLevelPct")) obj.optDouble("fuelLevelPct").toFloat() else null,
+                    fuelRangeKm = if (obj.has("fuelRangeKm")) obj.optInt("fuelRangeKm") else null,
+                    speedKmh = if (obj.has("speedKmh")) obj.optDouble("speedKmh").toFloat() else null,
+                    accelerationMps2 = if (obj.has("accelerationMps2")) obj.optDouble("accelerationMps2").toFloat() else null,
+                    instantConsumptionL100 = if (obj.has("instantConsumptionL100")) obj.optDouble("instantConsumptionL100").toFloat() else null,
+                    milOn = if (obj.has("milOn")) obj.optBoolean("milOn") else null,
+                    dtcCount = if (obj.has("dtcCount")) obj.optInt("dtcCount") else null,
+                    dtcs = dtcList,
+                    vin = obj.optString("vin").takeIf { it.isNotBlank() },
+                    updatedAtMs = android.os.SystemClock.elapsedRealtime()
+                )
+                com.chronosbvrx.ibizadash.obd.ObdRepository.publish(telemetry)
+            }
+
             "NOTIFY" -> PhoneNotifyBridge.onNotify(obj)
 
             "TILE_STATS" -> {
